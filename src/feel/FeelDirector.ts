@@ -171,7 +171,7 @@ export class FeelDirector {
         for(const root of [this.noirAtmosphere.root,this.noirDressing.root,this.noirRain.root])this.noirCity.adopt(root);
     }
     /** Evidence is created after the city and replaced on every welcome. */
-    adoptEvidence(root:THREE.Object3D):void {this.noirCity?.adopt(root);}
+    adoptEvidence(root:THREE.Object3D):void {this.noirCity?.adopt(root,true);}
     /** Force a lightning strike (workshop review). */
     lightning():void {this.noirAtmosphere?.strike();}
     /** New round: props back where they started. */
@@ -636,7 +636,7 @@ export class FeelDirector {
         // A surge pulse makes the lights stutter for a beat.
         const flicker=this.surgeFlicker>.02&&Math.sin(performance.now()*.09)>0?this.surgeFlicker*FEEL.surgeLook.params.flicker:0;
         this.dark=Math.max(this.blackout*stutter,flicker)*(1-flash);
-        this.noirCity?.setDark(this.dark);
+        this.noirCity?.setDark(this.dark);this.noirCity?.setEvidenceDark(this.blackout);
         RAT_BLACKOUT.value=this.blackout;
     }
     /** Offset the rendered view; `afterRender` must follow the same frame. */

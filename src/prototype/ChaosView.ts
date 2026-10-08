@@ -534,7 +534,7 @@ export class ChaosView {
             // A ball on the loose case: the tag flaps and a few sheets fly.
             if(hit.cue==='case-hit'&&!state.case.owner&&Math.hypot(hit.p.x-state.case.p.x,hit.p.y-state.case.p.y,hit.p.z-state.case.p.z)<2){this.caseMotion.kick();this.onCasePaper?.(hit.p,'kick');}
             if(hit.cue==='armor-clang')this.impacts.spark(this.impactPoint.set(hit.p.x,hit.p.y,hit.p.z),this.impactNormal.set(hit.n.x,hit.n.y,hit.n.z));
-            if(!hit.audioOnly&&!this.replay){reactToLandmarkImpact(this.root.parent as THREE.Scene,hit.p);cityImpact(hit.p,hit.cue==='thud'?3:hit.scale??1);}
+            if(!hit.audioOnly&&!this.replay){reactToLandmarkImpact(this.root.parent as THREE.Scene,hit.p);cityImpact(hit.p,hit.cue==='thud'?3:hit.scale??1);this.caseFiles.impact(hit.p,hit.cue==='thud'?3:hit.scale??1);}
         }
         const corpses=new Set(state.corpses.map(c=>c.id));
         for(const [id,c] of this.corpses)if(!corpses.has(id)){c.hat?.dispose();this.root.remove(c.mesh);contactShadowsOf(this.scene)?.remove(c.mesh);disposeMeshResources(c.mesh);this.corpses.delete(id);}
@@ -718,7 +718,7 @@ export class ChaosView {
             this.caseMotion.loose(wall,Math.hypot(s.case.v.x,s.case.v.y,s.case.v.z));
         }
         this.caseMotion.finish(dt,wall);
-        this.caseFiles.update(s.clues??[],now,camera);
+        this.caseFiles.update(s.clues??[],now,camera,dt,this.resolveRat(this.myId)?.mesh.position);
         this.hotLook.update(camera,renderTime,s.case,now,this.carrier,this.arm?.parent??null);
         // Physical evidence replaces the primary case's through-wall and screen locators.
         this.carrierFlash.hide();

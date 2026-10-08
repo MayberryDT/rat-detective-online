@@ -104,6 +104,8 @@ export interface Tactics {
     stance?:Stance;
 }
 
+/** A sweep of the eyes for the next case paper: there and back to each side over `ms`, `reach` radians each way. */
+const SEARCH={ms:1700,reach:1.9,restMs:2500} as const;
 /** The moving half of a bot: runs the current Plan every tick and fires whenever it has a shot, whatever the
  * goal. Routes come from BotNavigation; the rat runs them by pure pursuit at its own pace (`BotSteer`), moves
  * its crosshair like a hand (`BotAim`), strafes, pushes and uses cover in a fight (`BotFight`) and keeps
@@ -209,6 +211,13 @@ export class BotMotor {
     private glanceUntil=0;
     private glanceAt=0;
     private glanceTurn=0;
+    /** P4: a lead that ends sends the eyes across the street for the next paper, as a player looks round
+     * (mindVersion 14). Only the look moves; what turns up is seen the ordinary way. */
+    private searchFrom=0;
+    private searchUntil=0;
+    private searchNext=0;
+    private searchYaw=0;
+    private searchTurn=1;
     /** The next fight hop is due (set on landing). */
     private hopAt=0;
     private wasGrounded=false;
@@ -292,7 +301,7 @@ export class BotMotor {
         this.flight=undefined;this.launchWaitAt=undefined;this.ride=undefined;this.rideAt=0;
         this.assignmentSignature='';this.urgent=false;
         this.sighting=undefined;this.post=undefined;this.postAt=0;this.heard.until=0;this.listenAt=0;this.rivalShots=0;this.rivalNewest=Infinity;
-        this.suppressUntil=0;this.hitAt=-Infinity;this.lastHp=Infinity;this.lastDriveAt=undefined;this.ownSpeed=0;this.glanceUntil=0;this.glanceAt=0;
+        this.suppressUntil=0;this.hitAt=-Infinity;this.lastHp=Infinity;this.lastDriveAt=undefined;this.ownSpeed=0;this.glanceUntil=0;this.glanceAt=0;this.searchUntil=0;this.searchNext=0;
         this.hopAt=0;this.wasGrounded=false;this.idleUntil=0;this.heard.next=0;this.hopClicks=0;
         this.seenAt=undefined;this.pushingSince=undefined;this.velX=this.velZ=this.pressX=this.pressZ=this.driftX=this.driftZ=0;this.legs=1;
     }
@@ -809,6 +818,12 @@ export class BotMotor {
         return this.controls(self,x,z,jump,shoot);
     }
 
+    /** Look round for the next paper: once, unless a sweep ran in the last few seconds. */
+    searchAround(now:number):void {
+        if(now<this.searchUntil||now<this.searchNext)return;
+        this.searchFrom=now;this.searchUntil=now+SEARCH.ms;this.searchNext=this.searchUntil+SEARCH.restMs;
+        this.searchYaw=this.aim.yaw;this.searchTurn=this.motorRandom()<.5?-1:1;
+    }
     /** Where the eyes go with no rival in sight: a rat just lost, gunfire just heard, the case being run at, the
      * zone's approaches, the carrier's side of an intercept, else where it runs, as a player steers with the mouse
      * over held keys. Now and then, a glance to the side. */
@@ -820,6 +835,7 @@ export class BotMotor {
         if(this.mode==='case'&&this.destination&&distance(self,this.destination)<30){this.aim.look(eye,this.destination,true);return;}
         const carried=this.mode==='intercept'&&this.post!==undefined&&state?.case.owner&&state.case.owner!==self.id?this.carrierSight.caseAt('case',state.case,self.id):undefined;
         if(carried){this.aim.look(eye,carried);return;}
+        if(now<this.searchUntil){const u=(now-this.searchFrom)/SEARCH.ms;this.aim.lookAlong(this.searchYaw+this.searchTurn*Math.sin(u*2*Math.PI)*SEARCH.reach);return;}
         if(now>=this.glanceAt){this.glanceAt=now+8000+this.motorRandom()*12000;this.glanceUntil=now+350+this.motorRandom()*450;this.glanceTurn=(this.motorRandom()<.5?-1:1)*(.5+this.motorRandom()*.5);}
         const running=Math.hypot(x,z)>1;
         if(now<this.glanceUntil&&running){this.aim.lookAlong(Math.atan2(x,z)+this.glanceTurn);return;}

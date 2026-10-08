@@ -18,6 +18,7 @@ import { feelState } from '../feel/feelState';
 import { FEEL } from '../feel/feelTuning';
 import { reducedMotion } from '../ui/motion';
 import { ReplayAudio } from './ReplayAudio';
+import { NoirCity } from '../feel/NoirCity';
 import { ReplayDirector, type DirectorView } from './ReplayDirector';
 import type { ClipData, RecordedEvent, ReplayRecorder } from './ReplayRecorder';
 import type { ReplayClip, ReplayMode, ReplayPlayer } from './types';
@@ -78,6 +79,8 @@ class Playback {
         this.chaos=new ChaosView(this.scene,id=>this.remotes.get(id),context,true,audio.feedback,undefined,undefined,
             {clock:()=>this.t,synth:audio.synth,route:REPLAY_ROUTE,corpseStep:PLAYBACK.corpseStep,delay:PLAYBACK.viewDelay});
         this.chaos.onTrap=(event,trap)=>audio.feedback(TRAP_CUES[event],trap);
+        // Case papers lie still in a replay (no city here to blow them through), on the program the game warmed.
+        this.chaos.caseFiles.still=true;new NoirCity(new THREE.Scene()).adopt(this.chaos.caseFiles.root,true);
         for(const entry of data.entries){
             if('roster' in entry){this.roster??=entry;continue;}
             if('pose' in entry){const p=entry.pose;this.sample(p.id,entry.at,p);this.noteAim(p.id,entry.at,p.aim,true);continue;}

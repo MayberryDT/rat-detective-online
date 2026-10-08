@@ -2,7 +2,7 @@
 import {existsSync,mkdirSync,writeFileSync,rmSync,mkdtempSync,createReadStream} from 'node:fs';
 import {createServer} from 'node:http';import {spawn,spawnSync} from 'node:child_process';
 import {extname,join,resolve} from 'node:path';import {tmpdir} from 'node:os';import net from 'node:net';
-const OUT=resolve(process.env.P4_OUT??'/home/halla/build/rat-detective/physical-clues-20261007');
+const OUT=resolve(process.env.P4_OUT??'/home/halla/build/rat-detective/noir-papers-v2-20261007/candidate');
 const DIST=join(OUT,'visual'),proof=join(DIST,'proof');mkdirSync(proof,{recursive:true});
 const MIME={'.html':'text/html','.js':'text/javascript','.css':'text/css','.png':'image/png','.webm':'video/webm'};
 function findChrome() {
@@ -92,8 +92,8 @@ function makeCdpClient(socketUrl) {
 const chromePath=findChrome();if(!chromePath)throw Error('Chrome required');
 const {server,origin}=await serveDist(DIST),port=await getFreePort();
 const profile=mkdtempSync(join(tmpdir(),'p4-visual-'));
-const chrome=spawn(chromePath,['--headless=new','--no-sandbox',`--remote-debugging-port=${port}`,`--user-data-dir=${profile}`,'--no-first-run','--no-default-browser-check','--autoplay-policy=no-user-gesture-required','--use-angle='+(process.env.ANGLE??'vulkan'),'--enable-features=Vulkan','--ignore-gpu-blocklist','about:blank'],{stdio:'ignore'});
-let cdp;const report={kind:'repeatable city material/motion fixture; not human play',angle:process.env.ANGLE??'vulkan',captures:[]};
+const chrome=spawn(chromePath,['--headless=new','--no-sandbox',`--remote-debugging-port=${port}`,`--user-data-dir=${profile}`,'--no-first-run','--no-default-browser-check','--mute-audio','--use-angle='+(process.env.ANGLE??'vulkan'),'--enable-features=Vulkan','--ignore-gpu-blocklist','about:blank'],{stdio:'ignore'});
+let cdp;const report={kind:'static art and motion fixture with scripted wind time; not gameplay, not human acceptance',angle:process.env.ANGLE??'vulkan',captures:[]};
 const pause=ms=>new Promise(r=>setTimeout(r,ms));
 try{
  await waitForJson(`http://127.0.0.1:${port}/json/version`);
@@ -103,20 +103,24 @@ try{
  await send('Browser.setDownloadBehavior',{behavior:'allow',downloadPath:proof});
  for(const [label,width,height,low] of [['desktop',1280,720,false],['mobile-low',844,390,true]]){
   await send('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:false});
-  await send('Page.navigate',{url:origin+'/case-clues.html?agent=1&muted=1'+(low?'&low=1':'')});
+  await send('Page.navigate',{url:origin+'/case-clues.html?agent=1&mute=1'+(low?'&low=1':'')});
   let ready=false;for(let i=0;i<120;i++){const r=await send('Runtime.evaluate',{expression:"!!window.clueFixture",returnByValue:true});if(r.result?.result.value){ready=true;break;}await pause(250);}if(!ready)throw Error('fixture did not load');
-  for(const view of ['street','corner','sewer','blackout']){
+  for(const view of ['street','corner','sewer','blackout','gallery','wind']){
    await send('Runtime.evaluate',{expression:`window.clueFixture.setView('${view}')`});await pause(400);
    const seen=await send('Runtime.evaluate',{expression:'window.clueFixture.visible()',returnByValue:true});
    const shot=await send('Page.captureScreenshot',{format:'png'});const name=label+'-'+view+'.png';writeFileSync(join(proof,name),Buffer.from(shot.result.data,'base64'));
    const metrics=await send('Runtime.evaluate',{expression:'window.clueFixture.metrics?.()',returnByValue:true});
    report.captures.push({label,view,width,height,visible:seen.result.result.value,metrics:metrics.result?.result?.value,render:await (async()=>{const p=await send('Runtime.evaluate',{expression:'({samples:window.__paperPerf,render:window.__paperRenderer?.info.render,memory:window.__paperRenderer?.info.memory})',returnByValue:true});return p.result?.result?.value;})(),file:name});
   }
-  const clip='physical-files-street.webm';rmSync(join(proof,clip),{force:true});
-  await send('Runtime.evaluate',{expression:"window.clueFixture.setView('street');document.getElementById('record').click()"});
-  for(let i=0;i<180&&!existsSync(join(proof,clip));i++)await pause(250);
-  if(!existsSync(join(proof,clip)))throw Error('motion clip not saved');
-  writeFileSync(join(proof,label+'-motion.webm'),await import('node:fs/promises').then(fs=>fs.readFile(join(proof,clip))));
+  // Clips: the street walk (a sheet blows in, one blows away, a ball lands by them) and the wind over a still view.
+  for(const view of ['street','wind']){
+   const clip=`physical-files-${view}.webm`;rmSync(join(proof,clip),{force:true});
+   await send('Runtime.evaluate',{expression:`window.clueFixture.setView('${view}');document.getElementById('record').click()`});
+   const traced=[];for(let i=0;i<180&&!existsSync(join(proof,clip));i++){await pause(250);if(i%2===0){const t=await send('Runtime.evaluate',{expression:'window.clueFixture.trace()',returnByValue:true});traced.push(t.result?.result?.value);}}
+   if(!existsSync(join(proof,clip)))throw Error('motion clip not saved');
+   writeFileSync(join(proof,`${label}-${view}-motion.webm`),await import('node:fs/promises').then(fs=>fs.readFile(join(proof,clip))));
+   report.captures.push({label,view,clip:`${label}-${view}-motion.webm`,trace:traced});
+  }
  }
  await send('Runtime.evaluate',{expression:"window.clueFixture.setView('street');window.clueFixture.close?.()"});
  const close=await send('Page.captureScreenshot',{format:'png'});writeFileSync(join(proof,'paper-close.png'),Buffer.from(close.result.data,'base64'));

@@ -427,8 +427,9 @@ export class ChaosSimulation {
         c.scale=scale;c.body.updateBoundingRadius();
         c.body.updateMassProperties();c.body.updateAABB();
     }
-    private placeCaseAtSpawn(c=this.primaryCase,awayFrom?:Vec3Data){
-        if(c===this.primaryCase)this.clues.clear();
+    /** `reset`: a new round, so every rat's papers start again from its spawn. */
+    private placeCaseAtSpawn(c=this.primaryCase,awayFrom?:Vec3Data,reset=false){
+        if(c===this.primaryCase)this.clues.clear(reset,{x:c.body.position.x,y:c.body.position.y,z:c.body.position.z});
         this.rayQuery.refresh();
         const walls=[...this.targets].filter(([,target])=>target.kind==='world');
         for(const [body] of walls)body.updateAABB();
@@ -1732,11 +1733,12 @@ export class ChaosSimulation {
     }
     private stepClues(now:number):void {
         const c=this.primaryCase;
-        if(c.returningUntil||this.assignment?.closed){this.clues.clear();return;}
+        if(c.returningUntil||this.assignment?.closed){this.clues.clear(false,{x:c.body.position.x,y:c.body.position.y,z:c.body.position.z});this.clues.track(this.players.values(),now);return;}
         const p=c.owner?this.players.get(c.owner)??c.body.position:c.body.position;
         const floor=this.ray(new C.Vec3(p.x,p.y+.2,p.z),new C.Vec3(p.x,p.y-40,p.z),1);
-        if(!floor.hasHit||floor.hitNormalWorld.y<.7)return;
-        this.clues.guide(this.players.values(),{x:p.x,y:floor.hitPointWorld.y,z:p.z},now,(a,b)=>!this.ray(new C.Vec3(a.x,a.y+.8,a.z),new C.Vec3(b.x,b.y+.8,b.z),1).hasHit);
+        if(!floor.hasHit||floor.hitNormalWorld.y<.7){this.clues.track(this.players.values(),now);return;}
+        // Paper sight: any hit blocks (cheaper than the closest one), from a rat's middle height.
+        this.clues.guide(this.players.values(),{x:p.x,y:floor.hitPointWorld.y,z:p.z},now,(a,b)=>!this.rayQuery.blocked(new C.Vec3(a.x,a.y+.8,a.z),new C.Vec3(b.x,b.y+.8,b.z),1),!!c.owner);
     }
     private updateCase(c:CaseRuntime,dt:number,playing:boolean){
         if(c.owner){
@@ -1813,7 +1815,7 @@ export class ChaosSimulation {
         this.dispatch={phase:'ready',started:this.now,until:0,serial:this.dispatch.serial+1};this.casesWeaponized=false;this.syncExtraCases();
         this.pressure={serial:this.pressure.serial+1,levels:{},launches:[]};this.flights.clear();this.thrownUntil.clear();this.pendingVents.clear();
         this.misfireAt.clear();this.clangAt=0;this.incidentEvents.length=0;
-        this.primaryCase.body.type=C.Body.DYNAMIC;this.primaryCase.body.collisionFilterMask=1|8|16;this.scaleCase(CASE_LOOSE_SCALE);this.placeCaseAtSpawn();
+        this.primaryCase.body.type=C.Body.DYNAMIC;this.primaryCase.body.collisionFilterMask=1|8|16;this.scaleCase(CASE_LOOSE_SCALE);this.placeCaseAtSpawn(this.primaryCase,undefined,true);
         this.primaryCase.body.velocity.setZero();this.primaryCase.body.angularVelocity.setZero();this.primaryCase.body.wakeUp();this.primaryCase.looseSince=this.now;this.primaryCase.returningUntil=0;this.primaryCase.launched=false;this.primaryCase.ping=undefined;}
     private restoreCase(c:CaseRuntime,saved:CaseState,time:number){
         c.owner=saved.owner&&!this.isCaseHolder(saved.owner)?saved.owner:null;

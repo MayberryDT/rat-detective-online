@@ -1,115 +1,501 @@
 import {BotNavigation} from './BotNavigation';
+import type {BotWaypoint} from './BotLaunchRoutes';
 import type {WorldSpec} from './worldSpec';
-import type {PlayerData} from './networkProtocol';
-import type {Vec3Data} from './networkProtocol';
+import type {PlayerData,Vec3Data} from './networkProtocol';
+import {paperHash,windAt} from './paperWind';
 
-export const CLUES={max:128,visible:48,range:65,spacing:4,lifeMs:25000,freshMs:3000,wornMs:10000} as const;
-export interface CaseClue {id:string;p:Vec3Data;at:number;anchored?:true}
-export interface ClueEvent {what:'shed'|'clear';id:string;p:Vec3Data}
-export function clueAge(c:CaseClue,now:number):0|1|2{return now-c.at<CLUES.freshMs?0:now-c.at<CLUES.wornMs?1:2;}
+/** `max` sheets published at once; `visible` the most a rat, human or bot, takes in at once; `range` how far it reads them. */
+export const CLUES={max:128,visible:48,range:65} as const;
+/** The document art a sheet can wear: `s` = family + 4·art + 16·shape (families: statement, form, receipt, photograph). */
+export const PAPER_KINDS={families:4,arts:3,shapes:2} as const;
+export const paperFamily=(s:number):number=>s&3;
+export const paperArt=(s:number):number=>(s>>2)&3;
+export const paperShape=(s:number):number=>(s>>4)&1;
+/** One physical sheet. Everything here is fixed for the sheet's life: `id`, place `p`, birth `at` and look `s`.
+ * `q`: a second resting spot a gust can carry it to and back (paperWind `looseLifts`); bots read `p`. */
+export interface CaseClue {id:string;p:Vec3Data;at:number;s:number;q?:Vec3Data}
+/** City-map facts: a starter spill at a fresh spawn, a rat's first route of a case placement, the trail cleared. */
+export interface ClueEvent {what:'lead'|'route'|'clear';player?:string;p:Vec3Data;n?:number}
+const finite=(p:unknown):p is Vec3Data=>!!p&&typeof p==='object'&&[(p as Vec3Data).x,(p as Vec3Data).y,(p as Vec3Data).z].every(Number.isFinite);
 export function validClues(value:unknown):value is CaseClue[]{
     if(!Array.isArray(value)||value.length>CLUES.max)return false;
     const ids=new Set<string>();
-    return value.every(c=>c&&typeof c.id==='string'&&c.id.length>0&&c.id.length<=64&&!ids.has(c.id)&&
-        (ids.add(c.id),true)&&Number.isFinite(c.at)&&c.p&&[c.p.x,c.p.y,c.p.z].every(Number.isFinite)&&
-        (c.anchored===undefined||c.anchored===true));
+    return value.every(c=>c&&typeof c.id==='string'&&c.id.length>0&&c.id.length<=64&&!ids.has(c.id)&&(ids.add(c.id),true)&&
+        Number.isFinite(c.at)&&finite(c.p)&&Number.isInteger(c.s)&&c.s>=0&&c.s<64&&(c.q===undefined||finite(c.q)));
 }
-/** Same local budget for rendering and bot observations. Age is deliberately NOT a sort key. */
-export function visibleClues(clues:readonly CaseClue[],eye:Vec3Data,now:number,canSee:(p:Vec3Data)=>boolean):CaseClue[]{
+/** The sheets a rat can take in from `eye`: nearest first, within `range` (a flashlight's in a Blackout), only those
+ * `canSee` admits, at most `visible`. */
+export function visibleClues(clues:readonly CaseClue[],eye:Vec3Data,canSee:(p:Vec3Data)=>boolean,range:number=CLUES.range):CaseClue[]{
     const distance=(p:Vec3Data)=>Math.hypot(p.x-eye.x,p.y-eye.y,p.z-eye.z);
-    const nearby=clues.filter(c=>(c.anchored||now-c.at<CLUES.lifeMs)&&distance(c.p)<=CLUES.range)
-        .sort((a,b)=>distance(a.p)-distance(b.p));
+    const nearby=clues.filter(c=>distance(c.p)<=range).sort((a,b)=>distance(a.p)-distance(b.p));
     const visible:CaseClue[]=[];
     for(const c of nearby)if(canSee(c.p)){visible.push(c);if(visible.length===CLUES.visible)break;}
     return visible;
 }
-/** Shared physical routes, refreshed from each rat toward the current case. Tyler, 7 October:
- * multiple obvious paper trails at every spawn; no x-ray guidance. */
+
+/** Route reading (P4 repair, 7 October): small groups where the way needs telling, not a stream of pages. */
+const PLAN={
+    /** A rat's route keeps its groups on the street this far ahead (route units)… */
+    ahead:45,
+    /** …and lets go of passed ones this far behind. */
+    behind:16,
+    /** The first group of a route, when no corner comes sooner. */
+    first:[6,11],
+    /** The longest stretch in sight without a group. */
+    gap:[17,24],
+    /** Groups closer than this along a route are one. */
+    minGap:5,
+    /** A wanted group this near an existing one on its floor, in sight of it, is that group: routes share. */
+    merge:8,
+    /** An unwanted group lies this long before it goes (a replan, a death or a respawn usually picks it up again). */
+    graceMs:10000,
+    /** After a restore, sheets wait this long for the new routes to claim them. */
+    restoreMs:9000,
+    /** A starter spill is let go once its rat is this far away (or dies). */
+    leadLeave:22,
+    /** Wait this long after a spawn for the rat's own facing to arrive. */
+    facingMs:300,
+    /** Sight rays per simulation step for reading routes into groups, and new groups per step. */
+    rays:32,groups:3,
+    /** Sight rays per step for placing groups (a support probe counts six): over it, the rest waits a step. */
+    placeRays:300,
+    /** A place whose spot is taken for now is tried again this much later. */
+    retryMs:1000,
+    /** Replan a route at most this often, once its rat strays this far from it or the case (carried: its carrier)
+     * moves this far: routes that swing back and forth would lay papers and take them up again. */
+    replanMs:2500,stray:12,moved:8,carriedMoved:14,
+    /** Route search slices per step: a human's trail should be down before they have looked round. Extra slices stop
+     * once this many walk-graph edges were probed this step. */
+    humanSlices:4,sliceProbes:24,
+    /** No two sheets closer than this: pages never overlap. */
+    spacing:1.45,
+    /** Sheets kept back for starter spills: a crowded city never leaves a fresh spawn without its lead. */
+    leadReserve:16,
+    /** Every route's last group is the one spill beside the case, shared from this far. */
+    endMerge:10,
+    /** A spot a sheet just blew away from stays bare this long: a new sheet landing there at once would read as a swap. */
+    restMs:4000,
+};
+type AnchorKind='start'|'turn'|'level'|'launch'|'gap'|'end'|'lead';
+/** `how`: how it was placed (diagnostics): `sheets` in sight of the previous group's sheets, `anchor` of its anchor, `own` only its own; `+n` slid n nodes. */
+interface Group {id:number;anchor:Vec3Data;ids:string[];refs:Set<string>;idle?:number;how?:string;lead?:true}
+/** `step`, `bridge`: how far the search for a place to lay this group got (it resumes there on a later step, after
+ * `prior`, the group it reads from, stays the same). */
+interface Anchor {i:number;kind:AnchorKind;group?:number;retryAt?:number;step?:number;bridge?:number;prior?:number}
+interface Path {points:BotWaypoint[];dist:number[];target:Vec3Data;at:number;progress:number;anchors:Anchor[];scan:{a:number;j:number;last:number;gap:number;slope:boolean;slopeY:number;done:boolean};refs:Set<number>;carried:boolean}
+interface Life {alive:boolean;since:number;pending:boolean;lead?:number;leadAt?:Vec3Data;announced:boolean}
+type Clear=(a:Vec3Data,b:Vec3Data)=>boolean;
+const distance=(a:Vec3Data,b:Vec3Data)=>Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z);
+const flat=(a:Vec3Data,b:Vec3Data)=>Math.hypot(a.x-b.x,a.z-b.z);
+const isBot=(id:string)=>id.startsWith('rd-ai-');
+/** Whether the ground at `p` is in sight of someone standing at `eye`: from a rat's own eyes (1.6, how bots see) and
+ * from the shoulder camera's pivot (3.5, where a player's view never drops below). Awnings and arcades can block one
+ * and not the other. `clear` lifts both ends by .8. */
+const groundSeen=(clear:Clear,eye:Vec3Data,p:Vec3Data)=>clear({x:eye.x,y:eye.y+.8,z:eye.z},{x:p.x,y:p.y-.65,z:p.z})&&clear({x:eye.x,y:eye.y+2.7,z:eye.z},{x:p.x,y:p.y-.65,z:p.z});
+
+/** Shared physical evidence toward the current case (Tyler, 7 October: an obvious lead at every spawn, papers that lead
+ * to the case, no x-ray guidance; then: no blinking, fewer papers, varied, alive). Sheets belong to the city, not to a
+ * rat: each keeps its id, place and look for life. A rat's route only says which groups must lie on the street; a group
+ * nobody wants lingers briefly, then goes. Clearing (the case relocated, returning, reset) retires everything at once. */
 export class CaseClues {
     items:CaseClue[]=[];
     private readonly navigation?:BotNavigation;
-    private paths=new Map<string,{points:Vec3Data[];papers:Vec3Data[];target:Vec3Data;at:number}>();
+    private groups=new Map<number,Group>();
+    private paths=new Map<string,Path>();
+    private lives=new Map<string,Life>();
     private events:ClueEvent[]=[];
-    private placements=new Map<string,Vec3Data|null>();
-    private leads=new Map<string,{origin:Vec3Data;points:Vec3Data[]}>();
-    private pending?:{id:string;from:Vec3Data;target:Vec3Data;search:Generator<void,Vec3Data[]>};
+    private pending?:{id:string;from:Vec3Data;target:Vec3Data;search:Generator<void,BotWaypoint[]>};
+    private nextGroup=1;
+    private nextSheet=1;
+    private restored:boolean;
+    private resetLives=false;
+    private rays=0;
+    /** The last step's time: `clear()` is called without one. */
+    private lastNow=0;
+    /** Too full, or the spot was just vacated: try this place again on a later step. */
+    private capped=false;
+    /** A spot taken only for now (a sheet still lying there, or one just gone): worth trying again later. */
+    private blocked=false;
+    /** Sight rays spent laying groups this step: placement stops for the step past `PLAN.placeRays`. */
+    private placeRays=0;
+    /** The last placement stopped on that budget: its place is tried again next step. */
+    private budgeted=false;
+    /** Spots sheets just left. `cleared`: left in a clear, so they only keep new sheets off the very spot (a fresh
+     * trail is not held back), where an ordinary retirement also holds back a whole group laid there. */
+    private vacated:{p:Vec3Data;at:number;cleared?:true}[]=[];
     constructor(spec?:WorldSpec,saved?:CaseClue[]){
         if(spec)this.navigation=new BotNavigation(spec);
-        if(validClues(saved))this.items=structuredClone(saved);
-    }
-    clear():void {
-        if(this.items.length)this.events.push({what:'clear',id:this.items[0]!.id,p:{...this.items[0]!.p}});
-        this.items=[];this.paths.clear();this.placements.clear();this.leads.clear();this.pending=undefined;
-    }
-    guide(players:Iterable<PlayerData>,target:Vec3Data,now:number,clear?:(a:Vec3Data,b:Vec3Data)=>boolean):void {
-        const nav=this.navigation;if(!nav)return;
-        const living=[...players].filter(p=>p.hp>0).sort((a,b)=>Number(a.id.startsWith('rd-ai-'))-Number(b.id.startsWith('rd-ai-')));
-        const ids=new Set(living.map(p=>p.id));for(const id of this.paths.keys())if(!ids.has(id))this.paths.delete(id);
-        const distance=(a:Vec3Data,b:Vec3Data)=>Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z);
-        for(const id of this.leads.keys())if(!ids.has(id))this.leads.delete(id);
-        for(const player of living)if(!this.leads.has(player.id)){
-            const facing={x:2*(player.meshQx*player.meshQz+player.meshQw*player.meshQy),y:0,
-                z:1-2*(player.meshQx*player.meshQx+player.meshQy*player.meshQy)};
-            const points=nav.paperLead(player,facing,clear);
-            this.leads.set(player.id,{origin:{x:player.x,y:player.y,z:player.z},points});
-            if(points.length)this.events.push({what:'shed',id:'lead-'+player.id,p:{...points[0]!}});
-        }
-        // One bounded slice of the shared walk graph per simulation step; new humans first.
-        if(this.pending&&(!ids.has(this.pending.id)||distance(living.find(p=>p.id===this.pending!.id)!,this.pending.from)>40))this.pending=undefined;
-        if(this.pending?.id.startsWith('rd-ai-')&&living.some(p=>!p.id.startsWith('rd-ai-')&&!this.paths.has(p.id)))this.pending=undefined;
-        if(!this.pending)for(const player of living){
-            const old=this.paths.get(player.id);
-            if(old&&now-old.at<1000)continue;
-            if(old&&distance(old.target,target)<8&&old.points.some(p=>distance(p,player)<6))continue;
-            this.pending={id:player.id,from:{x:player.x,y:player.y,z:player.z},target:{...target},search:nav.paperRouteSteps(player,target,clear)};break;
-        }
-        if(this.pending){
-            const job=this.pending,result=job.search.next();
-            if(result.done){
-                const papers:Vec3Data[]=[];let travelled=6,previous=result.value[0];
-                for(const [i,p] of result.value.entries()){
-                    travelled+=distance(previous!,p);previous=p;
-                    const seed=Math.abs(Math.imul(Math.round(p.x),73856093)^Math.imul(Math.round(p.z),19349663));
-                    const a=result.value[i-1],b=result.value[i+1];
-                    const turn=a&&b&&Math.abs((p.x-a.x)*(b.z-p.z)-(p.z-a.z)*(b.x-p.x))>.1;
-                    if(i!==result.value.length-1&&!turn&&(travelled<2.8||(travelled<5.5&&seed%3===0)))continue;
-                    papers.push(p);travelled=0;
-                }
-                this.paths.set(job.id,{points:result.value,papers,target:job.target,at:now});
-                if(result.value.length)this.events.push({what:'shed',id:'trail-'+job.id,p:{...result.value[0]!}});
-                this.pending=undefined;
+        this.restored=validClues(saved);
+        if(this.restored){
+            this.items=structuredClone(saved!);
+            for(const c of this.items){const n=parseInt(c.id.slice(1),36);if(c.id[0]==='c'&&Number.isFinite(n))this.nextSheet=Math.max(this.nextSheet,n+1);}
+            // Saved groups are not recorded: sheets within a step of each other are one group, waiting to be claimed.
+            for(const c of this.items){
+                const near=[...this.groups.values()].find(g=>Math.abs(g.anchor.y-c.p.y)<1.5&&flat(g.anchor,c.p)<3.5);
+                if(near)near.ids.push(c.id);else{const id=this.nextGroup++;this.groups.set(id,{id,anchor:{...c.p},ids:[c.id],refs:new Set()});}
             }
         }
-        const previousClues=new Map(this.items.map(c=>[c.id,c]));
-        const next=new Map<string,CaseClue>();
+    }
+    /** Retire every sheet now. `reset`: a new round, so every living rat stands at a fresh spawn and gets a starter.
+     * `at`: where the case was, for the fact. */
+    clear(reset=false,at?:Vec3Data):void {
+        if(this.items.length)this.events.push({what:'clear',p:{...(at??this.items[0]!.p)},n:this.items.length});
+        for(const c of this.items)this.vacated.push({p:c.p,at:this.lastNow,cleared:true});
+        this.items=[];this.groups.clear();this.paths.clear();this.pending=undefined;
+        for(const life of this.lives.values()){life.lead=undefined;life.leadAt=undefined;life.announced=false;}
+        if(reset)this.resetLives=true;
+    }
+    /** One simulation step. `target`: the floor under the case (or its carrier); `carried` leaves the route's end bare. */
+    guide(players:Iterable<PlayerData>,target:Vec3Data,now:number,clear?:Clear,carried=false):void {
+        const nav=this.navigation;if(!nav)return;
+        this.lastNow=now;this.placeRays=0;
+        const sight:Clear=clear??(()=>true);
+        const all=[...players],living=all.filter(p=>p.hp>0).sort((a,b)=>Number(isBot(a.id))-Number(isBot(b.id)));
+        this.rays=0;
+        this.trackLives(all,living,now);
+        // Restored sheets wait for the routes to claim them, then go like any other unwanted group.
+        if(this.restored){for(const g of this.groups.values())g.idle=now+PLAN.restoreMs-PLAN.graceMs;this.restored=false;}
+        let made=0;
         for(const player of living){
-            const points=this.paths.get(player.id)?.papers??[];
-            let start=0,nearest=Infinity;
-            points.forEach((p,i)=>{const d=distance(p,player);if(d<nearest){nearest=d;start=i;}});
-            const add=(p:Vec3Data,starter=false)=>{
-                const id='paper-'+p.x+'-'+Math.round(p.y*100)+'-'+p.z;
-                if(!this.placements.has(id)){
-                    let seed=2166136261;for(const c of id)seed=Math.imul(seed^c.charCodeAt(0),16777619);
-                    this.placements.set(id,nav.paperPlacement(p,seed>>>0)??null);
+            const life=this.lives.get(player.id)!;
+            if(life.pending&&now-life.since>=PLAN.facingMs&&made<PLAN.groups){
+                life.pending=false;made++;this.capped=false;this.blocked=false;
+                const facing={x:2*(player.meshQx*player.meshQz+player.meshQw*player.meshQy),y:0,z:1-2*(player.meshQx*player.meshQx+player.meshQy*player.meshQy)};
+                const points=nav.paperLead(player,facing,clear,3);
+                if(points.length){
+                    const group=this.groupAt(points[0]!,'lead',now,sight,{points,out:{x:facing.x,z:facing.z},count:2+paperHash(player.id,life.since)%2});
+                    // Full, or its spot was just vacated: lay it on a later step, facing where the rat faces then.
+                    if(group===undefined&&this.capped){life.pending=true;life.since=now+PLAN.retryMs-PLAN.facingMs;}
+                    if(group!==undefined){
+                        this.ref(group,'lead:'+player.id);life.lead=group;life.leadAt={...points[0]!};
+                        this.events.push({what:'lead',player:player.id,p:{...points[0]!},n:this.groups.get(group)!.ids.length});
+                    }
                 }
-                const placed=this.placements.get(id);if(!placed)return false;
-                if(next.has(id))return true; // shared location, never stacked pages
-                const clueId=starter?'lead-'+id:id;
-                next.set(id,previousClues.get(clueId)??{id:clueId,p:{x:placed.x,y:placed.y+.018,z:placed.z},at:now,anchored:true});
-                return true;
-            };
-            // Sampling is fixed when a route is built, not re-phased around the rat.
-            // A moving window only adds/removes its boundary; retained sheets never move.
-            let count=0;
-            const lead=this.leads.get(player.id);
-            if(lead&&distance(player,lead.origin)<8)for(const p of lead.points)if(add(p,true))count++;
-            for(let i=Math.max(0,start-1);i<points.length&&count<12;i++)
-                if(add(points[i]!))count++;
-
+            }
+            if(life.lead!==undefined&&life.leadAt&&distance(player,life.leadAt)>PLAN.leadLeave){this.release(life.lead,'lead:'+player.id,now);life.lead=undefined;}
         }
-        this.items=[...next.values()].slice(0,CLUES.max);
-        // Bound geometry-probe cache to active paths, not the lifetime of the room.
-        if(this.placements.size>4096)this.placements.clear();
+        this.search(living,target,now,clear,carried);
+        for(const player of living){
+            const path=this.paths.get(player.id);if(!path?.points.length)continue;
+            this.follow(path,player,now,sight,()=>made<PLAN.groups,()=>made++);
+        }
+        for(const g of [...this.groups.values()]){
+            if(g.refs.size){g.idle=undefined;continue;}
+            g.idle??=now;
+            if(now-g.idle>=PLAN.graceMs)this.retire(g,now);
+        }
+        this.vacated=this.vacated.filter(v=>now-v.at<PLAN.restMs);
     }
     drain():ClueEvent[]{return this.events.splice(0);}
+    /** Steps where no trail is laid (the case returning, the round closed, the case or its carrier high in the air) still
+     * see deaths and respawns, so a rat respawned meanwhile gets its starter at the next step that lays papers. */
+    track(players:Iterable<PlayerData>,now:number):void {const all=[...players];this.trackLives(all,all.filter(p=>p.hp>0),now);}
+
+    /** Lives: a rat that comes alive (joins, respawns, a new round) gets one starter spill once its facing is known. */
+    private trackLives(all:PlayerData[],living:PlayerData[],now:number):void {
+        const present=new Set(all.map(p=>p.id));
+        for(const [id,life] of this.lives)if(!present.has(id)){this.drop(id,life,now);this.lives.delete(id);}
+        for(const p of all){
+            const alive=p.hp>0;let life=this.lives.get(p.id);
+            // Every rat first seen alive gets its starter, after a restore too: a wake from hibernation brings the human
+            // whose join woke the room and fresh bots; a rat restored mid-life (an eviction) only gets one spill more.
+            if(!life){this.lives.set(p.id,{alive,since:now,pending:alive,announced:false});continue;}
+            if(alive&&!life.alive){life.alive=true;life.since=now;life.pending=true;life.announced=false;}
+            else if(!alive&&life.alive){life.alive=false;life.pending=false;this.drop(p.id,life,now);}
+        }
+        if(this.resetLives){this.resetLives=false;for(const p of living){const life=this.lives.get(p.id)!;life.pending=true;life.since=now;}}
+    }
+    private drop(id:string,life:Life,now:number):void {
+        if(life.lead!==undefined)this.release(life.lead,'lead:'+id,now);
+        life.lead=undefined;life.leadAt=undefined;
+        const path=this.paths.get(id);if(path){for(const g of path.refs)this.release(g,id,now);this.paths.delete(id);}
+        if(this.pending?.id===id)this.pending=undefined;
+    }
+
+    /** One bounded slice of the shared walk graph per step; humans first. A failed search keeps a still-useful route. */
+    private search(living:PlayerData[],target:Vec3Data,now:number,clear:Clear|undefined,carried:boolean):void {
+        const nav=this.navigation!,ids=new Set(living.map(p=>p.id));
+        if(this.pending&&(!ids.has(this.pending.id)||distance(living.find(p=>p.id===this.pending!.id)!,this.pending.from)>40))this.pending=undefined;
+        if(this.pending&&isBot(this.pending.id)&&living.some(p=>!isBot(p.id)&&!this.paths.has(p.id)&&distance(p,target)>=6))this.pending=undefined;
+        if(!this.pending)for(const player of living){
+            const old=this.paths.get(player.id);
+            if(distance(player,target)<6){if(old){for(const g of old.refs)this.release(g,player.id,now);this.paths.delete(player.id);}continue;}
+            if(old&&now-old.at<(old.points.length?PLAN.replanMs:1000))continue;
+            if(old&&old.carried===carried&&distance(old.target,target)<(carried?PLAN.carriedMoved:PLAN.moved)&&this.onRoute(old,player))continue;
+            this.pending={id:player.id,from:{x:player.x,y:player.y,z:player.z},target:{...target},search:nav.paperRouteSteps(player,target,clear)};break;
+        }
+        if(!this.pending)return;
+        // Extra slices for a human only while the walk graph is warm: a cold region costs edge probes, not expansions
+        // (Workers' clocks freeze during CPU work, so the bound is work done, not time).
+        const job=this.pending,probes=nav.work.edgeProbes;let result=job.search.next();
+        for(let slice=1;slice<(isBot(job.id)?1:PLAN.humanSlices)&&!result.done&&nav.work.edgeProbes-probes<PLAN.sliceProbes;slice++)result=job.search.next();
+        if(!result.done)return;
+        this.pending=undefined;
+        const old=this.paths.get(job.id),life=this.lives.get(job.id);
+        if(!result.value.length){
+            if(old&&old.points.length&&distance(old.target,job.target)<24){old.at=now;return;}
+            if(old)for(const g of old.refs)this.release(g,job.id,now);
+            this.paths.set(job.id,this.path([],job.target,now,carried));return;
+        }
+        if(old)for(const g of old.refs)this.release(g,job.id,now);
+        this.paths.set(job.id,this.path(result.value,job.target,now,carried));
+        if(life&&!life.announced){life.announced=true;this.events.push({what:'route',player:job.id,p:{...result.value[0]!},n:result.value.length});}
+    }
+    private path(points:BotWaypoint[],target:Vec3Data,now:number,carried:boolean):Path {
+        const dist=[0];for(let i=1;i<points.length;i++)dist.push(dist[i-1]!+distance(points[i-1]!,points[i]!));
+        return {points,dist,target:{...target},at:now,progress:0,anchors:[],scan:{a:0,j:1,last:-Infinity,gap:0,slope:false,slopeY:0,done:points.length<2},refs:new Set(),carried};
+    }
+    private onRoute(path:Path,player:Vec3Data):boolean {
+        const from=Math.max(0,path.progress-4),to=Math.min(path.points.length,path.progress+16);
+        for(let i=from;i<to;i++)if(distance(path.points[i]!,player)<PLAN.stray)return true;
+        return false;
+    }
+
+    /** Advance a rat along its route (never backwards: jitter cannot toggle sheets), read more of the route into
+     * anchors, and hold exactly the groups within its stretch of street. */
+    private follow(path:Path,player:PlayerData,now:number,sight:Clear,canMake:()=>boolean,made:()=>void):void {
+        const P=path.points;
+        let best=path.progress,nearest=distance(P[best]!,player);
+        for(let i=path.progress+1;i<Math.min(P.length,path.progress+13);i++){const d=distance(P[i]!,player);if(d<nearest-.01){nearest=d;best=i;}}
+        path.progress=best;
+        const here=path.dist[best]!;
+        this.scan(path,here+PLAN.ahead+PLAN.gap[1],sight);
+        const within=(anchor:Anchor)=>{const at=path.dist[anchor.i]!;return at>=here-PLAN.behind&&at<=here+PLAN.ahead;};
+        for(const anchor of path.anchors)
+            if(path.dist[anchor.i]!<here-PLAN.behind&&anchor.group&&path.refs.delete(anchor.group))this.release(anchor.group,player.id,now);
+        // Groups for the stretch in order (a group can lay a bridge before itself), then hold every group in the stretch.
+        for(const anchor of [...path.anchors]){
+            if(path.dist[anchor.i]!>here+PLAN.ahead)break;
+            if(!within(anchor)||anchor.group!==undefined||now<(anchor.retryAt??0))continue;
+            if(!canMake())break;
+            made();this.capped=false;this.blocked=false;this.budgeted=false;
+            const group=this.anchorGroup(path,anchor,now,sight);
+            // Out of this step's placement work: next step. Full, or the spot is taken for now: a little later. Nowhere
+            // to lie at all: this place stays bare.
+            if(group===undefined&&this.budgeted)break;
+            if(group===undefined&&this.capped){anchor.retryAt=now+PLAN.retryMs;continue;}
+            anchor.group=group??0;
+        }
+        for(const anchor of path.anchors){
+            if(path.dist[anchor.i]!>here+PLAN.ahead)break;
+            if(within(anchor)&&anchor.group&&!path.refs.has(anchor.group)&&this.groups.has(anchor.group)){path.refs.add(anchor.group);this.ref(anchor.group,player.id);}
+        }
+    }
+    /** Read the route into the places that need telling: where sight breaks (the corner), a change of level (top and
+     * bottom of a ramp or shaft), a launcher's pad and landing, a long stretch, and the case itself. */
+    private scan(path:Path,until:number,sight:Clear):void {
+        const P=path.points,s=path.scan,n=P.length;
+        // Each stretch gets its own length from where it starts, so a replan reads the same street the same way.
+        const stretch=(at:Vec3Data,first:boolean)=>{const [lo,hi]=first?PLAN.first:PLAN.gap;return lo+(paperHash(at.x+','+at.z,3)%1000)/1000*(hi-lo);};
+        if(!s.gap)s.gap=stretch(P[0]!,true);
+        const emit=(i:number,kind:AnchorKind,force=false)=>{
+            if(!force&&path.dist[i]!-s.last<PLAN.minGap)return;
+            if(path.anchors.length&&path.anchors[path.anchors.length-1]!.i===i)return;
+            path.anchors.push({i,kind});s.last=path.dist[i]!;s.gap=stretch(P[i]!,false);
+        };
+        const since=(j:number)=>s.last===-Infinity?path.dist[j]!:path.dist[j]!-s.last;
+        while(!s.done&&this.rays<PLAN.rays&&(s.last===-Infinity||s.last<until)){
+            if(s.j>=n){if(!path.carried&&path.dist[n-1]!-s.last>PLAN.minGap)emit(n-1,'end',true);s.done=true;break;}
+            const a=s.a,j=s.j,A=P[a]!,J=P[j]!,prev=P[j-1]!;
+            if(prev.launch||prev.drop){emit(j-1,'launch',true);emit(j,'launch',true);s.a=j;s.j=j+1;s.slope=false;continue;}
+            // A ramp, stairs or a shaft is one passage: papers at its top and its bottom, and along it if it is long.
+            const slope=Math.abs(J.y-prev.y)>.05;
+            if(!s.slope&&slope&&Math.abs(P[Math.min(n-1,j+3)]!.y-prev.y)>.6){emit(j-1,'level');s.slope=true;s.slopeY=prev.y;s.a=j-1;}
+            else if(s.slope&&!slope&&Math.abs(P[Math.min(n-1,j+2)]!.y-prev.y)<.05){
+                if(Math.abs(prev.y-s.slopeY)>.6)emit(j-1,'level',true);
+                s.slope=false;s.a=j-1;
+            }
+            if(s.slope){if(since(j)>s.gap){emit(j,'gap',true);s.a=j;}s.j++;continue;}
+            // Along the street: the next group lies where a player at the last one stops being able to see the way
+            // (the corner), or at the end of a long stretch in plain sight. Sight is a player's: eye to the ground.
+            this.rays+=2;
+            if(!groundSeen(sight,A,J)){
+                if(j-1>a){emit(j-1,'turn');s.a=j-1;s.j=j;}else{s.a=j;s.j=j+1;}
+                continue;
+            }
+            if(since(j)>s.gap){emit(j,s.last===-Infinity?'start':'gap',true);s.a=j;}
+            s.j++;
+        }
+    }
+    private anchorGroup(path:Path,anchor:Anchor,now:number,sight:Clear):number|undefined {
+        // The group a player reads before this one: the last earlier anchor that has sheets (a bare place is skipped).
+        const P=path.points,i=anchor.i,A=P[i]!,earlier=path.anchors.slice(0,path.anchors.indexOf(anchor));
+        const before=[...earlier].reverse().find(a=>a.group&&this.groups.has(a.group))??earlier[earlier.length-1];
+        const back=P[Math.max(0,i-2)]!,ahead=P[Math.min(P.length-1,i+2)]!;
+        const dir=(a:Vec3Data,b:Vec3Data)=>{const d=flat(a,b);return d>.01?{x:(b.x-a.x)/d,z:(b.z-a.z)/d}:undefined;};
+        const out=dir(A,ahead)??dir(back,A)??{x:0,z:1},into=dir(back,A)??out;
+        const h=paperHash(A.x+','+A.y+','+A.z,7);
+        const count=anchor.kind==='end'?3:anchor.kind==='gap'||anchor.kind==='start'?1+Number(h%9>=5):2;
+        // Where a player stands to look for this group: on the previous group's sheets (for a route's first group, its
+        // rat's starter spill), else at the previous anchor.
+        const lead=before?undefined:[...this.lives.entries()].find(([id])=>this.paths.get(id)===path)?.[1].lead;
+        const prior=before?.group?this.groups.get(before.group):lead!==undefined?this.groups.get(lead):undefined;
+        const from=prior?prior.ids.map(id=>this.items.find(c=>c.id===id)?.p).filter((p):p is Vec3Data=>!!p):before?[P[before.i]!]:[];
+        // In sight of the previous group's sheets, sliding a few nodes along the route if the anchor itself has no such
+        // spot; only failing that, anywhere in sight of the anchor. A trail must read from one group to the next.
+        // In sight from one of the previous group's sheets (a player reads each), else from the previous anchor. A corner
+        // group never slides back up the street it turns from: from there nobody sees round the corner.
+        // Best: in sight from every one of them, wherever a player finishes reading the last group.
+        const ladder:{sources:Vec3Data[];every:boolean}[]=[...(from.length>1?[{sources:from,every:true}]:[]),{sources:from,every:false}];
+        if(before&&prior)ladder.push({sources:[P[before.i]!],every:false});
+        const shifts=anchor.kind==='turn'?[0,1,2,3]:[0,-1,1,-2,2,-3];
+        const counted:Clear=(a,b)=>{this.placeRays++;return sight(a,b);};
+        // The search resumes where a busy step left it, unless the group it reads from has changed.
+        if(anchor.prior!==prior?.id){anchor.prior=prior?.id;anchor.step=0;anchor.bridge=undefined;}
+        const tries=ladder.flatMap(l=>shifts.map(shift=>({...l,shift})));
+        for(let t=anchor.step??0;t<tries.length;t++){
+            const {sources,every,shift}=tries[t]!,k=i+shift;if(k<1||k>=P.length)continue;
+            if(this.placeRays>PLAN.placeRays){anchor.step=t;this.capped=this.budgeted=true;return undefined;}
+            // Cheap first: if the route node itself is out of sight from there, so are the sheets around it.
+            if(sources.length&&!(every?sources.every(f=>groundSeen(counted,f,P[k]!)):sources.some(f=>groundSeen(counted,f,P[k]!))))continue;
+            // The way on (a few nodes past this place) must be in sight from the group's first sheet.
+            const next=P[Math.min(P.length-1,k+3)]!;
+            const group=this.groupAt(P[k]!,anchor.kind,now,sight,{out,into,count,from:sources,every,strict:true,next,...(prior?{not:prior.id}:{})});
+            if(group!==undefined){const g=this.groups.get(group);if(g&&!g.how)g.how=(sources===from?(every?'all-sheets':'sheets'):'anchor')+(shift?(shift>0?'+':'')+shift:'');return group;}
+            if(this.capped){anchor.step=t;return undefined;}
+        }
+        anchor.step=tries.length;
+        // Nothing near this place reads from the last group: a single sheet where the last group's view of the route
+        // ends bridges the two (rare: a wall corner or a doorway between them), then this group reads from the bridge.
+        if(prior&&before&&from.length)for(let m=anchor.bridge??i-1;m>before.i;m--){
+            if(this.placeRays>PLAN.placeRays){anchor.bridge=m;this.capped=this.budgeted=true;return undefined;}
+            if(!from.some(f=>groundSeen(counted,f,P[m]!)))continue;
+            const bridge=this.groupAt(P[m]!,'turn',now,sight,{out:dir(P[m]!,A)??out,count:1,from,strict:true,next:A,not:prior.id});
+            if(bridge===undefined){if(this.capped){anchor.bridge=m;return undefined;}continue;}
+            const b=this.groups.get(bridge)!;b.how??='bridge';
+            path.anchors.splice(path.anchors.indexOf(anchor),0,{i:m,kind:'turn',group:bridge});
+            const sheets=b.ids.map(id=>this.items.find(c=>c.id===id)?.p).filter((p):p is Vec3Data=>!!p);
+            for(const shift of shifts){
+                const k=i+shift;if(k<1||k>=P.length)continue;
+                const group=this.groupAt(P[k]!,anchor.kind,now,sight,{out,into,count,from:sheets,strict:true,next:P[Math.min(P.length-1,k+3)]!,not:bridge});
+                if(group!==undefined){const g=this.groups.get(group);if(g&&!g.how)g.how='bridged';return group;}
+                if(this.capped)return undefined;
+            }
+            break;
+        }
+        const group=this.groupAt(A,anchor.kind,now,sight,{out,into,count,...(prior?{not:prior.id}:{})});
+        const g=group!==undefined?this.groups.get(group):undefined;if(g&&!g.how)g.how='own';
+        return group;
+    }
+    /** The group for an anchor: an existing one close by on the same floor and in sight, else a new spill of `count`
+     * supported sheets around it. A turn puts its second sheet into the new street. */
+    private groupAt(A:Vec3Data,kind:AnchorKind,now:number,sight:Clear,shape:{points?:Vec3Data[];out?:{x:number;z:number};into?:{x:number;z:number};from?:Vec3Data[];every?:boolean;strict?:boolean;not?:number;next?:Vec3Data;count:number}):number|undefined {
+        // A player's eye (1.6) to a sheet on the ground (.15); the authority's `clear` lifts both ends by .8.
+        // Starters are never held back by the step's placement work: a fresh spawn's lead comes first.
+        if(kind!=='lead'&&this.placeRays>PLAN.placeRays){this.capped=this.budgeted=true;return undefined;}
+        const counted:Clear=(a,b)=>{this.placeRays++;return sight(a,b);};
+        const seen=(eye:Vec3Data,p:Vec3Data)=>flat(eye,p)<.5||groundSeen(counted,eye,p);
+        // Routes share groups. A starter is always its own spill in its rat's view; a group never folds into the one it
+      // must be read from.
+        // A starter adopts a starter spill nobody holds any more that it would lie on (a rat respawning where another
+        // just left): the papers stay instead of one spill blowing away in front of it as the next lands.
+        if(kind==='lead'){
+            const idle=[...this.groups.values()].find(g=>!g.refs.size&&g.lead&&Math.abs(g.anchor.y-A.y)<1.5&&flat(g.anchor,A)<2.5);
+            if(idle)return idle.id;
+        }
+        // Every route ends at the same case: the nearest spill in sight of it serves them all.
+        if(kind==='end'){
+            let best:Group|undefined;
+            for(const g of this.groups.values())
+                if(g.id!==shape.not&&g.ids.length&&Math.abs(g.anchor.y-A.y)<1.5&&flat(g.anchor,A)<PLAN.endMerge&&(!best||flat(g.anchor,A)<flat(best.anchor,A))&&(flat(g.anchor,A)<.5||counted(g.anchor,A)))best=g;
+            if(best)return best.id;
+        }
+        if(kind!=='lead'&&kind!=='end')for(const g of this.groups.values()){
+            // A corner is shared only by a group at that corner: a step back up the street, nobody sees round it.
+            const reach=kind==='turn'?2:PLAN.merge;
+            if(g.id===shape.not||!g.ids.length||Math.abs(g.anchor.y-A.y)>=1.5||flat(g.anchor,A)>=reach||!(flat(g.anchor,A)<.5||counted(g.anchor,A)))continue;
+            // Shared only if it still reads from where this route's player stands.
+            const first=this.items.find(c=>c.id===g.ids[0]);
+            if(shape.strict&&shape.from?.length&&first&&!shape.from.some(f=>seen(f,first.p)))continue;
+            return g.id;
+        }
+        if(this.items.length+shape.count>CLUES.max-(kind==='lead'?0:PLAN.leadReserve)){this.capped=true;return undefined;}
+        if(this.vacated.some(v=>!v.cleared&&now-v.at<PLAN.restMs&&Math.abs(v.p.y-A.y)<1.5&&flat(v.p,A)<4)){this.capped=true;return undefined;}
+        const nav=this.navigation!,h=paperHash(A.x+','+A.y+','+A.z,kind.length);
+        const out=shape.out??{x:0,z:1},side=(h&1)?1:-1,perp={x:-out.z*side,z:out.x*side};
+        const bases:Vec3Data[]=shape.points?shape.points.map(p=>({...p})):[];
+        for(let k=bases.length;k<shape.count;k++){
+            const r=(paperHash(String(h),k)%1000)/1000,along=kind==='turn'&&k===1?2.2+r*.8:k===0?(r-.5)*.8:(k%2?1:-1)*(1.7+r*.7);
+            const lateral=(k===0?.5+r*.8:(k%2?-1:1)*(.3+r*.9));
+            bases.push({x:A.x+out.x*along+perp.x*lateral,y:A.y,z:A.z+out.z*along+perp.z*lateral});
+        }
+        const sheets:CaseClue[]=[],group:Group={id:this.nextGroup++,anchor:{...A},ids:[],refs:new Set()};
+        for(const [k,base] of bases.slice(0,shape.count).entries()){
+            let placed:Vec3Data|undefined,crowded=false;
+            // First choice: in sight from a sheet of the previous group, so the way reads from where a player stands.
+            const from=shape.from??[];
+            for(let attempt=0;attempt<12&&!placed&&(kind==='lead'||this.placeRays<=PLAN.placeRays);attempt++){
+                const turn=attempt*1.3,r=(attempt%4)*.4,strict=from.length>0&&(attempt<8||!!shape.strict&&k===0);
+                const c={x:base.x+Math.cos(turn+h)*r,y:base.y,z:base.z+Math.sin(turn+h)*r};
+                this.placeRays+=6;
+                const p=nav.paperPlacement(c,paperHash(String(h),k*31+attempt))??(attempt%4===0?nav.paperPlacement(c,0):undefined);
+                // A group reads as one: every further sheet is in sight of its first.
+                if(p&&!this.roomFor(p,sheets))crowded=true;
+                if(p&&Math.abs(p.y-A.y)<.7&&this.roomFor(p,sheets)&&seen(A,p)&&(!strict||(shape.every?from.every(f=>seen(f,p)):from.some(f=>seen(f,p))))&&(!sheets[0]||seen(sheets[0].p,p))
+                    &&(k>0||!strict||!shape.next||seen(p,shape.next)))placed=p;
+            }
+            // Out of this step's work before an answer: try again next step.
+            if(!placed&&kind!=='lead'&&this.placeRays>PLAN.placeRays){this.capped=this.budgeted=true;return undefined;}
+            // `strict`: the first sheet must be in sight from the previous group, or this place will not do.
+            if(!placed&&k===0&&shape.strict)return undefined;
+            if(!placed){if(crowded)this.blocked=true;continue;}
+            const p={x:placed.x,y:Math.round((placed.y+.018)*1000)/1000,z:placed.z};
+            const sheet:CaseClue={id:'c'+(this.nextSheet++).toString(36),p,at:Math.round(now),s:this.look(p,sheets,h+k)};
+            if(kind!=='lead'&&shape.count>1&&k===shape.count-1){const q=this.looseSpot(p,sheets,h,sight);if(q)sheet.q=q;}
+            sheets.push(sheet);
+        }
+        if(!sheets.length){if(this.blocked)this.capped=true;return undefined;}
+        for(const s of sheets){group.ids.push(s.id);this.items.push(s);}
+        if(kind==='lead')group.lead=true;
+        this.groups.set(group.id,group);
+        return group.id;
+    }
+    private roomFor(p:Vec3Data,fresh:readonly CaseClue[]):boolean {
+        // A spot a sheet just blew away from counts as taken until it has rested (PLAN.restMs).
+        for(const v of this.vacated)if(Math.abs(v.p.y-p.y)<1&&flat(v.p,p)<PLAN.spacing)return false;
+        for(const c of [...this.items,...fresh]){
+            if(Math.abs(c.p.y-p.y)<1&&flat(c.p,p)<PLAN.spacing)return false;
+            if(c.q&&Math.abs(c.q.y-p.y)<1&&flat(c.q,p)<PLAN.spacing)return false;
+        }return true;
+    }
+    /** A look unlike its neighbours: a family not yet in the group, the least-seen art nearby. */
+    private look(p:Vec3Data,group:readonly CaseClue[],h:number):number {
+        const near=this.items.filter(c=>flat(c.p,p)<14);
+        const used=new Set(group.map(c=>paperFamily(c.s)));
+        let family=0,best=Infinity;
+        for(let k=0;k<PAPER_KINDS.families;k++){
+            const f=(h+k)%PAPER_KINDS.families;if(used.has(f))continue;
+            const score=near.filter(c=>paperFamily(c.s)===f).length;
+            if(score<best){best=score;family=f;}
+        }
+        let art=0;best=Infinity;
+        for(let k=0;k<PAPER_KINDS.arts;k++){
+            const a=((h>>>3)+k)%PAPER_KINDS.arts,score=[...near,...group].filter(c=>paperFamily(c.s)===family&&paperArt(c.s)===a).length;
+            if(score<best){best=score;art=a;}
+        }
+        return family+4*art+16*((h>>>7)%PAPER_KINDS.shapes);
+    }
+    /** Where a gust may carry this sheet: a supported spot a couple of units downwind on the same floor, in plain sight,
+     * open to the sky (interiors and the sewers are calm). */
+    private looseSpot(p:Vec3Data,fresh:readonly CaseClue[],h:number,sight:Clear):Vec3Data|undefined {
+        const nav=this.navigation!,w=windAt(p.x,p.z);
+        if(!sight(p,{x:p.x,y:p.y+6,z:p.z}))return undefined;
+        for(const [turn,reach] of [[0,1.6+(h%100)/100*1.2],[.35,1.8],[-.35,1.8]] as const){
+            const c=Math.cos(turn),s=Math.sin(turn),d={x:w.x*c-w.z*s,z:w.x*s+w.z*c};
+            const q=nav.paperPlacement({x:p.x+d.x*reach,y:p.y,z:p.z+d.z*reach},h+11);
+            if(q&&Math.abs(q.y-p.y)<.25&&this.roomFor(q,fresh)&&sight(p,q))return {x:q.x,y:Math.round((q.y+.018)*1000)/1000,z:q.z};
+        }
+        return undefined;
+    }
+    private ref(group:number,by:string):void {const g=this.groups.get(group);if(g){g.refs.add(by);g.idle=undefined;}}
+    private release(group:number,by:string,now:number):void {
+        const g=this.groups.get(group);if(!g)return;
+        g.refs.delete(by);if(!g.refs.size)g.idle??=now;
+    }
+    private retire(g:Group,now:number):void {
+        const gone=new Set(g.ids);
+        for(const c of this.items)if(gone.has(c.id))this.vacated.push({p:c.p,at:now});
+        this.items=this.items.filter(c=>!gone.has(c.id));this.groups.delete(g.id);
+        for(const path of this.paths.values()){path.refs.delete(g.id);for(const a of path.anchors)if(a.group===g.id)a.group=undefined;}
+    }
 }

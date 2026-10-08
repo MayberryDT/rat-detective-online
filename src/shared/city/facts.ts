@@ -82,7 +82,9 @@ export interface WorldSituation {
 }
 
 export type CityFact = FactContext & (
-  | {type:'clue';what:'shed'|'clear';id:string;p:P3;place:string}
+  /** P4 case papers: `lead` a starter spill at a fresh spawn (`n` sheets); `route` a rat's first route to this case placement
+   * (`n` route nodes); `clear` every sheet retired when the case moved, returned or the round reset (`n` sheets, `p` the case). */
+  | {type:'clue';what:'lead'|'route'|'clear';a?:number;p:P3;place:string;n?:number}
   | { type: 'frame'; world: WorldSituation; rats: RatSituation[] }
   /** `aim`: per actor, 20 samples a second of `[ms, yaw, pitch]`: a human's camera look (pitch null when the client sent none), a bot's facing (pitch null).
    * `controls`: per actor, the same 20 Hz slots of `[ms, f, r, jumps, fx, rx]`, the same for humans and bots (`ControlTally`): the move

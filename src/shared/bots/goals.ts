@@ -1,4 +1,6 @@
 import {visibleClues,type CaseClue} from '../caseClues';
+import {looseLifts,type LooseLift} from '../paperWind';
+import {FLASHLIGHT_REACH} from '../rat/ratBody';
 import {GOALS,type Goal,type Personality,type Plan,type PlaceOption} from './intent';
 import {distance,enemyTrap,TRAP_REACH,type BotMotor,type CaseEntry,type MotorNavigation} from './motor';
 import type {KnownCarrier} from './motor/carriers';
@@ -94,6 +96,10 @@ function where(self:Vec3Data,point:Vec3Data):string {
  * zone is part of keeping the case, never a goal of its own. */
 export class BotGoals {
     private inspectedClues=new Set<string>();
+    /** When the last paper was reached: a lead that ends there sends the eyes looking for the next. */
+    private inspectedAt=-Infinity;
+    /** Each loose sheet's gust timetable so far (paperWind `looseLifts`), to see it where players see it. */
+    private readonly loose=new Map<string,{lifts:LooseLift[];next:number;count:number}>();
     private supplyTripAt=0;
     /** The supply the pickup reflex is taking, and when it gives up. */
     private reflexSite?:PickupState;
@@ -115,7 +121,7 @@ export class BotGoals {
         this.places=navigation.explorationTargets();
     }
     reset():void {
-        this.inspectedClues.clear();
+        this.inspectedClues.clear();this.inspectedAt=-Infinity;this.loose.clear();
         this.reflexSite=undefined;this.reflexUntil=0;this.supplyTripAt=0;this.dispatchGiveUpAt=0;this.dispatchDetour='';
         this.deliveryKey='';this.deliveryEntering=false;this.fleeAt=0;this.zonePostAt=0;this.zonePost=0;
     }
@@ -252,16 +258,27 @@ export class BotGoals {
         }
         const goal=available?.value.p??(!carrying?carrier?.p:undefined)??zone?.point??delivery?.point??(carrying&&active?combat:undefined);
         const pickup=active&&goal?undefined:this.wantedPickup(state,self,now,input.clear);
-        const papers=state?.clues??[],ids=new Set(papers.map(c=>c.id));
+        const ids=new Set((state?.clues??[]).map(c=>c.id));
         for(const id of this.inspectedClues)if(!ids.has(id))this.inspectedClues.delete(id);
+        for(const id of this.loose.keys())if(!ids.has(id))this.loose.delete(id);
+        // A loose sheet lies where the wind left it (its `q` after an odd number of lifts), as every player sees it.
+        const papers=(state?.clues??[]).map(c=>{
+            if(!c.q)return c;
+            const known=this.loose.get(c.id)??{lifts:[],next:1,count:0},step=looseLifts(c.id,c.at,c.p,time,known.lifts,known.next,known.count);
+            known.next=step.nextSlot;known.count=step.count;this.loose.set(c.id,known);
+            return known.count%2?{...c,p:c.q}:c;
+        });
+        const blackout=state?.dispatch.phase==='active'&&incidentInfo(state.dispatch.incident).id==='blackout';
         const forward={x:2*(self.meshQx*self.meshQz+self.meshQw*self.meshQy),z:1-2*(self.meshQx*self.meshQx+self.meshQy*self.meshQy)};
-        const seen=visibleClues(papers,self,time,p=>{
+        // In a Blackout a paper is seen only as far as a flashlight reaches, as for rats.
+        const seen=visibleClues(papers,self,p=>{
             const dx=p.x-self.x,dz=p.z-self.z,d=Math.hypot(dx,dz);
             return (d<2||(dx*forward.x+dz*forward.z)/d>.64)&&input.clear({...p,y:p.y+.15});
-        });
-        for(const c of seen)if(distance(self,c.p)<3)this.inspectedClues.add(c.id);
+        },blackout?FLASHLIGHT_REACH:undefined);
+        for(const c of seen)if(distance(self,c.p)<3&&!this.inspectedClues.has(c.id)){this.inspectedClues.add(c.id);this.inspectedAt=now;}
         // Follow the same visible paperwork as a person, without hidden timestamps.
         const clue=seen.find(c=>!this.inspectedClues.has(c.id)&&!motor.suppressed('clue:'+c.id,c.p,now));
+        if(!clue&&!carrying&&now-this.inspectedAt<2500)motor.searchAround(now);
         const ctx:GoalContext={...input,active,visible,carrier,available,combat,clue,sighting:motor.sighted,pickup,armor,pillars,delivery,
             intercept:intercept&&{key:`intercept:${jurisdiction?`${intercept.x},${intercept.z}`:next}`,point:intercept},zone,offered:[],memo:{},
             places:goal=>(ctx.memo.options??={})[goal]??=this.placeOptions(goal,ctx)};

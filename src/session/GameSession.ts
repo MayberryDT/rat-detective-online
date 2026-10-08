@@ -427,6 +427,7 @@ export class GameSession {
                 if(!this.stage.world.raycastClosest(from,to,{collisionFilterMask:1,skipBackfaces:true},hit)||hit.hitNormalWorld.y<.85)return undefined;
                 return {y:hit.hitPointWorld.y,normal:{x:hit.hitNormalWorld.x,y:hit.hitNormalWorld.y,z:hit.hitNormalWorld.z}};
             };
+            this.chaos.caseFiles.clearPath=this.gun.sceneryClear;
         }
 
         if(this.chaos){
@@ -1021,6 +1022,7 @@ export class GameSession {
         for(const [id,{entity}] of this.remotes.rats)if(!entity.dead)n=pooledSource(n,id,entity.mesh.position);
         sources.length=n;
         this.feel.footsteps(dt,sources,self,this.stage.camera);
+        this.chaos?.caseFiles.rats(sources);
         // M1: a near miss makes your rat gasp.
         if(self&&this.lastChaos&&this.feel.projectiles(this.lastChaos.shots,this.myId,HEAD_POSITION.copy(self).setY(self.y+1.6),this.stage.camera))rat.entity.startle();
         // L6: contrails behind every rat riding a launcher throw.

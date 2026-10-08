@@ -1,62 +1,86 @@
 import * as THREE from 'three';
 import {CASE_RED} from './caseRed';
+import {drawPaper,paperStock} from './casePaperDrawings';
 
-/** Original precinct paperwork. Shared atlas: ink, stock and edge occupy one surface. */
-export function casePaperArt():{map:THREE.CanvasTexture;edge:THREE.CanvasTexture} {
-    const canvas=document.createElement('canvas'),mask=document.createElement('canvas');
-    canvas.width=canvas.height=mask.width=mask.height=1024;
-    const ctx=canvas.getContext('2d')!,red=mask.getContext('2d')!;
-    const color='#'+new THREE.Color(CASE_RED).getHexString();
-    red.fillStyle='#000';red.fillRect(0,0,1024,1024);
-    for(let family=0;family<4;family++){
-        const x=(family%2)*512,y=Math.floor(family/2)*512;
-        ctx.save();red.save();ctx.translate(x,y);red.translate(x,y);
-        // Tile padding duplicates stock; mesh UVs stop inside it to protect minified edges.
-        ctx.fillStyle=['#d2cfc3','#bfc2bc','#d4cbb7','#d3d2ca'][family];ctx.fillRect(0,0,512,512);
-        ctx.strokeStyle=color;ctx.lineWidth=7;ctx.strokeRect(19.5,19.5,473,473);
-        red.strokeStyle=color;red.lineWidth=7;red.strokeRect(19.5,19.5,473,473);
-        ctx.fillStyle='#383a37';ctx.font='bold 19px monospace';ctx.fillText('PRECINCT / EVIDENCE',40,58);
-        ctx.font='12px monospace';ctx.fillText('FILE  /  RD-0047',40,79);
-        ctx.fillStyle='#55574f';ctx.fillRect(40,91,432,2);
-        if(family===0){
-            ctx.font='bold 23px monospace';ctx.fillText('WITNESS STATEMENT',40,129);
-            const lines=['The transfer was unsigned.','I saw the file at the docks.','The clerk left before closing.','','Statement amended by witness.','Original retained in evidence.'];
-            ctx.font='16px monospace';lines.forEach((t,i)=>ctx.fillText(t,40+(i===4?5:0),172+i*28));
-            ctx.fillRect(40,404,249,1);ctx.font='italic 18px serif';ctx.fillText('J. Marlow',60,400);
-            ctx.font='11px monospace';ctx.fillText('SIGNATURE                 COPY 01',40,424);
-        }else if(family===1){
-            ctx.font='bold 23px monospace';ctx.fillText('PROPERTY REGISTER',40,129);
-            ctx.font='12px monospace';ctx.fillText('ITEM   DESCRIPTION          REF.',44,165);
-            ctx.strokeStyle='#767a72';ctx.lineWidth=1.6;
-            for(let i=0;i<7;i++){ctx.beginPath();ctx.moveTo(40,180+i*33);ctx.lineTo(471,180+i*33);ctx.stroke();}
-            for(const at of [40,94,400,471]){ctx.beginPath();ctx.moveTo(at,145);ctx.lineTo(at,378);ctx.stroke();}
-            ctx.font='15px monospace';['Case file','Statement','Dock receipt','Photograph'].forEach((t,i)=>{ctx.fillText('0'+(i+1),48,202+i*33);ctx.fillText(t,105,202+i*33);});
-            ctx.font='bold 22px monospace';ctx.save();ctx.translate(290,428);ctx.rotate(-.08);ctx.fillText('RETAIN',0,0);ctx.restore();
-        }else if(family===2){
-            ctx.textAlign='center';ctx.font='bold 29px monospace';ctx.fillText('PIER 9',256,144);
-            ctx.font='18px monospace';ctx.fillText('HARBOUR OFFICE',256,174);
-            ctx.font='16px monospace';
-            ['RECEIPT  0714','--------------------','STORAGE       12.00','TRANSFER       4.00','--------------------','TOTAL         16.00'].forEach((t,i)=>ctx.fillText(t,256,220+i*28));
-            ctx.font='italic 18px serif';ctx.fillText('Payment outstanding',256,433);
-        }else{
-            // Original stylized evidence photograph: warehouse, quay and reflected windows.
-            ctx.fillStyle='#303937';ctx.fillRect(43,112,426,274);
-            ctx.fillStyle='#69706b';ctx.fillRect(43,112,426,104);
-            ctx.fillStyle='#252d2e';ctx.fillRect(95,154,245,158);ctx.fillRect(353,187,116,125);
-            ctx.fillStyle='#929387';for(let r=0;r<3;r++)for(let c=0;c<5;c++)ctx.fillRect(116+c*43,173+r*39,15,22);
-            ctx.fillStyle='#151e20';ctx.fillRect(43,312,426,74);
-            ctx.fillStyle='#59655f';for(let i=0;i<8;i++)ctx.fillRect(74+i*48,329+(i%3)*11,31,3);
-            ctx.font='italic 22px serif';ctx.fillStyle='#343833';ctx.fillText('Loading door — after closing',44,424);
-        }
-        // One understated handling fold, not random dirt applied to every pixel.
-        ctx.strokeStyle='rgba(57,51,42,.075)';ctx.lineWidth=2;
-        ctx.beginPath();ctx.moveTo(family===1?255:436,24);ctx.lineTo(family===1?257:456,488);ctx.stroke();
-        ctx.restore();red.restore();
+/** The case papers' shared atlas (P4 repair): a row per document family (statement, form, receipt, photograph), three
+ * fronts and a back in each. Every document sits in its cell at its sheet's own proportions, so nothing is stretched. */
+export const PAPER_ATLAS={size:1536,cell:384,edge:5} as const;
+/** Document size in cell pixels, the same proportions as the sheet in the world (CaseFiles `PAPER_SIZES`). */
+export const PAPER_RECTS:readonly {w:number;h:number}[]=[{w:271,h:364},{w:279,h:364},{w:163,h:364},{w:364,h:311}];
+export const PAPER_BACK=3;
+export function paperRect(family:number):{x:number;y:number;w:number;h:number} {
+    const r=PAPER_RECTS[family]!;return {x:(PAPER_ATLAS.cell-r.w)>>1,y:(PAPER_ATLAS.cell-r.h)>>1,w:r.w,h:r.h};
+}
+/** UV of point (a, b) of a family's document in the top-left cell, b = 1 at the top edge (textures flip Y). */
+export function paperUv(family:number,a:number,b:number):{u:number;v:number} {
+    const r=paperRect(family),size=PAPER_ATLAS.size;
+    return {u:(r.x+a*r.w)/size,v:1-(r.y+(1-b)*r.h)/size};
+}
+/** UV offset from the top-left cell to the cell of `family`'s `column` (0–2 fronts, 3 the back). */
+export function paperCellOffset(family:number,column:number):{u:number;v:number} {
+    const step=PAPER_ATLAS.cell/PAPER_ATLAS.size;return {u:column*step,v:-family*step};
+}
+
+let shared:{map:THREE.Texture;edge:THREE.Texture}|undefined;
+/** The shared map (ink, stock and the thin red line) and the red-only emissive mask, built once per page. Each mip level
+ * is drawn by hand: the level below, scaled, then the red line stamped again at one texel or more, so the edge stays
+ * about a pixel wide at any distance instead of dissolving into a shimmer. */
+export function casePaperArt():{map:THREE.Texture;edge:THREE.Texture} {
+    if(shared)return shared;
+    const red='#'+new THREE.Color(CASE_RED).getHexString(),size=PAPER_ATLAS.size,cell=PAPER_ATLAS.cell;
+    const base=document.createElement('canvas');base.width=base.height=size;
+    const ctx=base.getContext('2d')!;
+    for(let family=0;family<4;family++)for(let column=0;column<4;column++){
+        const r=paperRect(family),x=column*cell+r.x,y=family*cell+r.y;
+        // Cell padding repeats the document's own stock, so minified edges never bleed a neighbour's ink.
+        ctx.save();ctx.translate(x,y);ctx.beginPath();ctx.rect(0,0,r.w,r.h);ctx.clip();
+        drawPaper(ctx,family,column,r.w,r.h);ctx.restore();
+        ctx.fillStyle=paperStock(family,column);
+        ctx.fillRect(column*cell,family*cell,cell,r.y);ctx.fillRect(column*cell,y+r.h,cell,cell-r.y-r.h);
+        ctx.fillRect(column*cell,y,r.x,r.h);ctx.fillRect(x+r.w,y,cell-r.x-r.w,r.h);
     }
-    const texture=(source:HTMLCanvasElement)=>{
-        const t=new THREE.CanvasTexture(source);t.colorSpace=THREE.SRGBColorSpace;
-        t.anisotropy=4;t.minFilter=THREE.LinearMipmapLinearFilter;t.magFilter=THREE.LinearFilter;
-        return t;
-    };
-    return {map:texture(canvas),edge:texture(mask)};
+    const map=chain(base,red,false),mask=document.createElement('canvas');mask.width=mask.height=size/2;
+    const m=mask.getContext('2d')!;m.fillStyle='#000';m.fillRect(0,0,mask.width,mask.height);
+    const edge=chain(mask,red,true);
+    shared={map:texture(map),edge:texture(edge)};
+    return shared;
+}
+function texture(levels:HTMLCanvasElement[]):THREE.Texture {
+    const t=new THREE.Texture(levels[0]);
+    t.mipmaps=levels as unknown as THREE.Texture['mipmaps'];t.generateMipmaps=false;
+    t.colorSpace=THREE.SRGBColorSpace;t.anisotropy=4;t.minFilter=THREE.LinearMipmapLinearFilter;t.magFilter=THREE.LinearFilter;
+    t.needsUpdate=true;
+    return t;
+}
+/** Level 0 already drawn (`mask`: black); every level gets the red line stamped at its own resolution. */
+function chain(level0:HTMLCanvasElement,red:string,mask:boolean):HTMLCanvasElement[] {
+    const levels=[level0];
+    stamp(level0,red,mask);
+    while(levels[levels.length-1]!.width>1){
+        const previous=levels[levels.length-1]!,next=document.createElement('canvas');
+        next.width=next.height=Math.max(1,previous.width>>1);
+        const c=next.getContext('2d')!;c.imageSmoothingEnabled=true;c.imageSmoothingQuality='high';
+        c.drawImage(previous,0,0,next.width,next.height);
+        stamp(next,red,mask);levels.push(next);
+    }
+    return levels;
+}
+function stamp(canvas:HTMLCanvasElement,red:string,mask:boolean):void {
+    const k=canvas.width/PAPER_ATLAS.size,c=canvas.getContext('2d')!,cell=PAPER_ATLAS.cell;
+    const width=Math.max(1,Math.floor(PAPER_ATLAS.edge*k*(mask?.8:1)+.25));
+    c.fillStyle=red;
+    for(let family=0;family<4;family++)for(let column=0;column<4;column++){
+        const r=paperRect(family);
+        const x0=Math.round((column*cell+r.x)*k),y0=Math.round((family*cell+r.y)*k);
+        const x1=Math.round((column*cell+r.x+r.w)*k),y1=Math.round((family*cell+r.y+r.h)*k);
+        if(x1-x0<3||y1-y0<3){
+            // A document a texel or two wide: stock with a hint of red, never a red dot.
+            c.globalAlpha=mask?.2:.18;c.fillRect(x0,y0,Math.max(1,x1-x0),Math.max(1,y1-y0));c.globalAlpha=1;continue;
+        }
+        // Once a document is only a few texels across, a full-strength one-texel border would be most of it: far sheets
+        // would turn red and glow. The line fades as the document shrinks, keeping a thin edge, not a red speck.
+        const across=Math.min(x1-x0,y1-y0);c.globalAlpha=across>=16?1:across>=8?.7:.45;
+        c.fillRect(x0,y0,x1-x0,width);c.fillRect(x0,y1-width,x1-x0,width);
+        c.fillRect(x0,y0,width,y1-y0);c.fillRect(x1-width,y0,width,y1-y0);c.globalAlpha=1;
+    }
 }

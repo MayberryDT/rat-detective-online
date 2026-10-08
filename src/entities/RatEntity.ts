@@ -222,6 +222,8 @@ export class RatEntity {
         this.mesh = this.modelFactory({...opts, accessory: ratAccessory(name)});
         this.mesh.position.copy(position);
         this.mesh.userData.aimTarget = true;
+        // Diagnostics (E2E recordings): which rat in the scene is this client's own.
+        this.mesh.userData.localRat = !isRemote;
         this.scene.add(this.mesh);
         // Rats cast no moon shadow (the moon map is the static city's); a contact disc grounds them.
         contactShadowsOf(scene)?.add(this.mesh, .75);

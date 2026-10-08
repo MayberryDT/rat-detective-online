@@ -270,17 +270,17 @@ export class BotNavigation {
         }
         return [];
     }
-    /** One small visible spawn spill, connected to the same supported walk graph. */
-    paperLead(from:Vec3Data,facing:Vec3Data,clear?:(a:Vec3Data,b:Vec3Data)=>boolean):Vec3Data[]{
+    /** One small visible spawn spill (up to `max` places), connected to the same supported walk graph. */
+    paperLead(from:Vec3Data,facing:Vec3Data,clear?:(a:Vec3Data,b:Vec3Data)=>boolean,max=2):Vec3Data[]{
         const start=this.nearest(from);if(!start)return [];
         const points:Vec3Data[]=[];
         for(const [forward,side] of [[.4,2],[2.5,1.6],[4.5,.5],[.4,-2],[2.5,-1.6]]){
             const aim={x:from.x+facing.x*forward+facing.z*side,y:from.y,z:from.z+facing.z*forward-facing.x*side};
             const p=this.nearest(aim,n=>(!clear||clear(from,n))&&this.walkable(start,n));
             if(!p||(p.x-from.x)*facing.x+(p.z-from.z)*facing.z<-.25||Math.hypot(p.x-from.x,p.z-from.z)<1.2||
-                points.some(a=>Math.hypot(a.x-p.x,a.z-p.z)<1))continue;
+                points.some(a=>Math.hypot(a.x-p.x,a.z-p.z)<1.6))continue;
             if(this.paperPlacement(p,0))points.push({x:p.x,y:p.y,z:p.z});
-            if(points.length===2)break;
+            if(points.length===max)break;
         }
         return points;
     }

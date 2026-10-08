@@ -1,8 +1,16 @@
 # P4 implementation plan: natural noir case evidence
 
-Updated 7 October 2026. Thread: **[P4] Rat Detective physical clues**.
+Updated 8 October 2026. Thread: **[P4] Rat Detective physical clues**.
 
-**Status: implemented locally on Halla; visual review pending.** Tyler subsequently said “implement it all.” Game-code commits `55489b0` and `bffa4d6` implement the document artwork, rendering, grounded stable routes and immediate anchored starter papers. See the [implementation receipt](../verification/noir-physical-clues-2026-10-07.md) for completed checks, actual artifacts and remaining limits. Staging and production have not been deployed.
+**Status: the P4 repair (persistent, sparse, varied papers in the wind) is implemented and on staging for Tyler's review; production is not deployed.** Tyler reviewed the 7 October candidate (`55489b0`, `bffa4d6`): better, but papers blinked and flipped, were too many, identical and lifeless. The [stability and wind handoff](../handoffs/noir-paper-stability-and-wind-handoff.md) diagnosed why; Tyler then approved the fix ("move forward"), scripted movement for the review recording and a staging deploy. What changed, the repeatable checks and the review artifacts are in the [repair receipt](../verification/noir-papers-v2-2026-10-08.md). The earlier [implementation receipt](../verification/noir-physical-clues-2026-10-07.md) is history.
+
+### The P4 repair (8 October), in brief
+
+- **Sheets belong to the city.** Each sheet keeps one id, place and look (`s`: family, art, shape) for its life; a rat's route only says which groups must lie on the street. Groups nobody wants linger 10 s, then go; a case relocation, return or reset retires everything at once. Starter spills come once per life, 300 ms after the spawn, in the rat's view.
+- **Sparse groups where the way needs telling** (`caseClues.ts`): at corners (where sight breaks), the top and bottom of ramps and shafts, launcher pads and landings, long stretches (17–24 units) and one shared spill beside the case. Each group is in sight of the previous group's sheets (from a rat's eyes and the shoulder camera's pivot), sees the way on, and routes share nearby groups; a single bridge sheet covers the rare corner no spot reads from.
+- **The harbour wind** (`paperWind.ts`, client presentation only): gust fronts roll downwind and lift sheet edges by stock (receipts most, photographs least); a group's last sheet may be carried to a second resting spot and back by strong gusts on a timetable every client computes alike; new sheets blow in and retired ones blow away; passing rats and shots ruffle them. Interiors and sewers are calm; Reduced motion and `?feel=off` keep every sheet still.
+- **Twelve documents and four backs** in one case file (`casePaperDrawings.ts`), two rest shapes per family, and a hand-built mip chain that keeps the thin red edge about a pixel wide at any distance; the edge follows the Blackout smoothly and no longer strobes with surges.
+- Bots read the same sheets where players see them (a loose sheet at its current spot), within flashlight reach in a Blackout, and since `mindVersion` 14 look round once when a lead ends ([bot overhaul](../bot-overhaul.md)). Protocol 36.
 
 ## Outcome and authority
 

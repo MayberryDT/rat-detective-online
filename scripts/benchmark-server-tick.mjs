@@ -93,7 +93,7 @@ const controller=()=>new ServerBotController(spec,ids,{
     shoot:(id,origin,direction)=>{
         if(room){
             const player=players.get(id);if(!player||player.hp<=0||!admit(id))return;
-            if(sim.weapon(id)==='mousetrap'){if(sim.trapArming(id)||!sim.placeTrap(id,direction))hits.rejected++;return;}
+            if(sim.weapon(id)==='mousetrap'){if(sim.trapArming?.(id)||!sim.placeTrap(id,direction))hits.rejected++;return;}
             const shotId=crypto.randomUUID(),event={type:'playerShot',shooterId:id,shotId,origin,direction};
             sim.shoot(id,{shotId,origin,direction});shot++;
             // A shot carries its shooter's pending pose (tuple clients), which then leaves the tick's movement frame.

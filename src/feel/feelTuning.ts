@@ -59,6 +59,10 @@ export const FEEL={
     sound:{label:'17 Sound',toggle:true,params:{step:.07,remoteStep:.05,stepRange:14,rustle:.05,jostle:.08,squelch:.1,whizz:.2,whizzRange:1.8,brass:.12,headshot:.22,headshotRange:45,flashbulb:.18,shutter:.2,made:.16,hunch:.2,supply:.2,supplyRange:40,jam:.22,sting:.1,wind:.07,rain:.06,thunder:.16}},
     /** Reactive city: a flock every N lamps, a trash can every N lamps, scare radius, seconds before props return. */
     city:{label:'18 City reacts',toggle:true,params:{flockEvery:5,canEvery:4,scare:7,respawn:25}},
+    /** P4 case papers in the harbour wind: edges lift in passing gusts (strength scales the lift), loose sheets hop
+     * between their two spots, new sheets blow in and retired ones blow away; rats and shots ruffle them.
+     * Off (or Reduced interface motion): every sheet lies still where the authority put it. */
+    paperWind:{label:'P4 Case papers in the wind',toggle:true,params:{strength:1}},
     /** Rewards: victory slow-motion (seconds, rate, catch-up), callout cooldown, score punch and Case File. `bank`: the
      * seconds of the same slow-motion a Crossfire bank kill gives its killer. */
     rewards:{label:'19 Rewards',toggle:true,params:{slowmo:1.4,slowRate:.3,catchup:.8,calloutCooldown:3,bank:.55}},

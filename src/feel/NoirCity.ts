@@ -20,21 +20,26 @@ export class NoirCity {
     private readonly unlit={noirDrain:{value:0},noirGamma:{value:1},noirDark:this.dark,noirMono:this.mono};
     /** Additive glows (lamp haze, light shafts) only go dark with the power, and grey with low health. */
     private readonly glow={noirDrain:{value:0},noirGamma:{value:1},noirDark:this.dark,noirMono:this.mono};
+    /** P4 case papers: their thin red edge dims smoothly with the Blackout but never strobes with a surge or the lights'
+     * stutter (Tyler: a quiet, steady outline). */
+    private readonly evidenceDark={value:0};
+    private readonly evidence={noirDrain:{value:0},noirGamma:{value:1},noirDark:this.evidenceDark,noirMono:this.mono};
     private readonly patched=new Set<THREE.Material>();
 
     constructor(scene:THREE.Scene){this.collect(scene);}
 
-    private collect(object:THREE.Object3D,lightOnly=false):void {
+    private collect(object:THREE.Object3D,lightOnly=false,evidence=false):void {
         if(object.userData.noNoir&&!lightOnly)return;
         if(object instanceof THREE.Mesh||object instanceof THREE.Points||object instanceof THREE.Line)
-            for(const material of Array.isArray(object.material)?object.material:[object.material])this.patch(material,lightOnly);
-        for(const child of object.children)this.collect(child,lightOnly);
+            for(const material of Array.isArray(object.material)?object.material:[object.material])this.patch(material,lightOnly,evidence);
+        for(const child of object.children)this.collect(child,lightOnly,evidence);
     }
 
-    /** City dressing built after the city (neon, haze, rain) only follows the Blackout. */
-    adopt(root:THREE.Object3D):void {this.collect(root,true);}
+    /** City dressing built after the city (neon, haze, rain) only follows the Blackout. `evidence`: the case papers,
+     * which follow it without the stutter (`setEvidenceDark`). */
+    adopt(root:THREE.Object3D,evidence=false):void {this.collect(root,true,evidence);}
 
-    private patch(material:THREE.Material,lightOnly=false):void {
+    private patch(material:THREE.Material,lightOnly=false,evidence=false):void {
         if(this.patched.has(material))return;
         if(material instanceof THREE.ShaderMaterial){this.patchShader(material);return;}
         const unlit=material instanceof THREE.MeshBasicMaterial;
@@ -43,7 +48,7 @@ export class NoirCity {
         const additive=material.blending===THREE.AdditiveBlending;
         this.patched.add(material);
         material.addEventListener('dispose',()=>this.patched.delete(material));
-        const uniforms=additive||lightOnly?this.glow:unlit?this.unlit:this.lit;
+        const uniforms=evidence?this.evidence:additive||lightOnly?this.glow:unlit?this.unlit:this.lit;
         const compile=material.onBeforeCompile,key=material.customProgramCacheKey();
         material.onBeforeCompile=(shader,renderer)=>{
             compile.call(material,shader,renderer);
@@ -92,6 +97,8 @@ export class NoirCity {
 
     /** Blackout: 0 (power on) … 1 (every city light and surface dark). */
     setDark(level:number):void {this.dark.value=level;}
+    /** The case papers' darkness: the Blackout's eased level, without its stutter or a surge's flicker. */
+    setEvidenceDark(level:number):void {this.evidenceDark.value=level;}
 
     /** Leave patched materials visually neutral (they are disposed with the city). */
     dispose():void {
