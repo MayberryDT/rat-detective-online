@@ -63,7 +63,7 @@ export class PerfReporter {
     const now = performance.now(), visible = !this.skip;
     if (visible && frameMs >= STALL_MS && this.stalls.length < PERF_STALLS) this.stall(frameMs, now);
     this.firstMessageAt = undefined; this.messages = 0;
-    if (++this.sampled >= 60) { this.sampled = 0; this.lastHeap = heapMb(); this.lastPrograms = this.renderer.info.programs?.length ?? 0; }
+    if (++this.sampled >= 60) { this.sampled = 0; this.lastHeap = heapMb(); this.lastPrograms = this.renderer.info?.programs?.length ?? 0; }
     if (this.skip || !(frameMs > 0) || frameMs >= PAUSE_MS) { this.skip = false; return; }
     this.frames[this.count] = frameMs; this.cpu[this.count] = cpuMs; this.schedule[this.count] = scheduleMs; this.count++; this.ms += frameMs;
     if (this.ms >= REPORT_MS || this.count === CAPACITY) this.flush();
@@ -79,7 +79,7 @@ export class PerfReporter {
     this.machine ??= machine(gl);
     const p50 = at(frames, .5);
     const info = this.renderer.info, stalls = this.stalls.length ? this.stalls : undefined;
-    this.send({ ...(stalls ? { stalls } : {}), longFrames: this.longFrameCount, programs: info.programs?.length ?? 0, textures: info.memory.textures, geometries: info.memory.geometries,
+    this.send({ ...(stalls ? { stalls } : {}), longFrames: this.longFrameCount, ...(info ? { programs: info.programs?.length ?? 0, textures: info.memory.textures, geometries: info.memory.geometries } : {}),
       ms: Math.round(this.ms), frames: n, fps: r1(n * 1000 / this.ms), fps50: p50 > 0 ? r1(1000 / p50) : 0, p50, p95: at(frames, .95), p99: at(frames, .99),
       worst: r1(frames[n - 1]!), over33, over100, cpu50: at(cpu, .5), cpu95: at(cpu, .95), schedule50: at(schedule, .5), schedule95: at(schedule, .95), ...(heap ? { heapMb: r1(heap / 1048576) } : {}),
       w: gl.drawingBufferWidth, h: gl.drawingBufferHeight, dpr: window.devicePixelRatio || 1, pr: this.renderer.getPixelRatio(), ...this.machine, ...this.quality?.(), ...this.network?.() });
@@ -87,7 +87,7 @@ export class PerfReporter {
   }
 
   private stall(frameMs: number, now: number): void {
-    const start = now - frameMs, heap = heapMb(), programs = this.renderer.info.programs?.length ?? 0;
+    const start = now - frameMs, heap = heapMb(), programs = this.renderer.info?.programs?.length ?? 0;
     let script = 0, render = 0, top: string | undefined, topMs = 0;
     for (const f of this.longFrames) {
       if (f.end < start || f.start > now) continue;

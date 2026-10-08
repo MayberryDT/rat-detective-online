@@ -1,5 +1,6 @@
 import {DISPATCH_STATIONS,LAUNCH_MACHINES} from './chaosState';
-import { CITY_BOUNDS, GRAYBOX_SPAWNS, sharedGrayboxBoxes, type GrayboxBox } from './grayboxLayout';
+import { CITY_BOUNDS, GRAYBOX_SPAWNS, type GrayboxBox } from './grayboxLayout';
+import { sharedGrayboxBoxes } from './sharedLayout';
 import { LANDMARK_INTERIORS, landmarkExitPoint } from './landmarkLayout';
 import { pier9ExitPoint } from './city/kit/parts/docksWarehouse';
 import { SEWER_LIGHTS,SEWER_PIPE_ENTRANCES,sewerPipePoint,sewerRampTravelPoint } from './sewerLayout';

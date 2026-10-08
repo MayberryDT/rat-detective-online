@@ -100,8 +100,8 @@ export class CaseFiles {
         this.root.userData.noNoir=true; // adopted explicitly with the dynamic dressing path
         this.root.userData.caseFiles=this;
         this.paws.support=p=>this.support(p);this.root.add(this.paws.mesh);
-        const art=casePaperArt();
-        this.material=new THREE.MeshStandardMaterial({map:art.map,emissiveMap:art.edge,
+        // The case file's art is drawn on first use (`ensureArt`); the load's warm-up does it, so the program links before play.
+        this.material=new THREE.MeshStandardMaterial({
             emissive:0xffffff,emissiveIntensity:.55,roughness:1,metalness:0,side:THREE.FrontSide});
         this.material.onBeforeCompile=shader=>{
             shader.vertexShader=shader.vertexShader
@@ -135,6 +135,7 @@ export class CaseFiles {
     /** `now`: the authority's clock, so gusts and loose sheets agree across clients. `focus`: the local rat, which reads
      * papers out to `CLUES.range` like any rat; the orbiting camera must not move that edge. */
     update(clues:readonly CaseClue[],now:number,camera:THREE.Camera,dt=1/60,focus?:THREE.Vector3,prints:readonly CasePrints[]=[]):void {
+        if(clues.length)this.ensureArt();
         camera.updateMatrixWorld();this.time=now;
         this.frustum.setFromProjectionMatrix(this.matrix.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse));
         const motion=this.motion(),eye=focus??camera.position;
@@ -205,7 +206,12 @@ export class CaseFiles {
         }
         return out;
     }
+    private ensureArt():void {
+        if(this.material.map)return;
+        const art=casePaperArt();this.material.map=art.map;this.material.emissiveMap=art.edge;this.material.needsUpdate=true;
+    }
     warm():void{
+        this.ensureArt();
         for(const mesh of this.batches){mesh.count=1;mesh.visible=true;mesh.setMatrixAt(0,this.matrix.identity());mesh.instanceMatrix.needsUpdate=true;}
         this.paws.warm();
     }

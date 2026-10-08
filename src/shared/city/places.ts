@@ -1,4 +1,5 @@
-import { sharedGrayboxBoxes, GRAYBOX_VERSION, CITY_PREVIEW_SEED, CITY_BOUNDS, type GrayboxBox } from '../grayboxLayout';
+import { GRAYBOX_VERSION, CITY_PREVIEW_SEED, CITY_BOUNDS, type GrayboxBox } from '../grayboxLayout';
+import { sharedGrayboxBoxes } from '../sharedLayout';
 import { CITY_STREETS } from '../cityPlan';
 import { LANDMARK_INTERIORS } from '../landmarkLayout';
 import { SEWER_HALLS, SEWER_HALL_NAMES, SEWER_ENTRIES } from '../sewerLayout';

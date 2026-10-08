@@ -459,7 +459,9 @@ function parsePosePlayer(value: unknown): Extract<ServerMessage, { type: 'player
   ) {
     return null;
   }
-  return { id, x, y, z, qx, qy, qz, qw, meshQx, meshQy, meshQz, meshQw };
+  const lookYaw = value.lookYaw === undefined ? undefined : finiteNumber(value.lookYaw), lookPitch = value.lookPitch === undefined ? undefined : finiteNumber(value.lookPitch);
+  const look = lookYaw !== undefined && lookPitch !== undefined && lookYaw !== null && lookPitch !== null && Math.abs(lookYaw) <= 3.15 && Math.abs(lookPitch) <= 1.58 ? { lookYaw, lookPitch } : {};
+  return { id, x, y, z, qx, qy, qz, qw, meshQx, meshQy, meshQz, meshQw, ...look };
 }
 
 export function parseClientMessage(raw: unknown): ClientMessage | null {

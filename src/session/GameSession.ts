@@ -422,7 +422,7 @@ export class GameSession {
         this.remotes.snapshot(message.players, this.myId);
         this.gun.authoritative=this.worldSpec.version===GRAYBOX_VERSION;
         if(this.gun.authoritative)this.chaos=new ChaosView(this.stage.scene,id=>id===this.myId?this.rat?.entity:this.remotes.get(id),this.stage.listener.context as AudioContext,true,(cue,origin)=>this.feedback.play(cue,origin),this.foleyWorld,this.gun.tracePresentation);
-        if(this.chaos){
+        if(this.chaos?.caseFiles){
             this.feel.adoptEvidence(this.chaos.caseFiles.root);
             const hit=new CANNON.RaycastResult(),from=new CANNON.Vec3(),to=new CANNON.Vec3();
             this.chaos.caseFiles.support=p=>{
@@ -1055,6 +1055,26 @@ export class GameSession {
     /** `?replay=dev` (docs/replay/playback.md, Checks): F8 lists the kept clips and plays the newest fullscreen; F8 again stops it. */
     private bindReplayDev():void {
         this.replayDev=true;
+        // For scripts/verify-replay.mjs: the kept clips' recorded tracks, a clip to play, and the replay's clock and
+        // subject (whose eyes). Development only (`?replay=dev`).
+        Object.assign(window,{__ratReplay:{
+            serverNow:()=>Date.now()+this.serverOffset,myId:()=>this.myId,
+            rats:()=>({me:this.rat&&!this.rat.entity.dead?{x:this.rat.entity.mesh.position.x,y:this.rat.entity.mesh.position.y,z:this.rat.entity.mesh.position.z}:null,
+                others:[...this.remotes.rats].filter(([,r])=>!r.entity.dead).map(([id,{entity}])=>({id,x:entity.mesh.position.x,y:entity.mesh.position.y,z:entity.mesh.position.z}))}),
+            clips:()=>this.recorder.clips().map(clip=>({id:clip.id,kind:clip.kind,actors:clip.actors,at:clip.at,startAt:clip.startAt,endAt:clip.endAt,involvesLocal:clip.involvesLocal})),
+            data:(id:string)=>{const data=this.recorder.data(id);if(!data)return null;
+                const moves:Record<string,number[][]>={},deaths:[number,string][]=[],poses:number[][]=[];
+                for(const entry of data.entries){
+                    if('pose' in entry){const p=entry.pose;poses.push([entry.at,p.x,p.y,p.z,p.aim.x,p.aim.y,p.aim.z]);continue;}
+                    if(!('event' in entry))continue;const e=entry.event;
+                    if(e.type==='playerMoved'||e.type==='playerCorrected'){const p=e.player;(moves[p.id]??=[]).push([entry.at,p.x,p.y,p.z,p.lookYaw??NaN,p.lookPitch??NaN]);}
+                    if(e.type==='playerDied')deaths.push([entry.at,e.victimId]);
+                }
+                return {moves,deaths,poses};},
+            play:(id:string,loop=false)=>{const clip=this.recorder.clips().find(c=>c.id===id);if(clip)this.replay.play(clip,{mode:'fullscreen',loop,onEnd:()=>this.replay.stop()});return !!clip;},
+            stop:()=>this.replay.stop(),
+            state:()=>this.replay.debugState(),
+        }});
         document.addEventListener('keydown',event=>{
             if(event.code!=='F8'||event.repeat)return;
             event.preventDefault();this.logReplays();

@@ -1,5 +1,6 @@
 import { DISPATCH_STATIONS, LAUNCH_MACHINES } from './chaosState';
-import { CITY_BOUNDS, GRAYBOX_VERSION, sharedGrayboxBoxes, isRampOpening } from './grayboxLayout';
+import { CITY_BOUNDS, GRAYBOX_VERSION, isRampOpening } from './grayboxLayout';
+import { sharedGrayboxBoxes } from './sharedLayout';
 import type { Vec3Data } from './networkProtocol';
 import { boxHalfExtents } from './boxFrame';
 import { DEFAULT_CITY_OPTIONS, generateBuildingLayout, overlapsBuildingFootprint, type WorldSpec } from './worldSpec';

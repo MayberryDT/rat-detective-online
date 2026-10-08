@@ -10,7 +10,9 @@ import { closestPointOnSegment, INTERACTION_SWEEP_DISTANCE, INTERACTION_SWEEP_MS
 import { SLICK_MATERIAL, StaticCityBroadphase, addCityBody, cityBoxBody } from './StaticCityBroadphase';
 import { boundedIncidentVelocity, launcherVelocity, LANDING_SHOCKWAVE, SURGE, type ThrowSource } from './launcherVelocity';
 import { incidentInfo, incidentRoster, type EvidenceMode, type IncidentId } from './incidentCatalog';
-import { CITY_BOUNDS, sharedGrayboxBoxes } from './grayboxLayout';
+import { CITY_BOUNDS } from './grayboxLayout';
+import { GRAYBOX_VERSION } from './layoutVersion';
+import { sharedGrayboxBoxes } from './sharedLayout';
 import { isReachableLandmarkPosition } from './landmarkLayout';
 import { isReachableVehiclePosition } from './vehicleLayout';
 import { BALL_SPEED, BALL_GRAVITY, BALL_RESTITUTION, BALL_RADIUS } from './ballTuning';
@@ -243,7 +245,7 @@ export class ChaosSimulation {
         try{clear=spec?worldSpawnPoints(spec):CASE_SPAWNS;}catch{clear=CASE_SPAWNS;}
         this.streetPoints=clear;
         // Where supplies can stand depends only on the layout: worked out once per world, not at every room wake.
-        const key=spec&&`${spec.version}:${spec.seed}`;
+        const key=spec?.version===GRAYBOX_VERSION?`${spec.version}:${spec.seed}`:undefined;
         let points=key?SUPPLY_POINTS.get(key):undefined;
         if(!this.fixtureSupplies&&!points){points=resolvePickupPoints(clear,14,p=>this.supportedSpot(p));if(key)SUPPLY_POINTS.set(key,points);}
         this.pickupPoints=this.fixtureSupplies?[...this.fixtureSupplies]:[...points!];

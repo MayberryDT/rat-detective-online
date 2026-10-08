@@ -8,7 +8,8 @@ import { vehicleBoxes } from './vehicleLayout';
 import { sewerBoxes, sewerGroundOpening, SEWER_ENTRIES } from './sewerLayout';
 import { kitCity } from './city/kit/city';
 import { QUAY_EDGE_Z } from './city/kit/northPlan';
-export const GRAYBOX_VERSION = 7;
+export { GRAYBOX_VERSION } from './layoutVersion';
+import { GRAYBOX_VERSION } from './layoutVersion';
 export const SEWER_FLOOR = -7;
 export const CITY_BOUNDS = {min:-196,max:166};
 export const CITY_PREVIEW_SEED = 20260907;
@@ -25,15 +26,6 @@ export const GRAYBOX_SPAWNS = [
  * cheese, sight or cases. `slick`: frictionless (chutes). */
 export interface GrayboxBox {debris?:DebrisKind;x:number;y:number;z:number;w:number;h:number;d:number;color:number;rx:number;ry?:number;rz:number;building?:boolean;hidden?:boolean;original?:boolean;passBalls?:true;slick?:true}
 export const isRampOpening=sewerGroundOpening;
-const sharedBoxes=new Map<string,readonly GrayboxBox[]>();
-/** The layout's boxes, built once per world and shared (frozen): the authority's simulation, navigation, bots and
- * spawns all read the same list, and a room waking in a warm isolate does not rebuild it (smooth-play plan, E2). */
-export function sharedGrayboxBoxes(spec={seed:CITY_PREVIEW_SEED,version:GRAYBOX_VERSION}):readonly GrayboxBox[] {
-    const key=`${spec.version}:${spec.seed}`;
-    let boxes=sharedBoxes.get(key);
-    if(!boxes){boxes=Object.freeze(grayboxBoxes(spec).map(b=>Object.freeze(b)));sharedBoxes.set(key,boxes);}
-    return boxes;
-}
 export function grayboxBoxes(spec={seed:CITY_PREVIEW_SEED,version:GRAYBOX_VERSION}):GrayboxBox[] {
     const boxes:GrayboxBox[]=[];
     const box=(x:number,y:number,z:number,w:number,h:number,d:number,color=0x28222f,rx=0,rz=0,building=false)=>boxes.push({x,y,z,w,h,d,color,rx,rz,building});

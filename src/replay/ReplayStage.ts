@@ -58,6 +58,8 @@ class Playback {
     private readonly remotes:RemotePlayers;
     private readonly chaos:ChaosView;
     private director!:ReplayDirector;
+    /** Whose eyes the clip is seen through. */
+    get subject():string|undefined {return this.director?.subject;}
     private readonly view:DirectorView;
     private roster?:Extract<ClipData['entries'][number],{roster:unknown}>;
     private readonly tracks=new Map<string,Track>();
@@ -321,6 +323,10 @@ export class ReplayStage implements ReplayPlayer {
         if(!this.playback)return;
         this.playback.dispose();this.playback=undefined;this.options=undefined;
         this.audio.end();
+    }
+    /** For `?replay=dev` checks: the clip's clock (server ms), whose eyes, and whether it is playing. */
+    debugState():{t:number;pov?:string;clip?:string;playing:boolean} {
+        const p=this.playback;return p?{t:p.t,...(p.subject?{pov:p.subject}:{}),clip:p.data.clip.id,playing:!this.ended}:{t:0,playing:false};
     }
     clock():{ms:number;total:number} {
         const p=this.playback;if(!p)return {ms:0,total:0};

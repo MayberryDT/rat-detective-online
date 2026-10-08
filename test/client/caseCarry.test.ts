@@ -170,9 +170,9 @@ describe('natural briefcase carry',()=>{
         for(let i=1;i<=3;i++)expect(scene.getObjectByName(`hot-case-evidence-${i}`)).toBeUndefined();
         expect(mesh.getObjectByName('hot-case-off-hand')).toBeUndefined();
         expect(scene.getObjectByName('hot-case')).toBeDefined();
-        // Each extra case leaves the scene root whole: its body, its beacon's rim and echo, and its hot look's root;
-        // the carried one also its carrier's hat band overlay.
-        expect(scene.children.length).toBe(initialChildren-13);view.dispose();
+        // Each extra case leaves the scene root whole: its body and its hot look's root (no through-wall beacon since the
+        // P4 case papers, 7 October); the carried one also its carrier's hat band overlay.
+        expect(scene.children.length).toBe(initialChildren-7);view.dispose();
     });
     it('keeps the visible case and authoritative deflection body aligned through turns',()=>{
         for(const yaw of [0,Math.PI/2,Math.PI,Math.PI*1.6]){
@@ -234,7 +234,9 @@ describe('natural briefcase carry',()=>{
         view.dispose();
     });
 
-    it('hides only the local carrier badge and restores it after a disarm',()=>{
+    // Since the P4 case papers (7 October, Tyler: no through-wall or off-screen case locators) there is no case badge:
+    // a carrier and a disarm show none.
+    it('shows no case location badge for a carrier or after a disarm',()=>{
         const carrier=player('carrier'),attacker=player('attacker');attacker.x-=8;
         const simulation=new ChaosSimulation(new Map([[carrier.id,carrier],[attacker.id,attacker]]),()=>{});
         simulation.step(1/60,1000);
@@ -242,10 +244,10 @@ describe('natural briefcase carry',()=>{
         const entity={mesh,isPlayer:true,dead:false,name:'You',setWeapon(){}} as unknown as RatEntity;
         const view=new ChaosView(new THREE.Scene(),()=>entity,undefined,false),camera=new THREE.PerspectiveCamera();
         view.apply(simulation.snapshot());view.update(1/60,camera);
-        const badge=elements.filter(element=>element.label==='Hot Case location').at(-1)!;
-        expect(badge.style.display).toBe('none');
+        const badges=()=>elements.filter(element=>element.label==='Hot Case location');
+        expect(badges()).toHaveLength(0);
         entity.isPlayer=false;view.update(1/60,camera);
-        expect(badge.style.display).toBe('block');
+        expect(badges()).toHaveLength(0);
         entity.isPlayer=true;
         const p=simulation.caseBody.position;
         for(let i=0;i<CHAOS_TUNING.caseGripHits;i++){
@@ -255,7 +257,7 @@ describe('natural briefcase carry',()=>{
         expect(simulation.snapshot().case.owner).toBeNull();
         expect(simulation.snapshot().shots[0].v.x).toBeGreaterThan(0);
         view.apply(simulation.snapshot());view.update(1/60,camera);
-        expect(badge.style.display).toBe('block');
+        expect(badges()).toHaveLength(0);
         view.dispose();
     });
 });

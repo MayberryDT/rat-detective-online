@@ -43,7 +43,8 @@ export class PawPrints {
         // Per print: its ink (0…1) and which paw (1: the right, the left one's art mirrored).
         this.inks=new THREE.InstancedBufferAttribute(new Float32Array(MAX*2),2);this.inks.setUsage(THREE.DynamicDrawUsage);
         geometry.setAttribute('pawInk',this.inks);
-        this.material=new THREE.MeshStandardMaterial({map:pawTexture(),color:ink,emissive:ink,emissiveIntensity:.4,roughness:1,metalness:0,
+        // The paw art is drawn on first use (`ensureArt`): the load's warm-up does it, so its program links before play.
+        this.material=new THREE.MeshStandardMaterial({color:ink,emissive:ink,emissiveIntensity:.4,roughness:1,metalness:0,
             transparent:true,depthWrite:false,side:THREE.FrontSide,polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-8});
         this.material.onBeforeCompile=shader=>{
             shader.vertexShader=shader.vertexShader
@@ -62,6 +63,7 @@ export class PawPrints {
 
     /** `eye`: the local rat. `motion`: stamping in (else prints only fade in); `still`: a replay, everything as it lies. */
     update(prints:readonly CasePrints[],now:number,eye:THREE.Vector3,frustum:THREE.Frustum,motion:boolean,still:boolean):void {
+        if(prints.length)this.ensureArt();
         this.sync(prints,now,eye,still);
         const candidates=this.candidates;candidates.length=0;
         for(const [id,run] of this.runs){
@@ -110,7 +112,8 @@ export class PawPrints {
             return {id:run.r.id,state:run.leave!==undefined?'fading':run.arrive!==undefined?'stamping':'down',shown:run.shown,first:{x:a.x,y:a.y,z:a.z},end:{x:b.x,y:b.y,z:b.z},h:b.h,
                 points:run.prints.map(p=>[p.x,p.z,p.h] as [number,number,number])};});
     }
-    warm():void {this.mesh.count=1;this.mesh.visible=true;this.mesh.setMatrixAt(0,new THREE.Matrix4());this.mesh.instanceMatrix.needsUpdate=true;}
+    private ensureArt():void {if(!this.material.map){this.material.map=pawTexture();this.material.needsUpdate=true;}}
+    warm():void {this.ensureArt();this.mesh.count=1;this.mesh.visible=true;this.mesh.setMatrixAt(0,new THREE.Matrix4());this.mesh.instanceMatrix.needsUpdate=true;}
     clear():void {this.runs.clear();this.primed=false;this.mesh.count=0;this.mesh.visible=false;}
     dispose():void {this.clear();this.mesh.geometry.dispose();this.material.map?.dispose();this.material.dispose();this.mesh.dispose();}
 

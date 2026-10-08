@@ -14,7 +14,8 @@ import type { WeaponKind } from '../shared/pickups';
 import { serializeServerMessage } from './serializeServerMessage';
 import { type ChaosState } from '../shared/chaosState';
 import { shootRate } from '../shared/shotTiming';
-import { GRAYBOX_VERSION, sharedGrayboxBoxes } from '../shared/grayboxLayout';
+import { GRAYBOX_VERSION } from '../shared/grayboxLayout';
+import { sharedGrayboxBoxes } from '../shared/sharedLayout';
 import { drowned } from '../shared/city/kit/city';
 import { ASSIGNMENT_IDS, ASSIGNMENTS, createAssignment, isAssignmentId, nextAssignment, type AssignmentId, type AssignmentRotation, type AssignmentState } from '../shared/assignments';
 import { incidentInfo, incidentRoster, isEvidenceMode, isIncidentId, parseIncidentList, type EvidenceMode, type IncidentId } from '../shared/incidentCatalog';
@@ -243,6 +244,8 @@ export class GameRoom extends DurableObject<Env> {
   private readonly rateLimiter = new RateLimiter();
   private messagesIn = 0;
   private broadcasts = 0;
+  /** Each rat's latest look (camera for a player, aim for a bot), broadcast with its pose for replays. */
+  private readonly looks=new Map<string,{lookYaw:number;lookPitch:number}>();
   private readonly pendingMovement=new Map<string,Extract<ServerMessage,{type:'playersMoved'}>['players'][number]>();
   private lastSnapshotAt = 0;
   private reconnects = 0;
@@ -1234,7 +1237,7 @@ export class GameRoom extends DurableObject<Env> {
     player.meshQz = message.meshRotation.z;
     player.meshQw = message.meshRotation.w;
     this.chaos?.recordMovement(playerId,from,position,at,seq);
-    if(message.aim)this.city.aim(playerId,message.aim,at);
+    if(message.aim){this.city.aim(playerId,message.aim,at);this.looks.set(playerId,{lookYaw:Math.atan2(message.aim.x,message.aim.z),lookPitch:Math.asin(Math.max(-1,Math.min(1,message.aim.y)))});}
     if(message.controls)this.city.controls(playerId,message.controls,at);
     this.persistPlayer(player, corrected);
     // The harbour (plan D1): a rat whose feet sink into the water dies, credited to nobody.
@@ -1257,9 +1260,10 @@ export class GameRoom extends DurableObject<Env> {
       meshQy: player.meshQy,
       meshQz: player.meshQz,
       meshQw: player.meshQw,
+      ...this.looks.get(playerId),
     };
     const previous = this.lastMovementBroadcast.get(playerId);
-    const unchanged = previous && POSE_FIELDS.every(field => previous.pose[field] === pose[field]);
+    const unchanged = previous && POSE_FIELDS.every(field => previous.pose[field] === pose[field]) && previous.pose.lookYaw === pose.lookYaw && previous.pose.lookPitch === pose.lookPitch;
     // Deliver the first repeated pose so observers see movement stop. Further
     // identical poses need only a half-second heartbeat. Authority/activity and
     // persistence above still process every input; corrections are never hidden.
@@ -1588,7 +1592,7 @@ export class GameRoom extends DurableObject<Env> {
     if (!this.players.delete(playerId)) return;
     this.sessions.delete(playerId);
     this.ctx.storage.sql.exec('DELETE FROM reconnect_sessions WHERE player_id = ?',playerId);
-    this.pendingMovement.delete(playerId);
+    this.pendingMovement.delete(playerId);this.looks.delete(playerId);
     this.ctx.storage.sql.exec('DELETE FROM players WHERE id = ?', playerId);
     this.ctx.storage.sql.exec('DELETE FROM pending_events WHERE player_id = ?', playerId);
     this.hidden.delete(playerId);this.readers.delete(playerId);

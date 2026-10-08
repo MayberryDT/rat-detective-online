@@ -21,8 +21,9 @@ import type { ExhibitMessage, HighlightMarker } from './highlights';
  * 36: case papers are persistent sheets in small groups: a fixed id, place and look `s` for life, an optional gust spot `q`.
  * 37: paw prints beside the papers (`prints`, keyed runs leaving a group the way the trail goes on).
  * 38: a held join (`join` with `hold`): Enter City wakes the room while the browser loads; the welcome waits for the
- *     real join. */
-export const PROTOCOL_VERSION = 38;
+ *     real join.
+ * 39: movement carries each rat's look (`lookYaw`, `lookPitch`; a tuple row of 15) for replays. */
+export const PROTOCOL_VERSION = 39;
 /** Body hits deal 1; a headshot is always lethal. */
 export const MAX_HP = 5;
 export const KILLS_TO_WIN = 20;
@@ -185,10 +186,14 @@ export interface PublicRoomStatus {
 }
 
 export const MAX_MOVEMENT_BATCH = 100;
+/** A rat's pose as broadcast: body position and rotations, and where it looks (`lookYaw` as atan2 of the look's x and
+ * z, `lookPitch` up positive, radians): the camera's look for a player, the aim for a bot. Replays play the look back
+ * through the gameplay camera (smooth-play plan, R1). */
+export type PosePlayer = Pick<PlayerData, 'id' | 'x' | 'y' | 'z' | 'qx' | 'qy' | 'qz' | 'qw' | 'meshQx' | 'meshQy' | 'meshQz' | 'meshQw'> & { lookYaw?: number; lookPitch?: number };
 export interface MovementSample {
   at: number;
   seq?: number;
-  player: Pick<PlayerData, 'id' | 'x' | 'y' | 'z' | 'qx' | 'qy' | 'qz' | 'qw' | 'meshQx' | 'meshQy' | 'meshQz' | 'meshQw'>;
+  player: PosePlayer;
 }
 
 /** Latest local pose bundled with latency-sensitive actions. Sequence numbers are
@@ -274,18 +279,12 @@ export type ServerMessage =
       type: 'playerMoved';
       /** Authoritative sample time; optional for older previews. */
       at?: number;
-      player: Pick<
-        PlayerData,
-        'id' | 'x' | 'y' | 'z' | 'qx' | 'qy' | 'qz' | 'qw' | 'meshQx' | 'meshQy' | 'meshQz' | 'meshQw'
-      >;
+      player: PosePlayer;
     }
   | {
       type: 'playerCorrected';
       at?: number;
-      player: Pick<
-        PlayerData,
-        'id' | 'x' | 'y' | 'z' | 'qx' | 'qy' | 'qz' | 'qw' | 'meshQx' | 'meshQy' | 'meshQz' | 'meshQw'
-      >;
+      player: PosePlayer;
     }
   | { type: 'playerShot'; shooterId: string; shotId: string; origin: Vec3Data; direction: Vec3Data; movement?:MovementSample;
       launch?: {at:number; balls:Array<{id:string; velocity:Vec3Data}>} }
