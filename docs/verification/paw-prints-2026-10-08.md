@@ -1,5 +1,35 @@
 # Paw prints and the eye-catch: verification receipt (8 October 2026)
 
+## Revision: prints cross the gaps (current)
+
+Tyler, on the first version: "you put the paw prints in the exact same spot as the papers, and it completely ruins the whole point of it … It's still too hard to follow." He was right: four prints beside each group told a player at a paper which way to go, but nothing marked the 15–22 units between groups, where players get lost. The verifier's checks were all taken standing at a paper, so they could not see the problem. Approved fix ("do it"): pairs of prints across every gap.
+
+- **What changed** (`0ff15e2`, `5bcbafc`, `b0e248d`): each group's run now spans the route to the next group, with a left-right pair every 4.5 units, stopping 2.5 units short of the next group's papers (up to 16 prints). Bots and the follower look along the nearest print. Prints are indexed by grid cell for the placement checks, and checked at the two-decimal position they are sent with. The recorder follows prints pair by pair (`6a524b4`).
+- **The missing check, written before the change (P10):** walking the trail with only the screen's view, is a print or paper on screen within 10 units ahead? Pairs at most 6 units apart, and every run ending within 8 units of the next paper.
+
+| Screen-only follower, 62 spawns | No prints `6774b0c` | Prints across gaps `b0e248d` |
+| --- | --- | --- |
+| A print or paper on screen within 10 units ahead, share of the walk | 80% | **99%** |
+| Next paper on screen at the first look | 27% | 92% |
+| Reaches the case | 56 / 62 | **62 / 62** |
+| Time to the case, median / p90 | 24.4 / 62.2 s | 17.7 / 26.7 s |
+
+The first version (prints beside papers, `631ba5e`) scored 91% on the same walk measure.
+
+- **Checks:** 31 of 33 pass (`gaps-final3/papers-b0e248d.json`). P10: 607 of 610 runs have pairs within 6 units, and 596 end within 8 units of a further paper. The papers-only sight follower reaches the case from 62 of 62 spawns. Prints on screen within 30 units: median 6, p90 20. 10,659 prints checked: none floating, under a sheet or tangled with another run. No run blinks, changes or comes back. A restore keeps 65 of 65 runs, and a reset clears them all.
+- **F12 and P8 fail, by design:** prints add 2.3 KB/s (about 4% of a client's traffic). Side by side under the same load, the paper system's time went from 5.87 to 7.27 s over 6 minutes, and its p99 per step from 1.76 to 2.74 ms. The whole simulation step is no slower (median 1.44 against 1.58 ms).
+- **Bots:** 73% of a bot's next paper after reading one with prints lay within 45° of where the prints pointed (840 reads).
+- **Staging** `staging-2026-10-08-23fa1e1` (Worker version `1a6226cd-1a5d-41ac-bd17-6c35b9db0446`, client `index-BIrnTbR3.js`, protocol 37, `mindVersion` 15):
+  - The two-client and reconnect check passed: 32 identical frames, papers and prints.
+  - Desktop recording (100 s): 42 papers read, 19 runs followed pair by pair, 0 sheets or prints popped, 4 eye-catches.
+  - 960×540 recording (85 s): 35 papers read, 20 runs followed, 0 popped, 10 eye-catches.
+  - The room returned to 0 players and 0 bots.
+- **Tests:** 288 of 288 and the build pass. One full test run made during the authority runs failed 4 room tests on delivery-acknowledgement timeouts under load; they pass alone and in a quiet full run.
+- **Artifacts:** `gaps-final/` (no-prints walk baseline), `gaps-final3/`, `gaps-authority/` (prints beside papers under the new checks), `hosted/`. Review copies on Veelox: `/tmp/rat-detective-paw-prints/`.
+
+The rest of this receipt describes the first version (prints beside the papers) and stays as history.
+
+
 Thread: **[P4] Rat Detective physical clues**. Staging only; production is not deployed.
 
 Tyler played the papers repair ([its receipt](noir-papers-v2-2026-10-08.md)): "they look great now … it's not obvious enough where you need to go … add some detective-like footprints … not a whole trail … sparse paw prints on the ground that go along with the papers". The scope he approved ("implement all of it"): a short run of prints leaving each paper group the way the trail goes on, in case-red ink, plus an eye-catching gust on far papers; bots reading prints the same way; staging and a scripted-movement review recording. What changed is in [the plan](../plans/noir-physical-clues.md#paw-prints-and-the-eye-catch-8-october-in-brief).
