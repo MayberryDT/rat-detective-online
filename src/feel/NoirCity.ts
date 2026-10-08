@@ -42,6 +42,7 @@ export class NoirCity {
         // Additive glows (lamp haze, light shafts) are light, not surfaces: no drain or contrast.
         const additive=material.blending===THREE.AdditiveBlending;
         this.patched.add(material);
+        material.addEventListener('dispose',()=>this.patched.delete(material));
         const uniforms=additive||lightOnly?this.glow:unlit?this.unlit:this.lit;
         const compile=material.onBeforeCompile,key=material.customProgramCacheKey();
         material.onBeforeCompile=(shader,renderer)=>{
@@ -76,6 +77,7 @@ export class NoirCity {
     /** Custom shaders (light beams, haze) have no shared chunks: they only dim with the Blackout. */
     private patchShader(material:THREE.ShaderMaterial):void {
         this.patched.add(material);
+        material.addEventListener('dispose',()=>this.patched.delete(material));
         const compile=material.onBeforeCompile,key=material.customProgramCacheKey();
         material.onBeforeCompile=(shader,renderer)=>{
             compile.call(material,shader,renderer);

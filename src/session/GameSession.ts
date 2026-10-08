@@ -420,10 +420,12 @@ export class GameSession {
         this.gun.authoritative=this.worldSpec.version===GRAYBOX_VERSION;
         if(this.gun.authoritative)this.chaos=new ChaosView(this.stage.scene,id=>id===this.myId?this.rat?.entity:this.remotes.get(id),this.stage.listener.context as AudioContext,true,(cue,origin)=>this.feedback.play(cue,origin),this.foleyWorld,this.gun.tracePresentation);
         if(this.chaos){
+            this.feel.adoptEvidence(this.chaos.caseFiles.root);
             const hit=new CANNON.RaycastResult(),from=new CANNON.Vec3(),to=new CANNON.Vec3();
-            this.chaos.caseFiles.clearSight=p=>{
-                const eye=this.stage.camera.position;from.set(eye.x,eye.y,eye.z);to.set(p.x,p.y+.2,p.z);hit.reset();
-                return !this.stage.world.raycastClosest(from,to,{collisionFilterMask:1,skipBackfaces:true},hit);
+            this.chaos.caseFiles.support=p=>{
+                from.set(p.x,p.y+.3,p.z);to.set(p.x,p.y-.4,p.z);hit.reset();
+                if(!this.stage.world.raycastClosest(from,to,{collisionFilterMask:1,skipBackfaces:true},hit)||hit.hitNormalWorld.y<.85)return undefined;
+                return {y:hit.hitPointWorld.y,normal:{x:hit.hitNormalWorld.x,y:hit.hitNormalWorld.y,z:hit.hitNormalWorld.z}};
             };
         }
 

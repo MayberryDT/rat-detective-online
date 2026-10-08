@@ -92,13 +92,14 @@ function makeCdpClient(socketUrl) {
 const chromePath=findChrome();if(!chromePath)throw Error('Chrome required');
 const {server,origin}=await serveDist(DIST),port=await getFreePort();
 const profile=mkdtempSync(join(tmpdir(),'p4-visual-'));
-const chrome=spawn(chromePath,['--headless=new','--no-sandbox',`--remote-debugging-port=${port}`,`--user-data-dir=${profile}`,'--no-first-run','--no-default-browser-check','--autoplay-policy=no-user-gesture-required','--use-angle=swiftshader','--enable-unsafe-swiftshader','about:blank'],{stdio:'ignore'});
-let cdp;const report={kind:'static fixture, software rendering; not human play',captures:[]};
+const chrome=spawn(chromePath,['--headless=new','--no-sandbox',`--remote-debugging-port=${port}`,`--user-data-dir=${profile}`,'--no-first-run','--no-default-browser-check','--autoplay-policy=no-user-gesture-required','--use-angle='+(process.env.ANGLE??'vulkan'),'--enable-features=Vulkan','--ignore-gpu-blocklist','about:blank'],{stdio:'ignore'});
+let cdp;const report={kind:'repeatable city material/motion fixture; not human play',angle:process.env.ANGLE??'vulkan',captures:[]};
 const pause=ms=>new Promise(r=>setTimeout(r,ms));
 try{
  await waitForJson(`http://127.0.0.1:${port}/json/version`);
  const tab=await (await fetch(`http://127.0.0.1:${port}/json/new?about:blank`,{method:'PUT'})).json();cdp=makeCdpClient(tab.webSocketDebuggerUrl);await cdp.ready;
  const {send}=cdp;await send('Runtime.enable');await send('Page.enable');
+ await send('Page.addScriptToEvaluateOnNewDocument',{source:"(()=>{const d=window.__THREE_DEVTOOLS__=new EventTarget();window.__paperPerf=[];d.addEventListener('observe',e=>{const o=e.detail;if(o.render&&o.domElement&&!o.__paperHook){o.__paperHook=true;const render=o.render.bind(o);o.render=(...a)=>{const start=performance.now();const result=render(...a);window.__paperRenderer=o;__paperPerf.push(performance.now()-start);if(__paperPerf.length>180)__paperPerf.shift();return result;};}});})()"});
  await send('Browser.setDownloadBehavior',{behavior:'allow',downloadPath:proof});
  for(const [label,width,height,low] of [['desktop',1280,720,false],['mobile-low',844,390,true]]){
   await send('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:false});
@@ -108,11 +109,22 @@ try{
    await send('Runtime.evaluate',{expression:`window.clueFixture.setView('${view}')`});await pause(400);
    const seen=await send('Runtime.evaluate',{expression:'window.clueFixture.visible()',returnByValue:true});
    const shot=await send('Page.captureScreenshot',{format:'png'});const name=label+'-'+view+'.png';writeFileSync(join(proof,name),Buffer.from(shot.result.data,'base64'));
-   report.captures.push({label,view,width,height,visible:seen.result.result.value,file:name});
+   const metrics=await send('Runtime.evaluate',{expression:'window.clueFixture.metrics?.()',returnByValue:true});
+   report.captures.push({label,view,width,height,visible:seen.result.result.value,metrics:metrics.result?.result?.value,render:await (async()=>{const p=await send('Runtime.evaluate',{expression:'({samples:window.__paperPerf,render:window.__paperRenderer?.info.render,memory:window.__paperRenderer?.info.memory})',returnByValue:true});return p.result?.result?.value;})(),file:name});
   }
+  const clip='physical-files-street.webm';rmSync(join(proof,clip),{force:true});
+  await send('Runtime.evaluate',{expression:"window.clueFixture.setView('street');document.getElementById('record').click()"});
+  for(let i=0;i<180&&!existsSync(join(proof,clip));i++)await pause(250);
+  if(!existsSync(join(proof,clip)))throw Error('motion clip not saved');
+  writeFileSync(join(proof,label+'-motion.webm'),await import('node:fs/promises').then(fs=>fs.readFile(join(proof,clip))));
  }
- await send('Runtime.evaluate',{expression:"window.clueFixture.setView('sewer');document.getElementById('record').click()"});
- for(let i=0;i<120&&!existsSync(join(proof,'physical-files-sewer.webm'));i++)await pause(250);
- if(!existsSync(join(proof,'physical-files-sewer.webm')))throw Error('clip not saved');report.clip='physical-files-sewer.webm';
+ await send('Runtime.evaluate',{expression:"window.clueFixture.setView('street');window.clueFixture.close?.()"});
+ const close=await send('Page.captureScreenshot',{format:'png'});writeFileSync(join(proof,'paper-close.png'),Buffer.from(close.result.data,'base64'));
+ const atlas=await send('Runtime.evaluate',{expression:'window.clueFixture.atlas?.()',returnByValue:true});
+ if(atlas.result?.result?.value)writeFileSync(join(proof,'paper-atlas.png'),Buffer.from(atlas.result.result.value.split(',')[1],'base64'));
+ rmSync(join(proof,'physical-files-street.webm'),{force:true});
+ await send('Runtime.evaluate',{expression:"window.clueFixture.setView('street');document.getElementById('record').click()"});
+ for(let i=0;i<120&&!existsSync(join(proof,'physical-files-street.webm'));i++)await pause(250);
+ if(!existsSync(join(proof,'physical-files-street.webm')))throw Error('clip not saved');report.clip='physical-files-street.webm';
  writeFileSync(join(proof,'capture.json'),JSON.stringify(report,null,2)+'\n');console.log(JSON.stringify(report,null,2));
 }finally{cdp?.socket.close();chrome.kill('SIGTERM');await pause(500);rmSync(profile,{recursive:true,force:true,maxRetries:3,retryDelay:100});await new Promise(r=>server.close(r));}

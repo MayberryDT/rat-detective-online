@@ -270,10 +270,26 @@ export class BotNavigation {
         }
         return [];
     }
-    /** Small visible spill around the start of a route, only on connected supported ground. */
-    paperStart(from:Vec3Data):Vec3Data[]{
-        const start=this.nearest(from);if(!start)return [];
-        return this.neighbors(start).filter(p=>p.gx===start.gx||p.gz===start.gz).map(p=>({x:p.x,y:p.y,z:p.z}));
+    /** Deterministic offset, accepted only when the entire page has continuous support. */
+    paperPlacement(from:Vec3Data,seed:number):Vec3Data|undefined {
+        const find=(x:number,z:number)=>this.surfaces(x,z).filter(y=>Math.abs(y-from.y)<.7)
+            .sort((a,b)=>Math.abs(a-from.y)-Math.abs(b-from.y))[0];
+        for(const offset of [1,0]){
+            const x=from.x+(((seed>>>2)%101)/100-.5)*.8*offset;
+            const z=from.z+(((seed>>>10)%101)/100-.5)*.8*offset;
+            const y=find(x,z);if(y===undefined)continue;
+            const left=find(x-.72,z),right=find(x+.72,z),back=find(x,z-.72),front=find(x,z+.72);
+            if([left,right,back,front].some(v=>v===undefined))continue;
+            const dx=(right!-left!)/1.44,dz=(front!-back!)/1.44;
+            let supported=true;
+            for(const [ox,oz] of [[-.51,-.51],[-.51,.51],[.51,-.51],[.51,.51]]){
+                const h=find(x+ox,z+oz);
+                if(h===undefined||Math.abs(h-(y+dx*ox+dz*oz))>.035){supported=false;break;}
+            }
+            if(supported&&Math.abs(left!+right!-2*y)<.035&&Math.abs(back!+front!-2*y)<.035)
+                return {x:Math.round(x*100)/100,y,z:Math.round(z*100)/100};
+        }
+        return undefined;
     }
     /** A bounded A* route for physical paperwork. Reuses the same support/body-clearance
      * graph as rat navigation; never invents a straight segment through the city. */

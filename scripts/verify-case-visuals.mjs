@@ -8,6 +8,7 @@ import {join} from 'node:path';
 import {parseArgs} from 'node:util';
 
 const {values}=parseArgs({options:{url:{type:'string'},out:{type:'string'}}});
+values.url??=process.env.BROWSER_SMOKE_URL;
 if(!values.url||!values.out)throw Error('--url and --out are required');
 mkdirSync(values.out,{recursive:true});
 
@@ -40,9 +41,19 @@ try{
     for(let i=0;i<180&&!await evaluate("!!window.__scene?.getObjectByName('hot-case')");i++)await sleep(1000);
     for(let i=0;i<10;i++){
       if(i===5){await evaluate('__ws.filter(w=>w.readyState===1).forEach(w=>w.close())');await sleep(6000);}
-      steps.push(await evaluate(`(()=>{const s=window.__scene,c=window.__cam;if(!s||!c)return {missing:true,text:document.body.innerText.slice(-500)};const pos=o=>({name:o.name,uuid:o.uuid,p:o.position.toArray(),world:o.matrixWorld.elements.slice(12,15),visible:o.visible,auto:o.matrixAutoUpdate});return {camera:pos(c),cases:s.children.filter(o=>o.name==='hot-case'||o.name.startsWith('hot-case-')).map(pos),ghosts:s.children.filter(o=>o.visible&&o.children.some(m=>m.visible&&m.renderOrder===1999&&m.material?.isShaderMaterial&&m.material.fragmentShader.includes('uniform float strength'))).map(pos),files:s.getObjectByName('physical-case-files')?.children.map(pos)};})()`));
+      steps.push(await evaluate(`(()=>{const s=window.__scene,c=window.__cam;if(!s||!c)return {missing:true,text:document.body.innerText.slice(-500)};const pos=o=>({name:o.name,uuid:o.uuid,p:o.position.toArray(),world:o.matrixWorld.elements.slice(12,15),visible:o.visible,auto:o.matrixAutoUpdate,count:o.count});return {camera:pos(c),cases:s.children.filter(o=>o.name==='hot-case'||o.name.startsWith('hot-case-')).map(pos),ghosts:s.children.filter(o=>o.visible&&o.children.some(m=>m.visible&&m.renderOrder===1999&&m.material?.isShaderMaterial&&m.material.fragmentShader.includes('uniform float strength'))).map(pos),files:s.getObjectByName('physical-case-files')?.children.map(pos)};})()`));
+      if(i===1)await screenshot('first-spawn-papers');
+      if(i===9)await screenshot('reconnected-papers');
       await sleep(1000);
     }
+    checks.push({check:'paper instances at initial spawn and reconnect',pass:[steps[1],steps[9]].every(s=>s.files?.reduce((n,f)=>n+(f.count??0),0)>0)});
+    await evaluate("window.__paperMovie=new Promise(resolve=>{\n const stream=__renderer.domElement.captureStream(30),chunks=[];\n const recorder=new MediaRecorder(stream,{mimeType:'video/webm'});\n recorder.ondataavailable=e=>{if(e.data.size)chunks.push(e.data)};\n recorder.onstop=()=>{stream.getTracks().forEach(t=>t.stop());const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.readAsDataURL(new Blob(chunks,{type:'video/webm'}));};\n recorder.start();setTimeout(()=>recorder.stop(),20000);\n});void 0");
+    await send('Input.dispatchKeyEvent',{type:'keyDown',key:'w',code:'KeyW',windowsVirtualKeyCode:87});
+    await sleep(2500);
+    await send('Input.dispatchKeyEvent',{type:'keyUp',key:'w',code:'KeyW',windowsVirtualKeyCode:87});
+    const movie=await evaluate('window.__paperMovie');
+    if(typeof movie!=='string'||!movie.startsWith('data:video/'))throw Error('live motion recording missing');
+    writeFileSync(join(values.out,'live-motion.webm'),Buffer.from(movie.split(',')[1],'base64'));
     assets=await evaluate('performance.getEntriesByType("resource").map(e=>e.name).filter(n=>n.includes("/assets/")&&n.endsWith(".js"))');
     build=await evaluate('fetch("/health").then(r=>r.json()).then(r=>r.build)');
     await evaluate('window.__pauseProbe=true');await sleep(300);

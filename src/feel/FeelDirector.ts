@@ -170,6 +170,8 @@ export class FeelDirector {
         // Blackout also kills the neon, haze, searchlights and wet-street reflections.
         for(const root of [this.noirAtmosphere.root,this.noirDressing.root,this.noirRain.root])this.noirCity.adopt(root);
     }
+    /** Evidence is created after the city and replaced on every welcome. */
+    adoptEvidence(root:THREE.Object3D):void {this.noirCity?.adopt(root);}
     /** Force a lightning strike (workshop review). */
     lightning():void {this.noirAtmosphere?.strike();}
     /** New round: props back where they started. */

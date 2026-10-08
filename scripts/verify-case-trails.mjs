@@ -1,7 +1,7 @@
 // Authority -> supported walk graph -> paper windows -> compact receivers -> restore.
 // Failure scenarios were recorded before implementation in physical-clues-failure-cases.md.
 import assert from 'node:assert/strict';import {build} from 'esbuild';import {writeFileSync} from 'node:fs';
-const out='/home/halla/build/rat-detective/physical-clues-20261007';
+const out=process.env.P4_OUT??'/home/halla/build/rat-detective/physical-clues-20261007';
 await build({stdin:{contents:`export {ChaosSimulation} from './src/shared/ChaosSimulation';export {ChaosEncoder,ChaosDecoder} from './src/shared/chaosWire';export {createPlayer} from './src/worker/gameState';export {DEFAULT_APPEARANCE} from './src/shared/ratAppearance';export {worldSpawnPoints} from './src/shared/playerSpawns';export {BotNavigation} from './src/shared/BotNavigation';export {CLUES} from './src/shared/caseClues';export {BOT_LAUNCH_LINKS} from './src/shared/BotLaunchRoutes';`,resolveDir:process.cwd()},bundle:true,platform:'node',format:'esm',banner:{js:"import {createRequire} from 'node:module';const require=createRequire(import.meta.url);"},outfile:out+'/trail-integration.mjs'});
 const {ChaosSimulation,ChaosEncoder,ChaosDecoder,createPlayer,DEFAULT_APPEARANCE,worldSpawnPoints,BotNavigation,CLUES,BOT_LAUNCH_LINKS}=await import(out+'/trail-integration.mjs');
 let seed=7841;Math.random=()=>((seed=Math.imul(seed,1664525)+1013904223>>>0)/4294967296);
@@ -11,6 +11,11 @@ function step(){now+=1000/60;const t=performance.now();sim.step(1/60,now,true);m
 for(let i=0;i<120;i++)step();
 for(let i=0;i<10;i++){const p=spawns[(i*97)%spawns.length];players.set('human-'+i,createPlayer('human-'+i,'Spawn '+i,DEFAULT_APPEARANCE,{...p,y:0}));}
 let s;for(let i=0;i<240;i++)s=step();
+// Failure: stationary evidence churns, or unchanged IDs move on a window refresh.
+const anchored=new Map(s.clues.map(c=>[c.id,c.p]));
+for(let i=0;i<60;i++)s=step();
+for(const c of s.clues)if(anchored.has(c.id))assert.deepEqual(c.p,anchored.get(c.id),'stable sheet transform');
+const stableCount=s.clues.filter(c=>anchored.has(c.id)).length;assert.ok(stableCount>0);
 for(const p of players.values()){const near=Math.min(...s.clues.map(c=>Math.hypot(c.p.x-p.x,c.p.y-p.y,c.p.z-p.z)));rows.push({id:p.id,firstPaperDistance:near});assert.ok(near<5,'spawn has nearby paper: '+p.id);}
 const restored=new ChaosSimulation(players,()=>{},s,spec);assert.deepEqual(restored.snapshot(false).clues,s.clues);
 // Follow a supported route to the actual loose case and let authority claim it.
@@ -41,4 +46,4 @@ for(const link of BOT_LAUNCH_LINKS){
  for(let i=1;i<r.value.length;i++){const a=r.value[i-1],b=r.value[i];if(Math.hypot(a.x-b.x,a.z-b.z)>4)assert.ok(a.launch||a.drop,'no invented unsupported route segment');}
  roofRoutes.push({machine:link.machine.id,points:r.value.length});
 }
-const receipt={passed:true,kind:'real authority/walk-route/wire integration; not human gameplay acceptance',spawns:rows,sewerRoutes,roofRoutes,frames,maxBytes,maxStepMs,checks:['ten separated spawns each get papers','bounded compact frames decode','restore retains shared papers','supported route reaches real case pickup','launcher roofs have explicit supported routes','route follows moving carrier','relocation removes old routes']};writeFileSync(out+'/trail-integration.json',JSON.stringify(receipt,null,2));console.log(JSON.stringify(receipt,null,2));
+const receipt={passed:true,stableCount,kind:'real authority/walk-route/wire integration; not human gameplay acceptance',spawns:rows,sewerRoutes,roofRoutes,frames,maxBytes,maxStepMs,checks:['ten separated spawns each get papers','bounded compact frames decode','restore retains shared papers','supported route reaches real case pickup','launcher roofs have explicit supported routes','route follows moving carrier','relocation removes old routes']};writeFileSync(out+'/trail-integration.json',JSON.stringify(receipt,null,2));console.log(JSON.stringify(receipt,null,2));

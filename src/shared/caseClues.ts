@@ -28,8 +28,9 @@ export function visibleClues(clues:readonly CaseClue[],eye:Vec3Data,now:number,c
 export class CaseClues {
     items:CaseClue[]=[];
     private readonly navigation?:BotNavigation;
-    private paths=new Map<string,{points:Vec3Data[];target:Vec3Data;at:number}>();
+    private paths=new Map<string,{points:Vec3Data[];papers:Vec3Data[];target:Vec3Data;at:number}>();
     private events:ClueEvent[]=[];
+    private placements=new Map<string,Vec3Data|null>();
     private pending?:{id:string;from:Vec3Data;target:Vec3Data;search:Generator<void,Vec3Data[]>};
     constructor(spec?:WorldSpec,saved?:CaseClue[]){
         if(spec)this.navigation=new BotNavigation(spec);
@@ -37,7 +38,7 @@ export class CaseClues {
     }
     clear():void {
         if(this.items.length)this.events.push({what:'clear',id:this.items[0]!.id,p:{...this.items[0]!.p}});
-        this.items=[];this.paths.clear();this.pending=undefined;
+        this.items=[];this.paths.clear();this.placements.clear();this.pending=undefined;
     }
     guide(players:Iterable<PlayerData>,target:Vec3Data,now:number,clear?:(a:Vec3Data,b:Vec3Data)=>boolean):void {
         const nav=this.navigation;if(!nav)return;
@@ -56,7 +57,16 @@ export class CaseClues {
         if(this.pending){
             const job=this.pending,result=job.search.next();
             if(result.done){
-                this.paths.set(job.id,{points:result.value,target:job.target,at:now});
+                const papers:Vec3Data[]=[];let travelled=6,previous=result.value[0];
+                for(const [i,p] of result.value.entries()){
+                    travelled+=distance(previous!,p);previous=p;
+                    const seed=Math.abs(Math.imul(Math.round(p.x),73856093)^Math.imul(Math.round(p.z),19349663));
+                    const a=result.value[i-1],b=result.value[i+1];
+                    const turn=a&&b&&Math.abs((p.x-a.x)*(b.z-p.z)-(p.z-a.z)*(b.x-p.x))>.1;
+                    if(i!==result.value.length-1&&!turn&&(travelled<2.8||(travelled<5.5&&seed%3===0)))continue;
+                    papers.push(p);travelled=0;
+                }
+                this.paths.set(job.id,{points:result.value,papers,target:job.target,at:now});
                 if(result.value.length)this.events.push({what:'shed',id:'trail-'+job.id,p:{...result.value[0]!}});
                 this.pending=undefined;
             }
@@ -64,23 +74,29 @@ export class CaseClues {
         const previousClues=new Map(this.items.map(c=>[c.id,c]));
         const next=new Map<string,CaseClue>();
         for(const player of living){
-            const points=this.paths.get(player.id)?.points;if(!points?.length)continue;
+            const points=this.paths.get(player.id)?.papers;if(!points?.length)continue;
             let start=0,nearest=Infinity;
             points.forEach((p,i)=>{const d=distance(p,player);if(d<nearest){nearest=d;start=i;}});
             const add=(p:Vec3Data)=>{
-                const id=`paper-${p.x}-${Math.round(p.y*100)}-${p.z}`;
-                next.set(id,{id,p:{x:p.x,y:p.y+.08,z:p.z},at:previousClues.get(id)?.at??now,anchored:true});
+                const id='paper-'+p.x+'-'+Math.round(p.y*100)+'-'+p.z;
+                if(!this.placements.has(id)){
+                    let seed=2166136261;for(const c of id)seed=Math.imul(seed^c.charCodeAt(0),16777619);
+                    this.placements.set(id,nav.paperPlacement(p,seed>>>0)??null);
+                }
+                const placed=this.placements.get(id);if(!placed)return false;
+                next.set(id,previousClues.get(id)??{id,p:{x:placed.x,y:placed.y+.018,z:placed.z},at:now,anchored:true});
+                return true;
             };
-            const spill=nav.paperStart(points[start]!);for(const p of spill)add(p);
-            let travelled:number=CLUES.spacing;let count=spill.length,previous=points[start]!;
-            for(let i=start;i<points.length&&count<12;i++){
-                const p=points[i]!;travelled+=distance(previous,p);previous=p;
-                if(travelled<CLUES.spacing)continue;
-                travelled=0;count++;
-                add(p);
-            }
+            // Sampling is fixed when a route is built, not re-phased around the rat.
+            // A moving window only adds/removes its boundary; retained sheets never move.
+            let count=0;
+            for(let i=Math.max(0,start-1);i<points.length&&count<12;i++)
+                if(add(points[i]!))count++;
+
         }
         this.items=[...next.values()].slice(0,CLUES.max);
+        // Bound geometry-probe cache to active paths, not the lifetime of the room.
+        if(this.placements.size>4096)this.placements.clear();
     }
     drain():ClueEvent[]{return this.events.splice(0);}
 }
