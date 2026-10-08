@@ -1750,7 +1750,8 @@ export class GameRoom extends DurableObject<Env> {
       const metrics=this.diagnostics.tick(now,{gapMs,costMs:performance.now()-tickStart,steps,balls:state.shots.length,
         snapshotBytes:recipients?sentBytes/recipients:0,maxSnapshotBytes:maxBytes,sentBytes,recipients});
       if(metrics)log('info','room diagnostics',{roomId:this.ctx.id.toString(),players:this.players.size,
-        connections:this.ctx.getWebSockets().length,roundPhase:this.round.phase,incident:state.dispatch.incident??null,...metrics});
+        connections:this.ctx.getWebSockets().length,roundPhase:this.round.phase,incident:state.dispatch.incident??null,...metrics,
+        ...(this.cityStore.scans.length?{cityScans:this.cityStore.scans.splice(0)}:{})});
     },1000/30);
   }
 

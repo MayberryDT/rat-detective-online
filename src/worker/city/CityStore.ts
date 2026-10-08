@@ -1,5 +1,4 @@
 import { HeatDay, heatDayKey, validHeatKey } from '../HeatMap';
-import { log } from '../logging';
 
 /** The room's durable city aggregates (docs/city-map.md, layer 2), keyed by UTC day, build, layout and assignment.
  * Counts are added, never overwritten, so a flush after an eviction cannot double count. Aggregates are
@@ -84,6 +83,8 @@ export class CityStore {
   private lastPackId: number | undefined;
   /** The retention cut-off last applied by this instance: events are pruned once a day, not every flush. */
   private prunedBefore: string | undefined;
+  /** The once-a-wake whole-table statements' rows (the room's diagnostics log takes them). */
+  readonly scans: { what: string; rowsRead: number; rowsWritten?: number }[] = [];
 
   /** `transaction` runs a synchronous block atomically (the room passes `transactionSync`). */
   constructor(private readonly sql: SqlStorage, private readonly transaction: (fn: () => void) => void = fn => fn(),
@@ -168,7 +169,7 @@ export class CityStore {
       // Once a wake. Rows read are logged: the first human's join waited seconds on a cold staging room.
       const cursor = this.sql.exec<{ id: number | null }>('SELECT MAX(id) AS id FROM city_packs');
       this.lastPackId = cursor.one().id ?? 0;
-      log('info', 'city store scan', { what: 'last-pack', rowsRead: cursor.rowsRead });
+      this.scans.push({ what: 'last-pack', rowsRead: cursor.rowsRead });
     }
     this.sql.exec('INSERT INTO city_packs (kind, day, build, layout, mode, layer, id, bytes, data) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
       ...bucketArgs(bucket), ++this.lastPackId, data.length, data);
@@ -220,7 +221,7 @@ export class CityStore {
     const before = heatDayKey(now - (EVENT_RETENTION_DAYS - 1) * DAY_MS);
     if (before === this.prunedBefore) return;
     const cursor = this.sql.exec('DELETE FROM city_events WHERE day < ?', before);
-    log('info', 'city store scan', { what: 'prune-events', rowsRead: cursor.rowsRead, rowsWritten: cursor.rowsWritten });
+    this.scans.push({ what: 'prune-events', rowsRead: cursor.rowsRead, rowsWritten: cursor.rowsWritten });
     this.prunedBefore = before;
   }
 
