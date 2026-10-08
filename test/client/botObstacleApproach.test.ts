@@ -23,7 +23,7 @@ it.each([.1,.3,.5,.7,.9,1.1,1.3,1.5,1.7,1.9])('wall pickup at grid offset %s',of
 it.each([1.25,1.65,2].flatMap(height=>[[1,0],[-1,0],[0,1],[0,-1]].map(([dx,dz])=>({height,dx,dz}))))('jumps over $height-unit obstacle toward ($dx,$dz)',({height,dx,dz})=>{
  vi.spyOn(Math,'random').mockImplementation(seededRandom(81));
  fixture.boxes=[box(30,-.5,30,80,1,80),box(30+dx*3,height/2,30+dz*3,dx?1.5:6,height,dz?1.5:6)];
- const bot=createPlayer('bot','Bot',DEFAULT_APPEARANCE,{x:30,y:.3,z:30}),players=new Map([[bot.id,bot]]),spec={seed:341283204,version:2};
+ const bot=createPlayer('bot','Bot',DEFAULT_APPEARANCE,{x:30,y:1.1,z:30}),players=new Map([[bot.id,bot]]),spec={seed:341283204,version:2};
  const sim=new ChaosSimulation(players,()=>{},undefined,spec);sim.caseBody.position.set(30+dx*7,.6,30+dz*7);sim.caseBody.velocity.setZero();
  const ctl=new ServerBotController(spec,[bot.id],{move:(_id,p)=>Object.assign(bot,p),shoot:()=>{},recover:()=>{}});
  let crossed=false;
