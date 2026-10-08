@@ -91,6 +91,8 @@ function where(self:Vec3Data,point:Vec3Data):string {
     return `${band} ${COMPASS[Math.round(Math.atan2(dx,-dz)/(Math.PI/4))&7]}${level}`;
 }
 
+/** How long a bot keeps going for a loose case it has lost sight of, to where it saw it. */
+const CASE_MEMORY_MS=10_000;
 /** The paw prints a rat standing at `self` takes in: the run with a print within 4 units on its floor and in sight
  * (within a flashlight's reach in a Blackout too), one not followed yet (`done`) first. `yaw`: the nearest print's
  * heading (where its toes point); `end`: where the run ends, by the next paper. */
@@ -137,22 +139,34 @@ export class BotGoals {
         this.places=navigation.explorationTargets();
     }
     reset():void {
-        this.inspectedClues.clear();this.inspectedAt=-Infinity;this.loose.clear();this.printLook={until:-Infinity,yaw:0};
+        this.inspectedClues.clear();this.inspectedAt=-Infinity;this.loose.clear();this.printLook={until:-Infinity,yaw:0};this.caseSeen.clear();
         this.reflexSite=undefined;this.reflexUntil=0;this.supplyTripAt=0;this.dispatchGiveUpAt=0;this.dispatchDetour='';
         this.deliveryKey='';this.deliveryEntering=false;this.fleeAt=0;this.zonePostAt=0;this.zonePost=0;
     }
     /** A new round, phase, delivery or zone: pick the zone post afresh. */
     newAssignment():void {this.zonePostAt=0;}
 
-    /** The nearest genuine case this rat may pick up now (never while carrying or during Evidence Tampering). */
+    /** The nearest genuine case this rat may pick up now (never while carrying or during Evidence Tampering): one in
+     * sight, or one it saw within `CASE_MEMORY_MS`, sought where it was seen (mindVersion 16): a player who loses sight
+     * of a loose case behind a crate still goes for it, and only finds out on arrival if it has gone (the motor fails
+     * the goal there). Whether a case is loose or carried is on everyone's HUD. */
     takeable(input:GoalInput):CaseEntry|undefined {
         const {now,self,state}=input,time=state?.time??now;
         const evidence=state?.dispatch.phase==='active'&&incidentInfo(state.dispatch.incident).id==='evidence-tampering';
-        return input.carrying||evidence?undefined:input.cases.filter(({key,value})=>!value.owner&&value.returningUntil<=time&&
-            distance(self,value.p)<60&&input.clear(value.p)&&
-            (value.previousOwner!==self.id||value.pickupAfter<=time)&&!this.motor.suppressed(key,value.p,now))
-            .sort((a,b)=>distance(self,a.value.p)-distance(self,b.value.p))[0];
+        if(input.carrying||evidence)return undefined;
+        const found:CaseEntry[]=[];
+        for(const entry of input.cases){
+            const {key,value}=entry;
+            if(value.owner||value.returningUntil>time||(value.previousOwner===self.id&&value.pickupAfter>time)){this.caseSeen.delete(key);continue;}
+            let p:Vec3Data|undefined;
+            if(distance(self,value.p)<60&&input.clear(value.p)){p=value.p;this.caseSeen.set(key,{p:{...value.p},at:now});}
+            else{const seen=this.caseSeen.get(key);if(seen&&now-seen.at<CASE_MEMORY_MS)p=seen.p;}
+            if(p&&distance(self,p)<60&&!this.motor.suppressed(key,p,now))found.push(p===value.p?entry:{...entry,value:{...value,p}});
+        }
+        return found.sort((a,b)=>distance(self,a.value.p)-distance(self,b.value.p))[0];
     }
+    /** Where each loose case was last seen, and when (`takeable`). */
+    private readonly caseSeen=new Map<string,{p:Vec3Data;at:number}>();
 
     /** Whether a stocked supply is of use to this rat now: never a Quick Fix at full health; a timed supply or weapon
      * it already holds refreshes (another weapon replaces the held one). Never one with another rat's Mousetrap in
