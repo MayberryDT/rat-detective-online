@@ -1064,13 +1064,17 @@ export class GameSession {
             clips:()=>this.recorder.clips().map(clip=>({id:clip.id,kind:clip.kind,actors:clip.actors,at:clip.at,startAt:clip.startAt,endAt:clip.endAt,involvesLocal:clip.involvesLocal})),
             data:(id:string)=>{const data=this.recorder.data(id);if(!data)return null;
                 const moves:Record<string,number[][]>={},deaths:[number,string][]=[],poses:number[][]=[];
+                // Each kind of entry: how many, and its first and last time (a clip without movement shows why here).
+                const kinds:Record<string,[number,number,number]>={};
                 for(const entry of data.entries){
+                    const kind='pose' in entry?'pose':'roster' in entry?'roster':entry.event.type,k=kinds[kind]??=[0,Infinity,-Infinity];
+                    k[0]++;k[1]=Math.min(k[1],entry.at);k[2]=Math.max(k[2],entry.at);
                     if('pose' in entry){const p=entry.pose;poses.push([entry.at,p.x,p.y,p.z,p.aim.x,p.aim.y,p.aim.z]);continue;}
                     if(!('event' in entry))continue;const e=entry.event;
                     if(e.type==='playerMoved'||e.type==='playerCorrected'){const p=e.player;(moves[p.id]??=[]).push([entry.at,p.x,p.y,p.z,p.lookYaw??NaN,p.lookPitch??NaN]);}
                     if(e.type==='playerDied')deaths.push([entry.at,e.victimId]);
                 }
-                return {moves,deaths,poses};},
+                return {moves,deaths,poses,kinds};},
             play:(id:string,loop=false)=>{const clip=this.recorder.clips().find(c=>c.id===id);if(clip)this.replay.play(clip,{mode:'fullscreen',loop,onEnd:()=>this.replay.stop()});return !!clip;},
             stop:()=>this.replay.stop(),
             state:()=>this.replay.debugState(),
