@@ -112,10 +112,11 @@ export class PawPrints {
             return {id:run.r.id,state:run.leave!==undefined?'fading':run.arrive!==undefined?'stamping':'down',shown:run.shown,first:{x:a.x,y:a.y,z:a.z},end:{x:b.x,y:b.y,z:b.z},h:b.h,
                 points:run.prints.map(p=>[p.x,p.z,p.h] as [number,number,number])};});
     }
-    private ensureArt():void {if(!this.material.map){this.material.map=pawTexture();this.material.needsUpdate=true;}}
+    private ensureArt():void {if(!this.material.map){this.material.map=sharedPawTexture();this.material.needsUpdate=true;}}
     warm():void {this.ensureArt();this.mesh.count=1;this.mesh.visible=true;this.mesh.setMatrixAt(0,new THREE.Matrix4());this.mesh.instanceMatrix.needsUpdate=true;}
     clear():void {this.runs.clear();this.primed=false;this.mesh.count=0;this.mesh.visible=false;}
-    dispose():void {this.clear();this.mesh.geometry.dispose();this.material.map?.dispose();this.material.dispose();this.mesh.dispose();}
+    /** The paw art is shared for the page's life (a replay's view uses the same texture); only this view's mesh goes. */
+    dispose():void {this.clear();this.mesh.geometry.dispose();this.material.dispose();this.mesh.dispose();}
 
     /** New runs stamp in if born moments ago near this view; gone ones fade if they were on screen. */
     private sync(prints:readonly CasePrints[],now:number,eye:THREE.Vector3,still:boolean):void {
@@ -137,6 +138,9 @@ export class PawPrints {
         this.primed=true;
     }
 }
+
+let paw:THREE.CanvasTexture|undefined;
+function sharedPawTexture():THREE.CanvasTexture {return paw??=pawTexture();}
 
 /** One inked paw, white on clear (the material tints it): a palm pad, four toes and claw nicks, the toes toward the
  * canvas's foot (the plane's +z, the heading). Speckled where the ink missed, like a stamp. */

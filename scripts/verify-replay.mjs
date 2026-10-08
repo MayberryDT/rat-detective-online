@@ -12,14 +12,15 @@
 //       over 50 ms)                         RP5 a frame over 100 ms while a replay plays, at its start or on a loop
 //   RP6 slow motion (the clip's clock runs under 0.9 or over 1.1 of real time)
 //
-// usage: node scripts/verify-replay.mjs --url=<game url> --out=<dir> [--label=name] [--play=150] [--size=1280x720]
+// usage: node scripts/verify-replay.mjs --url=<game url> --out=<dir> [--label=name] [--play=150] [--size=1280x720] [--profile]
+//   --profile  also save a CPU profile of the first clip's playback (replay-<label>.cpuprofile)
 import {spawn} from 'node:child_process';
 import {mkdirSync,mkdtempSync,rmSync,writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {parseArgs} from 'node:util';
 
-const {values}=parseArgs({options:{url:{type:'string'},out:{type:'string'},label:{type:'string',default:'replay'},play:{type:'string',default:'150'},size:{type:'string',default:'1280x720'}}});
+const {values}=parseArgs({options:{url:{type:'string'},out:{type:'string'},label:{type:'string',default:'replay'},play:{type:'string',default:'150'},size:{type:'string',default:'1280x720'},profile:{type:'boolean',default:false}}});
 if(!values.url||!values.out)throw Error('--url and --out are required');
 mkdirSync(values.out,{recursive:true});
 const [width,height]=values.size.split('x').map(Number),sleep=ms=>new Promise(r=>setTimeout(r,ms));
@@ -78,17 +79,22 @@ try{
     if(forward)await key('keyUp','W');
     report.shots=shots;
     // The replays: each kept clip (up to three, best first) fullscreen, once through and three seconds into a loop.
+    // As the results board does: the kept clips are frozen while they are played.
+    await ev('window.__ratReplay.freeze?.()');
     const clips=(await ev('window.__ratReplay.clips()'))??[];report.keptClips=clips.length;
     const myId=await ev('window.__ratReplay.myId()');report.myId=myId;
     for(const clip of clips.slice(0,3)){
         const data=await ev(`window.__ratReplay.data(${JSON.stringify(clip.id)})`);
         const camsBefore=await ev('window.__cams.length');
         await ev(`window.__replayStates=[];const tok=window.__replayToken=(window.__replayToken||0)+1;window.__ratReplay.play(${JSON.stringify(clip.id)},true);(function s(){if(window.__replayToken!==tok)return;const st=window.__ratReplay.state();window.__replayStates.push([performance.now(),st.t,st.pov??null,st.clip??null]);if(window.__replayStates.length<20000)requestAnimationFrame(s);})();void 0`);
+        if(values.profile&&clip===clips[0]){await send('Profiler.enable');await send('Profiler.setSamplingInterval',{interval:250});await send('Profiler.start');}
         await sleep(clip.endAt-clip.startAt+3500);
+        if(values.profile&&clip===clips[0]){const {result}=await send('Profiler.stop');writeFileSync(join(values.out,`replay-${values.label}.cpuprofile`),JSON.stringify(result.profile));}
         await ev('window.__ratReplay.stop()');
         const states=await ev('window.__replayStates.splice(0)'),cams=await ev(`window.__cams.slice(${camsBefore})`);
         report.clips.push({clip,data,states,cams});
     }
+    await ev('window.__ratReplay.release?.()');
     await ev('window.__recordCams=false;window.__stopMovie()');
     const movie=await ev('window.__movie');
     if(typeof movie==='string'&&movie.startsWith('data:video/'))writeFileSync(join(values.out,`replay-${values.label}.webm`),Buffer.from(movie.split(',')[1],'base64'));

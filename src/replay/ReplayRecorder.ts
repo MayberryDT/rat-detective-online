@@ -59,12 +59,16 @@ export class ReplayRecorder {
     private myId='';
     private lastKeyframe=-Infinity;
     private lastPose=-Infinity;
+    /** The latest server time a message carried (a chaos state's, a pose's): events without their own time are stamped
+     * with it, so shots, hits and deaths line up with the movement they came with (smooth-play plan, R2). The socket
+     * keeps order, so this is within a tick of when the server sent them. */
+    private serverTime=-Infinity;
     constructor(private readonly serverNow:()=>number) {}
 
     /** A new session state: everything goes, the roster is the welcome's. */
     welcome(message:Extract<ServerMessage,{type:'welcome'}>):void {
         this.entries=[];this.shelf=[];this.board=undefined;this.boardShared=[];this.pending.clear();this.marks.clear();this.roster.clear();this.names.clear();
-        this.myId=message.id;this.lastKeyframe=this.lastPose=-Infinity;
+        this.myId=message.id;this.lastKeyframe=this.lastPose=this.serverTime=-Infinity;
         for(const player of [message.player,...Object.values(message.players)])this.join(player);
         // An observer's camera avatar is no rat.
         if(message.observing)this.roster.delete(message.id);
@@ -80,7 +84,9 @@ export class ReplayRecorder {
         if(message.type==='highlight'){this.mark(message);return;}
         if(!(message.type in RECORDED))return;
         const event=message as RecordedEvent,now=this.serverNow();
-        const at=event.type==='chaos'?event.state.time:(event.type==='playerMoved'||event.type==='playerCorrected')&&event.at!==undefined?event.at:now;
+        const own=event.type==='chaos'?event.state.time:(event.type==='playerMoved'||event.type==='playerCorrected')&&event.at!==undefined?event.at:undefined;
+        if(own!==undefined)this.serverTime=Math.max(this.serverTime,own);
+        const at=own??(Number.isFinite(this.serverTime)?this.serverTime:now);
         this.entries.push({at,event});
         switch(event.type){
             case 'playerJoined':this.join(event.player);break;

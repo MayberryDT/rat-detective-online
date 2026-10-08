@@ -1074,6 +1074,8 @@ export class GameSession {
             play:(id:string,loop=false)=>{const clip=this.recorder.clips().find(c=>c.id===id);if(clip)this.replay.play(clip,{mode:'fullscreen',loop,onEnd:()=>this.replay.stop()});return !!clip;},
             stop:()=>this.replay.stop(),
             state:()=>this.replay.debugState(),
+            /** As the results board does: the kept clips stop changing while they are played. */
+            freeze:()=>this.recorder.freeze(),release:()=>this.recorder.release(),
         }});
         document.addEventListener('keydown',event=>{
             if(event.code!=='F8'||event.repeat)return;

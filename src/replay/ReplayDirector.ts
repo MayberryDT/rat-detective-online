@@ -6,11 +6,11 @@ import { SHOULDER, ShoulderCamera, viewAlong } from '../player/ShoulderCamera';
 import { FEEL } from '../feel/feelTuning';
 import type { ReplayClip } from './types';
 
-/** The director's timing (docs/replay/playback.md, X3): on the key beat (the marker's `at`) time runs at `slow` for
- * `hold` ms of clip time (about 1 s on screen), easing in and out over `ease` ms; with reduced motion the hold is
- * `reducedHold`. `yaw` and `pitch` are how fast the view turns to a rat's look (1/s); a look read from a shot tilts at
- * most `shotTilt` rad from the default pitch (a bot's lob aims far steeper than any player's camera). */
-export const DIRECTOR={slow:.3,hold:300,ease:180,reducedHold:120,yaw:12,pitch:6,shotTilt:.35} as const;
+/** The director's camera speeds: `yaw` and `pitch` are how fast the view turns to a look read from a shot (1/s), for
+ * a clip recorded without looks; such a look tilts at most `shotTilt` rad from the default pitch (a bot's lob aims far
+ * steeper than any player's camera). A recorded look is followed exactly. Clips play at real time: no slow motion
+ * (Tyler, 8 October: "I just want to see what that user saw"). */
+export const DIRECTOR={yaw:12,pitch:6,shotTilt:.35} as const;
 
 /** What the director reads from the replay each frame. */
 export interface DirectorView {
@@ -28,7 +28,7 @@ const FORWARD=new THREE.Vector3();
 const LOOK=new THREE.Matrix4(),TURN=new THREE.Quaternion();
 
 /** The exhibit camera is a screen recording (Tyler, 2 October, protocol 31): one rat's gameplay shoulder camera for the
- * whole clip, looking where that rat looked, with live play's death camera when it falls. Slow motion on the key beat. */
+ * whole clip, looking where that rat looked, with live play's death camera when it falls. */
 export class ReplayDirector {
     private readonly shoulder:ShoulderCamera;
     private readonly view=new THREE.Spherical(SHOULDER.radius,SHOULDER.phi,0);
@@ -43,7 +43,7 @@ export class ReplayDirector {
     private deathAge=0;
     private readonly ray=new THREE.Raycaster();
     private readonly moment:THREE.Vector3;
-    constructor(private readonly clip:ReplayClip,private readonly replay:DirectorView,private readonly blockers:CameraBlockers,private readonly reduced:boolean) {
+    constructor(clip:ReplayClip,private readonly replay:DirectorView,private readonly blockers:CameraBlockers) {
         this.shoulder=new ShoulderCamera(blockers);
         this.moment=new THREE.Vector3(clip.p.x,clip.p.y,clip.p.z);
         const actors=[...new Set(clip.actors)];
@@ -51,13 +51,8 @@ export class ReplayDirector {
         this.candidates=actors;
     }
 
-    /** Clip-time speed at clip time `t`: 1, easing to `DIRECTOR.slow` around the key beat. */
-    timeScale(t:number):number {
-        const hold=(this.reduced?DIRECTOR.reducedHold:DIRECTOR.hold)/2,d=Math.abs(t-this.clip.at);
-        if(d<=hold)return DIRECTOR.slow;
-        if(d>=hold+DIRECTOR.ease)return 1;
-        return DIRECTOR.slow+(1-DIRECTOR.slow)*(d-hold)/DIRECTOR.ease;
-    }
+    /** Clip-time speed: real time, always. */
+    timeScale(_t:number):number {return 1;}
 
     /** Whose eyes the clip is seen through, once a frame has chosen them. */
     get subject():string|undefined {return this.pov;}

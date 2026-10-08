@@ -16,7 +16,6 @@ import { incidentInfo } from '../shared/incidentCatalog';
 import { FAULTY_COPY, faultyOf, heldWeapon, trapped } from '../shared/pickups';
 import { feelState } from '../feel/feelState';
 import { FEEL } from '../feel/feelTuning';
-import { reducedMotion } from '../ui/motion';
 import { ReplayAudio } from './ReplayAudio';
 import { NoirCity } from '../feel/NoirCity';
 import { ReplayDirector, type DirectorView } from './ReplayDirector';
@@ -24,8 +23,9 @@ import type { ClipData, RecordedEvent, ReplayRecorder } from './ReplayRecorder';
 import type { ReplayClip, ReplayMode, ReplayPlayer } from './types';
 
 /** Playback (docs/replay/playback.md, X3): rats and bodies are shown `viewDelay` ms behind the clip's clock, as live
- * play shows other rats; bodies step at `corpseStep` seconds. Another rat's look is known only from its shots: each
- * shot's direction is its look for `shotLook` ms either side. */
+ * play shows other rats; bodies step at `corpseStep` seconds. Each rat's look comes with its movement (protocol 39:
+ * a player's camera, a bot's aim; smooth-play plan, R3); only a clip recorded without it falls back to its shots,
+ * each shot's direction its look for `shotLook` ms either side. */
 export const PLAYBACK={viewDelay:100,corpseStep:1/60,shotLook:500} as const;
 
 export interface ReplayStageDeps {
@@ -88,7 +88,10 @@ class Playback {
             if('pose' in entry){const p=entry.pose;this.sample(p.id,entry.at,p);this.noteAim(p.id,entry.at,p.aim,true);continue;}
             const event=entry.event;
             if(event.type==='playerMoved'||event.type==='playerCorrected'){
-                const p=event.player;this.sample(p.id,entry.at,{x:p.x,y:p.y,z:p.z,qx:p.meshQx,qy:p.meshQy,qz:p.meshQz,qw:p.meshQw});continue;
+                const p=event.player;this.sample(p.id,entry.at,{x:p.x,y:p.y,z:p.z,qx:p.meshQx,qy:p.meshQy,qz:p.meshQz,qw:p.meshQw});
+                // Where it looked, exactly: the gameplay camera follows it.
+                if(p.lookYaw!==undefined&&p.lookPitch!==undefined){const c=Math.cos(p.lookPitch);this.noteAim(p.id,entry.at,{x:Math.sin(p.lookYaw)*c,y:Math.sin(p.lookPitch),z:Math.cos(p.lookYaw)*c},true);}
+                continue;
             }
             this.events.push({at:entry.at,event});
             if(event.type==='playerShot')this.noteAim(event.shooterId,entry.at,event.direction,false);
@@ -113,7 +116,7 @@ class Playback {
         const clip=this.data.clip;
         // The view first, while its carrier and armed rats still exist; the rats are rebuilt from the roster below.
         this.chaos.rewind();this.remotes.clear();this.dust.clear();this.audio.stopAll();
-        this.director=new ReplayDirector(clip,this.view,this.blockers,reducedMotion());
+        this.director=new ReplayDirector(clip,this.view,this.blockers);
         this.next=0;this.cut=true;this.lastChaos=null;
         this.t=this.roster?.at??clip.startAt;
         this.audio.muted=true;
