@@ -1684,7 +1684,9 @@ export class GameRoom extends DurableObject<Env> {
       this.noteTransportActivity();
       if(!this.chaos)return;
       this.reconcileLiveness();
-      const retainedHuman=[...this.players.keys()].some(id=>!this.isManagedBot(id));
+      // A held seat (Enter pressed, still loading) plays too: the first ticks' work (bots' first routes and decisions)
+      // then overlaps the browser's load instead of landing on the join.
+      const retainedHuman=[...this.players.keys()].some(id=>!this.isManagedBot(id))||this.heldSeats()>0;
       if(!retainedHuman){
         if(this.matchRoom){this.rebalanceBots();return;}
         this.stopPlaying();this.checkpointGame();return;
