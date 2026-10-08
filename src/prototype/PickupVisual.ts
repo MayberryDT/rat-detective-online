@@ -79,8 +79,8 @@ function weaponDisplay(kind:'tommy-gun'|'laser'|'mousetrap',kit:PartKit,f:Weapon
 /** The display is lit by its own lamp, not by self-glow: surfaces facing up toward
  * the shade catch warm light and the sides fall off into the dark. Chained after
  * the batch's own palette so the per-part colors stay exact. */
-function lightFromLamp(root:THREE.Group,strength:number):THREE.SkinnedMesh|undefined {
-    const batch=batchRigidMeshes(root);
+function lightFromLamp(root:THREE.Group,strength:number,share:string):THREE.SkinnedMesh|undefined {
+    const batch=batchRigidMeshes(root,share);
     const materials=batch?[batch.material].flat():[];
     for(const material of materials){
         const compile=material.onBeforeCompile,key=material.customProgramCacheKey;
@@ -253,7 +253,7 @@ export class PickupVisual {
         this.root.add(this.lamp);
         // Readable through the noir fog at any distance.
         this.root.traverse(object=>{if(object instanceof THREE.Mesh)for(const m of [object.material].flat())m.fog=false;});
-        const batch=lightFromLamp(this.item,.6);batchRigidMeshes(this.lamp);
+        const batch=lightFromLamp(this.item,.6,'supply-'+kind);batchRigidMeshes(this.lamp,'supply-lamp');
         if(batch)this.addRim(batch);
         // The bulb, its cone of light and the pool it throws: the only glowing parts.
         this.bulb=new THREE.MeshBasicMaterial({color:LAMP_COLOR,toneMapped:false});

@@ -38,7 +38,11 @@ export class RigidBatch extends THREE.SkinnedMesh {
  * (direct `rat-body` meshes) are skinned across its soft spine (body, belly, chest) so a
  * corpse bends smoothly; its tail (and tip) ride one bone with vertices copied from the
  * deformed tail; every other leaf is rigid. */
-export function batchRigidMeshes(root:THREE.Group):RigidBatch|undefined {
+/** Merged geometry by share key (supply props: every site of a kind has the same parts). Rigid leaves keep their own
+ * local space, so the geometry does not depend on where the rig stands. A rig's dispose may release the shared
+ * buffers; the next draw simply uploads them again (as the props' shared part shapes). */
+const SHARED=new Map<string,{geometry:THREE.BufferGeometry;vertexCount:number;indexCount:number;rigidIndexCount:number}>();
+export function batchRigidMeshes(root:THREE.Group,share?:string):RigidBatch|undefined {
     const sources:THREE.Mesh[]=[];
     root.traverse(object=>{
         if(!batchable(object)||object.children.length)return;
@@ -56,18 +60,20 @@ export function batchRigidMeshes(root:THREE.Group):RigidBatch|undefined {
     // Sized up front and written in place: a corpse is batched on every death, mid-fight.
     let vertexCount=0,indexCount=0;
     for(const {geometry} of parts){const count=geometry.getAttribute('position').count;vertexCount+=count;indexCount+=geometry.index?.count??count;}
-    const positions=new Float32Array(vertexCount*3),normals=new Float32Array(vertexCount*3),uvs=new Float32Array(vertexCount*2),materialIndices=new Float32Array(vertexCount);
-    const skinIndices=new Uint16Array(vertexCount*4),weights=new Float32Array(vertexCount*4);
+    const cached=share!==undefined&&!deforming.length?SHARED.get(share):undefined;
+    const reuse=cached&&cached.vertexCount===vertexCount&&cached.indexCount===indexCount?cached:undefined,size=reuse?0:vertexCount;
+    const positions=new Float32Array(size*3),normals=new Float32Array(size*3),uvs=new Float32Array(size*2),materialIndices=new Float32Array(size);
+    const skinIndices=new Uint16Array(size*4),weights=new Float32Array(size*4);
     // The largest index is vertexCount-1: the type an index array would have picked.
-    const indices=vertexCount>65535?new Uint32Array(indexCount):new Uint16Array(indexCount);
-    const geometry=new THREE.BufferGeometry();let vertexOffset=0,indexOffset=0,rigidIndexCount=0,tailStart=0;
+    const indices=size>65535?new Uint32Array(reuse?0:indexCount):new Uint16Array(reuse?0:indexCount);
+    const geometry=reuse?.geometry??new THREE.BufferGeometry();let vertexOffset=0,indexOffset=0,rigidIndexCount=reuse?.rigidIndexCount??0,tailStart=0;
     const body=root.getObjectByName('rat-body'),belly=body?.getObjectByName('rat-spine-belly'),chest=body?.getObjectByName('rat-spine-chest');
     const spine=body&&belly&&chest?[body,belly,chest]:[];
     // Spine bones follow the leaf bones; at rest each spine joint is identity in body space.
     const spineBone=sources.length,tailBone=spineBone+spine.length;
     const follow=[...sources,...spine,...deforming.slice(0,1)],bones=follow.map(()=>new THREE.Bone());
     const point=new THREE.Vector3(),normal=new THREE.Vector3(),normalMatrix=new THREE.Matrix3();
-    parts.forEach((source,bone)=>{
+    if(!reuse)parts.forEach((source,bone)=>{
         const g=source.geometry,p=g.getAttribute('position'),n=g.getAttribute('normal'),uv=g.getAttribute('uv');
         const start=indexOffset,skinned=spine.length>0&&source.parent===body,materialIndex=materials.indexOf(source.material as THREE.Material);
         // Skinned leaves are baked into body space and blended by height; the tip into tail space.
@@ -95,12 +101,15 @@ export function batchRigidMeshes(root:THREE.Group):RigidBatch|undefined {
         if(bone===sources.length-1)rigidIndexCount=indexOffset;
     });
     const positionAttribute=new THREE.BufferAttribute(positions,3),normalAttribute=new THREE.BufferAttribute(normals,3);
-    geometry.setAttribute('position',positionAttribute);
-    geometry.setAttribute('normal',normalAttribute);
-    geometry.setAttribute('uv',new THREE.BufferAttribute(uvs,2));
-    geometry.setAttribute('ratMaterial',new THREE.BufferAttribute(materialIndices,1));
-    geometry.setAttribute('skinIndex',new THREE.BufferAttribute(skinIndices,4));
-    geometry.setAttribute('skinWeight',new THREE.BufferAttribute(weights,4));geometry.setIndex(new THREE.BufferAttribute(indices,1));
+    if(!reuse){
+        geometry.setAttribute('position',positionAttribute);
+        geometry.setAttribute('normal',normalAttribute);
+        geometry.setAttribute('uv',new THREE.BufferAttribute(uvs,2));
+        geometry.setAttribute('ratMaterial',new THREE.BufferAttribute(materialIndices,1));
+        geometry.setAttribute('skinIndex',new THREE.BufferAttribute(skinIndices,4));
+        geometry.setAttribute('skinWeight',new THREE.BufferAttribute(weights,4));geometry.setIndex(new THREE.BufferAttribute(indices,1));
+        if(share!==undefined&&!deforming.length)SHARED.set(share,{geometry,vertexCount,indexCount,rigidIndexCount});
+    }
     // The tail's vertices follow its deformed geometry (and the tip its offset), copied only when they changed.
     let showPose=()=>{};
     if(tail instanceof THREE.Mesh&&tip instanceof THREE.Mesh&&deforming.length){
