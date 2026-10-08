@@ -93,6 +93,8 @@ const PLAN={
      * other and of another run's prints (two runs never tangle into one cluster), and turn to a new run only once the
      * case is this far from where they pointed and the way from the group has turned this much (radians). */
     printLead:.9,printClear:.75,printApart:.35,printRuns:1,printTurn:1.2,
+    /** A starter's prints keep this far from where its rat stands. */
+    printClearOf:1.8,
     /** A run lies at least this long before it may turn (a case thrown about would turn it back and forth). */
     printKeepMs:5000,
 };
@@ -295,11 +297,12 @@ export class CaseClues {
         let best=path.progress,nearest=distance(P[best]!,player);
         for(let i=path.progress+1;i<Math.min(P.length,path.progress+13);i++){const d=distance(P[i]!,player);if(d<nearest-.01){nearest=d;best=i;}}
         path.progress=best;
-        // A starter's prints wait for its rat's route: from the spill toward where that route goes.
+        // A starter's prints wait for its rat's route: from the spill toward where that route goes, never under the rat
+        // (they would read as its own).
         const life=this.lives.get(player.id),lead=life?.lead!==undefined?this.groups.get(life.lead):undefined;
         if(lead&&P.length>1&&this.wantsPrints(lead)){
             let j=0;for(let k=1;k<Math.min(P.length,15);k++)if(Math.abs(P[k]!.y-lead.anchor.y)<1.5&&flat(P[k]!,lead.anchor)<flat(P[j]!,lead.anchor))j=k;
-            this.printFor(lead,flat(P[j]!,lead.anchor)<1.5?P.slice(j,j+10):[lead.anchor,...P.slice(j,j+10)],now);
+            this.printFor(lead,flat(P[j]!,lead.anchor)<1.5?P.slice(j,j+10):[lead.anchor,...P.slice(j,j+10)],now,player);
         }
         const here=path.dist[best]!;
         this.scan(path,here+PLAN.ahead+PLAN.gap[1],sight);
@@ -515,9 +518,9 @@ export class CaseClues {
         return g.kind!=='end'&&!!this.aim&&(!g.printed||!!g.prints&&!!g.toward&&flat(g.toward,this.aim)>PLAN.moved);
     }
     /** Lay a group's prints along `way` (the route on from it): from just past its farthest sheet along the way, up to
-     * `PRINTS.run` prints a stride apart, paws alternating, each on supported ground clear of every sheet and print. Two
-     * at least, or none. */
-    private printFor(g:Group,way:readonly Vec3Data[]|undefined,now:number):void {
+     * `PRINTS.run` prints a stride apart, paws alternating, each on supported ground clear of every sheet and print (and
+     * of `clearOf`, a rat standing there). Two at least, or none. */
+    private printFor(g:Group,way:readonly Vec3Data[]|undefined,now:number,clearOf?:Vec3Data):void {
         if(!way||!this.wantsPrints(g))return;
         const line=this.printLine(g,way);
         // Laid already: turn to a new run only once it has lain a while and the way from here has turned. The old run
@@ -532,7 +535,7 @@ export class CaseClues {
         g.printed=true;g.toward={...this.aim!};
         if(!line)return;
         const nav=this.navigation!;
-        for(let shift=0;shift<3;shift++){
+        for(let shift=0;shift<(clearOf?5:3);shift++){
             const f:number[]=[];
             for(let k=0;k<PRINTS.run;k++){
                 const s=line.start+shift+k*PRINTS.stride;if(s>line.total-.2)break;
@@ -542,7 +545,7 @@ export class CaseClues {
                 const p={x:(a.x+b.x+c.x)/3+Math.cos(h)*PRINTS.gait*side,y:b.y,z:(a.z+b.z+c.z)/3-Math.sin(h)*PRINTS.gait*side};
                 this.placeRays+=2;
                 const y=nav.printGround(p,h);
-                if(y===undefined||!this.printRoom({x:p.x,y,z:p.z},f,old))continue;
+                if(y===undefined||clearOf&&Math.abs(clearOf.y-y)<1.5&&flat(clearOf,p)<PLAN.printClearOf||!this.printRoom({x:p.x,y,z:p.z},f,old))continue;
                 f.push(round3(p.x),round3(y+.012),round3(p.z),round3(h));
             }
             if(f.length>=8){

@@ -327,11 +327,13 @@ for(const mode of values.followers.split(',').filter(Boolean)){
         // The authority spawns a rat facing +z; the client's own facing arrives one way later (about 200 ms here).
         const f=R.createPlayer(id,id,R.DEFAULT_APPEARANCE,spawn);room.players.set(id,f);
         for(let k=0;k<15;k++){if(k===6)setYaw(f,yaw);room.clues=tick(room);}
+        // P6: the starter's prints never lie under the rat they were laid for (they would read as its own).
+        const underfoot=printPoints(room.prints).filter(q=>Math.abs(q.p.y-f.y)<1.5&&flat(q.p,f)<1.5).length;
         // In the opening view: the shoulder camera sits about 5.7 behind and 5.4 above the rat (SHOULDER); a sheet within
         // 40° of its view axis, within 14 units of the rat and in the camera's sight.
         const facing={x:Math.sin(yaw),z:Math.cos(yaw)},cam=camera(see,f,facing);
         const inView=room.clues.filter(c=>{const d=flat(cam,c.p);return flat(f,c.p)<14&&((c.p.x-cam.x)*facing.x+(c.p.z-cam.z)*facing.z)/d>Math.cos(40*Math.PI/180)&&see(cam,{...c.p,y:c.p.y+.15});});
-        const run={spawn:i,yaw:+yaw.toFixed(2),firstLead:inView.length?+Math.min(...inView.map(c=>flat(f,c.p))).toFixed(1):null,followed:0,seconds:0,ok:false,looks:[],farLooks:[]};
+        const run={spawn:i,yaw:+yaw.toFixed(2),firstLead:inView.length?+Math.min(...inView.map(c=>flat(f,c.p))).toFixed(1):null,followed:0,seconds:0,ok:false,looks:[],farLooks:[],underfoot,printsAtSpawn:room.prints.length};
         if(!inView.length)run.noLead={f:{x:f.x,y:f.y,z:f.z},near:room.clues.filter(c=>flat(f,c.p)<20).map(c=>({p:c.p,d:+flat(f,c.p).toFixed(1),seen:see(eye(f),{...c.p,y:c.p.y+.15}),ahead:+(((c.p.x-f.x)*facing.x+(c.p.z-f.z)*facing.z)/Math.max(.01,flat(f,c.p))).toFixed(2)})),events:room.events.slice(-4)};
         const start=room.now,visited=new Set(),read=[],caseAt=()=>room.state.case,seenRuns=new Set(),walkedRuns=new Set();
         const got=()=>caseAt().owner===id;
@@ -414,7 +416,7 @@ for(const mode of values.followers.split(',').filter(Boolean)){
     followers[mode]={placement:how,runs:runs.length,reachedCase:ok.length,firstLeadInView:runs.filter(r=>r.firstLead!==null).length,firstLead:stats(runs.filter(r=>r.firstLead!==null).map(r=>r.firstLead)),
         seconds:stats(ok.map(r=>r.seconds)),leadDistance:stats(runs.flatMap(r=>r.leadDistances??[])),sheetsFollowed:stats(ok.map(r=>r.followed)),
         ...(screenOnly?{farReads:looks.length,firstLook:looks.length?+(looks.filter(t=>t===0).length/looks.length).toFixed(2):null,turnsPerRead:mean(looks),walkedPrints:runs.reduce((t,r)=>t+(r.walkedPrints??0),0)}:{}),
-        ...(mode==='prints'?{printReads,groupsWithPrints}:{}),
+        ...(mode==='prints'?{printReads,groupsWithPrints,runsAtSpawn:stats(runs.map(r=>r.printsAtSpawn)),underfoot:runs.filter(r=>r.underfoot).map(r=>({spawn:r.spawn,prints:r.underfoot}))}:{}),
         failures:runs.filter(r=>!r.ok).slice(0,12),withoutLead:runs.filter(r=>r.noLead).map(r=>({spawn:r.spawn,yaw:r.yaw,...r.noLead}))};
     const F=followers[mode];
     if(mode==='sight'){
@@ -428,6 +430,7 @@ for(const mode of values.followers.split(',').filter(Boolean)){
         check('P2 from ≥ 90% of print runs read, the way to the case leaves within 45° of where they point',p.runs>0&&p.along>=p.runs*.9,{runs:p.runs,along:p.along,examples:p.examples.filter(e=>!e.along).slice(0,3)});
         check('P3 looking where ≥ 85% of print runs point shows a further paper or the case (screen, 40 units)',p.runs>0&&p.ahead>=p.runs*.85,{runs:p.runs,ahead:p.ahead,examples:p.examples.filter(e=>!e.ahead).slice(0,3)});
         check('P9 a screen-only follower facing the prints reaches the case from ≥ 95% of sampled spawns',ok.length>=runs.length*.95,{reached:ok.length,of:runs.length});
+        check('P6 no print under a fresh spawn\'s rat (within 1.5 units, half a second in)',F.underfoot.length===0,F.underfoot.slice(0,5));
     }
 }
 report.follower=followers.sight??{};report.followers=followers;
