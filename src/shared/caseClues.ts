@@ -138,6 +138,8 @@ export class CaseClues {
     private nextGroup=1;
     private nextSheet=1;
     private nextPrint=1;
+    /** `prints` by 2-unit cell (`printsNear`); undefined after a change. */
+    private printCells?:Map<string,{x:number;y:number;z:number;run:CasePrints}[]>;
     /** Where the trail leads this step (the floor under the case or its carrier). */
     private aim?:Vec3Data;
     private restored:boolean;
@@ -167,7 +169,7 @@ export class CaseClues {
             const claimed=new Set<string>();
             if(validPrints(savedPrints))for(const r of savedPrints){
                 const c=this.items.find(c=>c.id===r.g);if(!c||claimed.has(c.id))continue;
-                claimed.add(c.id);this.prints.push(structuredClone(r));
+                claimed.add(c.id);this.prints.push(structuredClone(r));this.printCells=undefined;
                 const id=this.nextGroup++;this.groups.set(id,{id,kind:'gap',anchor:{...c.p},ids:[c.id],refs:new Set(),prints:r.id,printed:true});
                 const n=parseInt(r.id.slice(1),36);if(r.id[0]==='p'&&Number.isFinite(n))this.nextPrint=Math.max(this.nextPrint,n+1);
             }
@@ -183,7 +185,7 @@ export class CaseClues {
     clear(reset=false,at?:Vec3Data):void {
         if(this.items.length)this.events.push({what:'clear',p:{...(at??this.items[0]!.p)},n:this.items.length});
         for(const c of this.items)this.vacated.push({p:c.p,at:this.lastNow,cleared:true});
-        this.items=[];this.prints=[];this.groups.clear();this.paths.clear();this.pending=undefined;
+        this.items=[];this.prints=[];this.printCells=undefined;this.groups.clear();this.paths.clear();this.pending=undefined;
         for(const life of this.lives.values()){life.lead=undefined;life.leadAt=undefined;life.announced=false;}
         if(reset)this.resetLives=true;
     }
@@ -561,7 +563,7 @@ export class CaseClues {
         }
         if(f.length<8)return;
         if(old)this.prints=this.prints.filter(r=>r!==old);
-        const run:CasePrints={id:'p'+(this.nextPrint++).toString(36),g:g.ids[0]!,at:Math.round(now),f};this.prints.push(run);g.prints=run.id;
+        const run:CasePrints={id:'p'+(this.nextPrint++).toString(36),g:g.ids[0]!,at:Math.round(now),f};this.prints.push(run);g.prints=run.id;this.printCells=undefined;
     }
     /** A left and a right paw at `s` along the line (those that fit), as x, y, z, heading each. */
     private printPair(line:{at:(s:number)=>Vec3Data;heading:(s:number)=>number},s0:number,fresh:readonly number[],old?:CasePrints,clearOf?:Vec3Data):number[] {
@@ -573,9 +575,11 @@ export class CaseClues {
             // A rat facing h has its left at (cos h, −sin h).
             const p={x:(a.x+b.x+c.x)/3+Math.cos(h)*PRINTS.gait*side,y:b.y,z:(a.z+b.z+c.z)/3-Math.sin(h)*PRINTS.gait*side};
             this.placeRays+=2;
-            const y=nav.printGround(p,h);
-            if(y===undefined||clearOf&&Math.abs(clearOf.y-y)<1.5&&flat(clearOf,p)<PLAN.printClearOf||!this.printRoom({x:p.x,y,z:p.z},[...fresh,...out],old))continue;
-            out.push(round2(p.x),round3(y+.012),round2(p.z),round2(h));
+            const y=nav.printGround(p,h);if(y===undefined)continue;
+            // Checked where it will lie (two decimals on the wire), so a print a unit from another stays a unit away.
+            const q={x:round2(p.x),y:round3(y+.012),z:round2(p.z)};
+            if(clearOf&&Math.abs(clearOf.y-y)<1.5&&flat(clearOf,q)<PLAN.printClearOf||!this.printRoom(q,[...fresh,...out],old))continue;
+            out.push(q.x,q.y,q.z,round2(h));
         }
         return out;
     }
@@ -605,12 +609,27 @@ export class CaseClues {
         }
         return start+PLAN.printLead+PRINTS.stride<total?{total,start:start+PLAN.printLead,at,heading}:undefined;
     }
+    /** Prints in the 2-unit cells around `p` (every check here reaches at most a unit): a city of runs is not scanned
+     * whole for each spot tried. Rebuilt after prints change. */
+    private printsNear(p:Vec3Data):{x:number;y:number;z:number;run:CasePrints}[] {
+        if(!this.printCells){
+            this.printCells=new Map();
+            for(const run of this.prints)for(let i=0;i+3<run.f.length;i+=4){
+                const x=run.f[i]!,z=run.f[i+2]!,key=Math.floor(x/2)+','+Math.floor(z/2);
+                let cell=this.printCells.get(key);if(!cell)this.printCells.set(key,cell=[]);
+                cell.push({x,y:run.f[i+1]!,z,run});
+            }
+        }
+        const out:{x:number;y:number;z:number;run:CasePrints}[]=[],cx=Math.floor(p.x/2),cz=Math.floor(p.z/2);
+        for(let dx=-1;dx<=1;dx++)for(let dz=-1;dz<=1;dz++){const cell=this.printCells.get((cx+dx)+','+(cz+dz));if(cell)out.push(...cell);}
+        return out;
+    }
     /** No print on or beside a sheet's spot (either of a loose sheet's), nor on another print (`replacing` aside). */
     private printRoom(p:Vec3Data,fresh:readonly number[],replacing?:CasePrints):boolean {
         for(const c of this.items)for(const q of [c.p,c.q])if(q&&Math.abs(q.y-p.y)<1&&flat(q,p)<PLAN.printClear)return false;
         const near=(f:readonly number[],apart:number)=>{for(let i=0;i+3<f.length;i+=4)if(Math.abs(f[i+1]!-p.y)<1&&Math.hypot(f[i]!-p.x,f[i+2]!-p.z)<apart)return true;return false;};
         if(near(fresh,PLAN.printApart))return false;
-        for(const r of this.prints)if(r!==replacing&&near(r.f,PLAN.printRuns))return false;
+        for(const q of this.printsNear(p))if(q.run!==replacing&&Math.abs(q.y-p.y)<1&&Math.hypot(q.x-p.x,q.z-p.z)<PLAN.printRuns)return false;
         return true;
     }
     private roomFor(p:Vec3Data,fresh:readonly CaseClue[]):boolean {
@@ -621,7 +640,7 @@ export class CaseClues {
             if(c.q&&Math.abs(c.q.y-p.y)<1&&flat(c.q,p)<PLAN.spacing)return false;
         }
         // Nor on prints.
-        for(const r of this.prints)for(let i=0;i+3<r.f.length;i+=4)if(Math.abs(r.f[i+1]!-p.y)<1&&Math.hypot(r.f[i]!-p.x,r.f[i+2]!-p.z)<PLAN.printClear)return false;
+        for(const q of this.printsNear(p))if(Math.abs(q.y-p.y)<1&&Math.hypot(q.x-p.x,q.z-p.z)<PLAN.printClear)return false;
         return true;
     }
     /** A look unlike its neighbours: a family not yet in the group, the least-seen art nearby. */
@@ -662,7 +681,7 @@ export class CaseClues {
         const gone=new Set(g.ids);
         for(const c of this.items)if(gone.has(c.id))this.vacated.push({p:c.p,at:now});
         this.items=this.items.filter(c=>!gone.has(c.id));this.groups.delete(g.id);
-        if(g.prints)this.prints=this.prints.filter(r=>r.id!==g.prints);
+        if(g.prints){this.prints=this.prints.filter(r=>r.id!==g.prints);this.printCells=undefined;}
         for(const path of this.paths.values()){path.refs.delete(g.id);for(const a of path.anchors)if(a.group===g.id)a.group=undefined;}
     }
 }
