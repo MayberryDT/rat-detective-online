@@ -92,17 +92,17 @@ function where(self:Vec3Data,point:Vec3Data):string {
 }
 
 /** The paw prints a rat standing at `self` takes in: the run with a print within 4 units on its floor and in sight
- * (within a flashlight's reach in a Blackout too), one not followed yet (`done`) first. `yaw`: its last print's heading
- * (where the toes point); `end`: where the run ends. */
+ * (within a flashlight's reach in a Blackout too), one not followed yet (`done`) first. `yaw`: the nearest print's
+ * heading (where its toes point); `end`: where the run ends, by the next paper. */
 function printsHere(runs:readonly CasePrints[],self:Vec3Data,clear:(p:Vec3Data)=>boolean,done:ReadonlySet<string>):{id:string;yaw:number;end:Vec3Data}|undefined {
-    let best=Infinity,run:CasePrints|undefined;
+    let best=Infinity,run:CasePrints|undefined,at=0;
     for(const r of runs)for(let i=0;i+3<r.f.length;i+=4){
         const d=Math.hypot(r.f[i]!-self.x,r.f[i+2]!-self.z),score=d+(done.has('print:'+r.id)?4:0);
-        if(d<4&&score<best&&Math.abs(r.f[i+1]!-self.y)<1.2&&clear({x:r.f[i]!,y:r.f[i+1]!+.1,z:r.f[i+2]!})){best=score;run=r;}
+        if(d<4&&score<best&&Math.abs(r.f[i+1]!-self.y)<1.2&&clear({x:r.f[i]!,y:r.f[i+1]!+.1,z:r.f[i+2]!})){best=score;run=r;at=i;}
     }
     if(!run)return undefined;
     const n=run.f.length;
-    return {id:'print:'+run.id,yaw:run.f[n-1]!,end:{x:run.f[n-4]!,y:run.f[n-3]!,z:run.f[n-2]!}};
+    return {id:'print:'+run.id,yaw:run.f[at+3]!,end:{x:run.f[n-4]!,y:run.f[n-3]!,z:run.f[n-2]!}};
 }
 /** Which goals are valid now and the plan each makes: the old priority ladder's candidates, one goal at a
  * time. Holds the per-rat timers those candidates need. Only a carrier scores in a Jurisdiction zone, so the

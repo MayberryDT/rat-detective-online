@@ -41,6 +41,14 @@ const run=(id:string,g:string,x:number,z:number,h:number,n=4,turn=0,y=0,born=bas
  const f:number[]=[];let px=x,pz=z,ph=h;
  for(let k=0;k<n;k++){const side=k%2?-1:1;f.push(px+Math.cos(ph)*PRINTS.gait*side,y+.012,pz-Math.sin(ph)*PRINTS.gait*side,ph);px+=Math.sin(ph)*PRINTS.stride;pz+=Math.cos(ph)*PRINTS.stride;ph+=turn;}
  return {id,g,at:born,f};};
+/** Pairs of prints across a gap: from (x, z) heading `h` for `length` units, a pair every `PRINTS.pairs`. */
+const gap=(id:string,g:string,x:number,z:number,h:number,length:number,turn=0):CasePrints=>{
+ const f:number[]=[];let px=x,pz=z,ph=h;
+ for(let along=0;along+PRINTS.stride<=length;along+=PRINTS.pairs){
+  for(let k=0;k<2;k++){const side=k?-1:1,d=k?PRINTS.stride:0;
+   f.push(px+Math.sin(ph)*d+Math.cos(ph)*PRINTS.gait*side,.012,pz+Math.cos(ph)*d-Math.sin(ph)*PRINTS.gait*side,ph);}
+  px+=Math.sin(ph)*PRINTS.pairs;pz+=Math.cos(ph)*PRINTS.pairs;ph+=turn;}
+ return {id,g,at:base-60000,f};};
 // A loose sheet whose gust timetable lifts it inside the clip (searched once, deterministically).
 function looseSheet(id:string,x:number,z:number,s:number,q:[number,number]):CaseClue {
  for(let k=0;k<400;k++){const born=base-26000*(1+k%9)-k*911,c=sheet(id+'-'+k,x,0,z,s,born,q);
@@ -49,20 +57,20 @@ function looseSheet(id:string,x:number,z:number,s:number,q:[number,number]):Case
 }
 const views:Record<string,{p:number[];build:()=>CaseClue[];prints?:()=>CasePrints[];script?:()=>typeof script;turn?:true}>={
  street:{p:[-10,0,-27],build:()=>[sheet('st-0',-9.6,0,-31.5,0),sheet('st-1',-10.9,0,-33.2,5+16),sheet('st-2',-9.2,0,-41,2),sheet('st-3',-10.8,0,-42.8,7+16)],
-  prints:()=>[run('pr-st','st-0',-10.2,-34.6,Math.PI)],
+  prints:()=>[gap('pr-st','st-0',-10.2,-34.6,Math.PI,4.5)],
   script:()=>[{at:5000,add:sheet('st-new',-9.4,0,-37,3+8,base+5000)},{at:5000,addPrints:run('pr-new','st-new',-9.6,-38.4,Math.PI,4,0,0,base+5000)},{at:9000,drop:'st-2'},{at:12000,hit:new THREE.Vector3(-10.2,.3,-34)}]},
  corner:{p:[-10,0,-34],build:()=>[sheet('co-0',-10.4,0,-42,1+4),sheet('co-1',-12.6,0,-44.2,2+8+16),sheet('co-2',-21,0,-44,0+8)],
   prints:()=>[run('pr-co','co-1',-14,-44.4,-Math.PI/2-.25,4,.08)]},
  // Paw prints at reading distance: a group with its prints close by, and the next group's prints turning the corner.
  prints:{p:[-10,0,-27],build:()=>[sheet('pp-0',-9.6,0,-31.5,0),sheet('pp-1',-10.9,0,-33.2,5+16),sheet('pp-2',-10.4,0,-42,1+4),sheet('pp-3',-12.6,0,-44.2,2+8+16)],
-  prints:()=>[run('pr-pp-0','pp-0',-10.2,-34.6,Math.PI),run('pr-pp-1','pp-2',-14,-44.4,-Math.PI/2-.25,4,.08)]},
+  prints:()=>[gap('pr-pp-0','pp-0',-10.2,-34.6,Math.PI,5.5),gap('pr-pp-1','pp-2',-14,-44.4,-Math.PI/2-.2,10,.05)]},
  sewer:{p:[0,-7,18],build:()=>[sheet('se-0',.3,-7,10,1),sheet('se-1',-.4,-7,0,3+4+16),sheet('se-2',.2,-7,-10,2+4)]},
  // The eye-catch: the camera starts turned away and swings back at 2 s; a paper lying in the open 25 units down the street
  // comes into view, lifts in a gust and lands where it lay.
  eyecatch:{p:[-10,0,-27],turn:true,build:()=>[sheet('ec-0',-9.6,0,-31.5,0),sheet('ec-1',-14,0,-52.5,2+4),sheet('ec-2',-13.6,0,-55,1+8+16)],
-  prints:()=>[run('pr-ec-0','ec-0',-10.2,-33.6,Math.PI-.15),run('pr-ec-1','ec-1',-14.2,-56.8,Math.PI)]},
+  prints:()=>[gap('pr-ec-0','ec-0',-10.2,-33.6,Math.PI+.2,17),gap('pr-ec-1','ec-1',-14.2,-56.8,Math.PI,9)]},
  blackout:{p:[-10,0,-27],build:()=>[sheet('bo-0',-9.6,0,-31.5,0),sheet('bo-1',-10.9,0,-33.2,5+16),sheet('bo-2',-9.2,0,-41,2),sheet('bo-3',-10.8,0,-42.8,7+16)],
-  prints:()=>[run('pr-bo','bo-0',-10.2,-34.6,Math.PI)]},
+  prints:()=>[gap('pr-bo','bo-0',-10.2,-34.6,Math.PI,4.5)]},
  // Every front document and both shapes of each family, in two rows on the pavement.
  gallery:{p:[-10,0,-27],build:()=>Array.from({length:12},(_,i)=>{const family=i%4,art=Math.floor(i/4);return sheet('ga-'+i,-13.2+(i%6)*1.3,0,-31.4-Math.floor(i/6)*1.6,family+4*art+16*(i%2));})},
  wind:{p:[-10,0,-27],build:()=>[looseSheet('wi-loose',-9.5,-33,2+4,[-9.2,-35.2]),sheet('wi-0',-10.8,0,-32.4,1),sheet('wi-1',-9.2,0,-38.5,0+8+16),sheet('wi-2',-10.6,0,-40.6,3)]},

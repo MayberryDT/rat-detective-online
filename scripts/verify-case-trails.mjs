@@ -18,6 +18,9 @@
 //      re-laid in place while the case lies still               P5 prints crowd the view
 //   P6 a print floats, sinks, lies under a sheet or on another print (or another run's, within a unit: runs tangled)
 //   P7 a restore drops the prints or a reset leaves them        P8 print bytes push the wire past the baseline
+//   P10 (8 October, Tyler: "you put the paw prints in the exact same spot as the papers"): the gaps between paper
+//      groups have no marks. Walking the trail, the next print or paper is not on screen within 10 units ahead; a run's
+//      pairs lie more than 6 units apart; a run stops more than 8 units short of the next paper.
 //   P9 prints do not help: a follower that sees only its screen and turns where the prints point needs no fewer looks
 //      round than one that ignores them, or misses the case
 //
@@ -278,7 +281,8 @@ if(values.only===undefined){
     const P=report.room.prints;
     check('P4 no print run changes, comes back or blinks (under 2 s outside a clear)',P.adds>0&&!P.violations.look&&!P.violations.comeback&&!P.violations.blink,P.violations);
     check('P4 prints are re-laid in place only when the case moved',P.relaidWhileStill===0,{relaid:P.relaid,whileStill:P.examples.relaidWhileStill});
-    check('P5 prints stay sparse (every rat each second, on screen within 30 units: median ≤ 8, p90 ≤ 16)',(P.onScreen.median??0)<=8&&(P.onScreen.p90??0)<=16,P.onScreen);
+    // Prints now span the gaps between groups (a pair every 4–5 units), so a street view holds more of them than runs beside papers did.
+    check('P5 prints stay sparse (every rat each second, on screen within 30 units: median ≤ 12, p90 ≤ 24)',(P.onScreen.median??0)<=12&&(P.onScreen.p90??0)<=24,P.onScreen);
     check('P6 every print has ground under heel and toe, none under a sheet or within a unit of another run',printsChecked>0&&P.misplaced===0,{checked:printsChecked,misplaced:P.misplaced,examples:P.misplacedExamples});
     if(values.baseline){const base=JSON.parse(readFileSync(values.baseline,'utf8')).room;
         check('P8 paper and print bytes together no more than the baseline\'s paper bytes',report.room.clueBytesPerSecond+P.bytesPerSecond<=(base.clueBytesPerSecond??Infinity),{papers:report.room.clueBytesPerSecond,prints:P.bytesPerSecond,baseline:base.clueBytesPerSecond});}
@@ -314,11 +318,13 @@ for(const mode of values.followers.split(',').filter(Boolean)){
             const a=route[i-1],b=route[i],n=Math.max(1,Math.ceil(dist(a,b)/SPEED));
             for(let s=1;s<=n;s++){const u=s/n;
                 Object.assign(f,{x:a.x+(b.x-a.x)*u,y:a.y+(b.y-a.y)*u,z:a.z+(b.z-a.z)*u});if(flat(a,b)>.05)setYaw(f,Math.atan2(b.x-a.x,b.z-a.z));
+                // P10: every few steps of walking the trail, is a print or paper on screen within 10 units ahead?
+                if(screenOnly&&++walkSteps%6===0){gaps.n++;const marks=[...room.clues,...printPoints(room.prints)];if(onScreen(see,f,marks).some(c=>dist(f,c.p)<=10))gaps.covered++;}
                 if(s%2===0){room.clues=tick(room);if(until())return true;}}
         }return false;
     };
     const routeTo=(from,to)=>{const r=nav.paperRouteSteps(from,to);let s;do{s=r.next();}while(!s.done);return s.value;};
-    const printReads={runs:0,along:0,ahead:0,examples:[]},groupsWithPrints={groups:0,printed:0,bare:[]};
+    const printReads={runs:0,along:0,ahead:0,spaced:0,reaches:0,examples:[]},groupsWithPrints={groups:0,printed:0,bare:[]},gaps={n:0,covered:0};let walkSteps=0;
     for(let n=0,i=0;i<spawns.length;i+=stride,n++){
         if(values.only!==undefined&&i!==Number(values.only))continue;
         // Each sample in its own room on its own random stream and clock, so `--only` reproduces one exactly.
@@ -358,8 +364,8 @@ for(const mode of values.followers.split(',').filter(Boolean)){
         // Reaching a paper: the prints beside it (a player looks where they point). P2 and P3 read each run once.
         const reachPaper=()=>{
             const r=printsHere(see,f,room.prints,walkedRuns);if(!r)return;
-            const last=printsOf(r).at(-1);
-            if(mode==='prints')setYaw(f,last.h);
+            const last=printsOf(r).at(-1),near=printsOf(r).reduce((a,q)=>flat(q,f)<flat(a,f)?q:a);
+            if(mode==='prints')setYaw(f,near.h);
             if(mode!=='prints'||seenRuns.has(r.id))return;
             seenRuns.add(r.id);printReads.runs++;
             const c=caseAt(),target=c.owner?room.players.get(c.owner)??c.p:c.p,way=routeTo(last,target);
@@ -370,6 +376,10 @@ for(const mode of values.followers.split(',').filter(Boolean)){
             const ahead=onScreen(see,stand,room.clues).some(p=>dist(stand,p.p)<=40&&flat(p.p,first)>5&&!visited.has(p.id))||
                 (dist(stand,c.p)<=40&&onScreen(see,stand,[{p:c.p}]).length>0);
             if(along)printReads.along++;if(ahead)printReads.ahead++;
+            // P10: pairs at most 6 apart, and the run ends within 8 of a further paper (or the case).
+            const q=printsOf(r);let gap=0;for(let k=1;k<q.length;k++)gap=Math.max(gap,flat(q[k-1],q[k]));
+            if(gap<=6)printReads.spaced++;
+            if(room.clues.some(c=>!visited.has(c.id)&&flat(c.p,first)>3&&dist(c.p,last)<=8)||dist(c.p,last)<=8)printReads.reaches++;
             if((!along||!ahead)&&printReads.examples.length<8)printReads.examples.push({spawn:i,run:r.id,last,along,ahead,target:{x:+target.x.toFixed(1),y:+target.y.toFixed(1),z:+target.z.toFixed(1)},way:way.slice(0,4)});
         };
         while(room.now-start<150000&&!got()){
@@ -418,6 +428,7 @@ for(const mode of values.followers.split(',').filter(Boolean)){
     followers[mode]={placement:how,runs:runs.length,reachedCase:ok.length,firstLeadInView:runs.filter(r=>r.firstLead!==null).length,firstLead:stats(runs.filter(r=>r.firstLead!==null).map(r=>r.firstLead)),
         seconds:stats(ok.map(r=>r.seconds)),leadDistance:stats(runs.flatMap(r=>r.leadDistances??[])),sheetsFollowed:stats(ok.map(r=>r.followed)),
         ...(screenOnly?{farReads:looks.length,firstLook:looks.length?+(looks.filter(t=>t===0).length/looks.length).toFixed(2):null,turnsPerRead:mean(looks),walkedPrints:runs.reduce((t,r)=>t+(r.walkedPrints??0),0)}:{}),
+        ...(screenOnly?{walkCovered:gaps.n?+(gaps.covered/gaps.n).toFixed(2):null}:{}),
         ...(mode==='prints'?{printReads,groupsWithPrints,runsAtSpawn:stats(runs.map(r=>r.printsAtSpawn)),underfoot:runs.filter(r=>r.underfoot).map(r=>({spawn:r.spawn,prints:r.underfoot}))}:{}),
         failures:runs.filter(r=>!r.ok).slice(0,12),withoutLead:runs.filter(r=>r.noLead).map(r=>({spawn:r.spawn,yaw:r.yaw,...r.noLead}))};
     const F=followers[mode];
@@ -430,6 +441,8 @@ for(const mode of values.followers.split(',').filter(Boolean)){
         const g=F.groupsWithPrints,p=F.printReads;
         check('P1 ≥ 90% of trail groups (all but the spill beside the case) carry prints',g.groups>0&&g.printed>=g.groups*.9,{groups:g.groups,printed:g.printed,bare:g.bare.slice(0,4)});
         check('P2 from ≥ 90% of print runs read, the way to the case leaves within 45° of where they point',p.runs>0&&p.along>=p.runs*.9,{runs:p.runs,along:p.along,examples:p.examples.filter(e=>!e.along).slice(0,3)});
+        check('P10 ≥ 90% of runs read have pairs at most 6 units apart and end within 8 units of a further paper or the case',p.runs>0&&p.spaced>=p.runs*.9&&p.reaches>=p.runs*.9,{runs:p.runs,spaced:p.spaced,reaches:p.reaches});
+        check('P10 walking the trail, a print or paper is on screen within 10 units ahead ≥ 90% of the way',(F.walkCovered??0)>=.9,{covered:F.walkCovered});
         check('P3 looking where ≥ 85% of print runs point shows a further paper or the case (screen, 40 units)',p.runs>0&&p.ahead>=p.runs*.85,{runs:p.runs,ahead:p.ahead,examples:p.examples.filter(e=>!e.ahead).slice(0,3)});
         check('P9 a screen-only follower facing the prints reaches the case from ≥ 95% of sampled spawns',ok.length>=runs.length*.95,{reached:ok.length,of:runs.length});
         check('P6 no print under a fresh spawn\'s rat (within 1.5 units, half a second in)',F.underfoot.length===0,F.underfoot.slice(0,5));

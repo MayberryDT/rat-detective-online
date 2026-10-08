@@ -7,19 +7,19 @@ import {CASE_RED} from './caseRed';
 /** Ink colours to compare: the case's red, or pale chalk. */
 export const PAW_INK={red:CASE_RED,chalk:0xd9d2c1} as const;
 /** Prints drawn at once, and how far from the rat they read (past that a print is a smudge), fading over the last `FADE`. */
-const MAX=64,RANGE=40,FADE=8;
+const MAX=128,RANGE=40,FADE=8;
 /** A print's size on the ground (width across the paw, length heel to toe): bigger than a rat's paw, so it reads. */
 const SIZE={w:.48,d:.62};
 /** A new run stamps in print by print once its papers have landed; a retired one fades. */
-const STAMP_MS=140,STAMP_GAP=170,FADE_MS=900,AFTER_PAPERS_MS=1300,ARRIVING_WINDOW=2600;
+const STAMP_MS=140,STAMP_GAP=110,FADE_MS=900,AFTER_PAPERS_MS=1300,ARRIVING_WINDOW=2600;
 const UP=new THREE.Vector3(0,1,0);
 
 interface Print {x:number;y:number;z:number;h:number;normal?:THREE.Vector3;supported?:boolean}
 interface Run {r:CasePrints;prints:Print[];arrive?:number;leave?:number;shown:boolean}
 
 /** Paw prints beside the case papers (Tyler, 8 October), presentation only: the authority lays each run with a fixed
- * id and place. Ink stamped on the ground, darkest beside the papers and fainter as the ink runs out (which also says
- * which way they go). A new run stamps in print by print after its papers land; a retired one fades. Drawn only near
+ * id and place: pairs of inked paws across the gap from one paper group to the next, darkest by the papers they leave.
+ * A new run stamps in print by print after its papers land (a rat walking across); a retired one fades. Drawn only near
  * the rat. One instanced batch, lit like the papers (NoirCity evidence, adopted with the case files); GPU depth owns
  * occlusion. Matte and steady: never the hot carrier's glowing prints. */
 export class PawPrints {
@@ -78,8 +78,8 @@ export class PawPrints {
         let n=0;
         for(const {run,i,d} of candidates){
             if(n===MAX)break;
-            // Darkest beside the papers, fainter as the ink runs out.
-            let ink=1-.13*i,scale=1;
+            // Darkest beside the papers, a little fainter toward the next.
+            let ink=1-.3*i/Math.max(1,run.prints.length-1),scale=1;
             if(run.arrive!==undefined){
                 const t=now-(run.arrive+i*STAMP_GAP);if(t<0)continue;
                 if(t<STAMP_MS){const u=t/STAMP_MS;ink*=u;if(motion)scale=1+.35*(1-u)*(1-u);}
