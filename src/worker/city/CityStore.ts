@@ -220,8 +220,13 @@ export class CityStore {
   pruneEvents(now: number): void {
     const before = heatDayKey(now - (EVENT_RETENTION_DAYS - 1) * DAY_MS);
     if (before === this.prunedBefore) return;
-    const cursor = this.sql.exec('DELETE FROM city_events WHERE day < ?', before);
-    this.scans.push({ what: 'prune-events', rowsRead: cursor.rowsRead, rowsWritten: cursor.rowsWritten });
+    // Events go in in time order, so `seq` rises with `day`: walk from the oldest to the first one kept (one row when
+    // none are old), then delete by key range. `day < ?` alone read every row (891,152 on staging) at each wake's
+    // first flush, which the first human's join waited behind for seconds.
+    const first = this.sql.exec<{ seq: number }>('SELECT seq FROM city_events WHERE day >= ? ORDER BY seq LIMIT 1', before);
+    const keep = first.toArray()[0]?.seq;
+    const cursor = keep === undefined ? this.sql.exec('DELETE FROM city_events') : this.sql.exec('DELETE FROM city_events WHERE seq < ?', keep);
+    this.scans.push({ what: 'prune-events', rowsRead: first.rowsRead + cursor.rowsRead, rowsWritten: cursor.rowsWritten });
     this.prunedBefore = before;
   }
 
