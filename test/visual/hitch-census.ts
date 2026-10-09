@@ -199,6 +199,12 @@ const script:[string,()=>void,number?][]=[
     ['you respawn again',()=>{send({type:'playerRespawn',id:'me',x:me.x,y:me.y,z:me.z,hp:5});},60],
     ['you go underground',()=>{send({type:'playerCorrected',player:{id:'me',x:0,y:-5.7,z:4,qx:0,qy:0,qz:0,qw:1,meshQx:0,meshQy:0,meshQz:0,meshQw:1}});},90],
     ['back on the street',()=>{send({type:'playerCorrected',player:{id:'me',x:me.x,y:me.y,z:me.z,qx:0,qy:0,qz:0,qw:1,meshQx:0,meshQy:0,meshQz:0,meshQw:1}});},60],
+    // Tyler's 9 October freeze: a Tommy Gun kill, a respawn inside the Icebox, out into the street.
+    ['chalk, a tip and muck',()=>{state.chalk=[{id:'k1',p:{x:-7,y:.014,z:-24},h:1,c:0x386caa,at:now()-2000}];state.tips=[{id:'t1',p:{x:-7,y:.016,z:-24},to:{x:-20,y:0,z:-40},carrier:'rat-5',seen:now()-4000,at:now()-1000}];
+        state.muck=[{id:'m1',at:now()-500,f:[-9,.012,-25,0,-8.7,.012,-24.4,0,-9,.012,-23.8,0,-8.7,.012,-23.2,0]}];},90],
+    ['a Tommy Gun kills you',()=>{send({type:'playerDamaged',id:'me',hp:0,attackerId:'rat-1'});send({type:'playerDied',victimId:'me',killerId:'rat-1',killerName:'Rival 1',victimName:'Census',respawnAt:now()+3000,killerStreak:2,weapon:'tommy-gun'});state.corpses=[{...corpse(0,true),victimId:'me'}];},200],
+    ['you respawn inside the Icebox',()=>{send({type:'playerRespawn',id:'me',x:140,y:2,z:-44,hp:5});state.corpses=[];},120],
+    ['out of the Icebox onto the street',()=>{send({type:'playerCorrected',player:{id:'me',x:116,y:.3,z:-16,qx:0,qy:0,qz:0,qw:1,meshQx:0,meshQy:0,meshQz:0,meshQw:1}});},120],
     ['round won: lineup',()=>{send({type:'gameWon',winnerId:'me',winnerName:'Census',kills:9,resetAt:now()+15_000,lineup:['me','rat-1','rat-2','rat-3','rat-4'],awards:[{id:'top-gun',title:'Top Gun',playerId:'me',playerName:'Census',value:9}]});},600],
     ['round reset',()=>{send({type:'gameReset',round:{phase:'playing'}});},90],
 ];

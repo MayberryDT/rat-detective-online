@@ -164,6 +164,8 @@ export class GameSession {
     /** The Blackout level the nameplates were last shaded for (0: every plate lit). */
     private plateDark = 0;
     private compiling?:Promise<unknown>;
+    /** The background warm of the other sewer-lamp state (`compileOtherLampState`): programs counted after the last one. */
+    private lampWarm={programs:0,at:0,busy:false};
     private compileTimer?:ReturnType<typeof setTimeout>;
     private readonly lineup?:PoliceLineup;
     private pendingLineup?:{entries:LineupEntry[];at:number};
@@ -490,10 +492,31 @@ export class GameSession {
         // Bounded: three's readiness poll can throw inside its timer (a material
         // disposed mid-link, context loss) and never settle.
         clearTimeout(this.compileTimer);
-        const compiling=Promise.race([this.stage.renderer.compileAsync(this.stage.scene,this.stage.camera).then(()=>{uploadTextures(this.stage.renderer,this.stage.scene);return checkPrograms(this.stage.renderer);}),
+        const compiling=Promise.race([Promise.all([this.stage.renderer.compileAsync(this.stage.scene,this.stage.camera),this.compileOtherLampState()]).then(()=>{uploadTextures(this.stage.renderer,this.stage.scene);return checkPrograms(this.stage.renderer);}),
             new Promise(resolve=>{this.compileTimer=setTimeout(resolve,WELCOME_COMPILE_MS);})]).catch(()=>undefined)
             .finally(()=>{if(this.compiling===compiling){clearTimeout(this.compileTimer);this.compiling=undefined;}});
         this.compiling=compiling;
+    }
+
+    /** Compile every visible program for the sewer-lamp state not showing (the eight lamps light only underground, so
+     * the light count, and every lit program with it, has two states). A flip to a state whose programs were never
+     * compiled relinks them all at once: Tyler's 9 October 5 s freeze, 36 programs when a respawn passed a sewer
+     * mouth. The links run off the main thread (KHR_parallel_shader_compile); nothing waits for them to draw. */
+    private compileOtherLampState():Promise<unknown> {
+        const lamps=this.city instanceof Neighborhood?this.city.sewerLights:[];
+        if(!lamps.length)return Promise.resolve();
+        const shown=lamps[0]!.visible;
+        for(const lamp of lamps)lamp.visible=!shown;
+        try{return this.stage.renderer.compileAsync(this.stage.scene,this.stage.camera);}
+        finally{for(const lamp of lamps)lamp.visible=shown;}
+    }
+    /** Every 2 s of play: programs that appeared since (a new effect, a rat, a prop) get their other lamp state too. */
+    private warmLampStates(now:number):void {
+        const warm=this.lampWarm,renderer=this.stage.renderer,count=renderer.info.programs?.length??0;
+        if(warm.busy||this.compiling||now-warm.at<2000||count<=warm.programs)return;
+        warm.busy=true;warm.at=now;
+        this.compileOtherLampState().then(()=>checkPrograms(renderer)).catch(()=>undefined)
+            .finally(()=>{warm.busy=false;warm.programs=renderer.info.programs?.length??0;});
     }
 
     private receive(message: ServerMessage): void {
@@ -895,6 +918,7 @@ export class GameSession {
         if(this.pendingLineup&&now>=this.pendingLineup.at){this.lineup?.start(this.pendingLineup.entries);this.feel.endDeathCamera(camera);this.pendingLineup=undefined;}
         if(this.lineup?.active)this.lineup.update(dt,camera,flashlight);
         this.replay?.update(dt);
+        this.warmLampStates(now);
         if(!this.compiling){
             renderer.toneMappingExposure=this.baseExposure;
             // A fullscreen exhibit takes the screen: the live frame is not drawn under it.

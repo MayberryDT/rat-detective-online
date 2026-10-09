@@ -67,7 +67,7 @@ export class CityMarksView {
         this.notes.end();this.arrows.end();
         this.muck.update(marks.muck??[],now,eye,frustum,motion,still);
     }
-    warm():void {for(const d of [this.chalk,this.notes,this.arrows])d.warm();this.muck.warm();}
+    warm():void {for(const d of [this.chalk,this.notes,this.arrows])d.warm();this.muck.warm();this.hats.count=1;this.hats.visible=true;this.hats.setMatrixAt(0,new THREE.Matrix4());this.hats.setColorAt(0,this.color.setHex(0));}
     clear():void {for(const d of [this.chalk,this.notes,this.arrows])d.clear();this.hats.count=0;this.hats.visible=false;this.muck.clear();}
     dispose():void {this.clear();for(const d of [this.chalk,this.notes,this.arrows])d.dispose();this.hats.geometry.dispose();(this.hats.material as THREE.Material).dispose();this.hats.dispose();this.muck.dispose();}
 }
