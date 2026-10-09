@@ -35,6 +35,14 @@ it all. Let's implement all of it ... make the pigeon scatter super obvious ... 
 Bots read the same evidence a player does (`CarrierSight.lead`, `mindVersion` 18): radio calls (heard by all), pigeons
 over the roofs in sight, the freshest wax drop in sight.
 
+## Round 5 (9 October): the ping, the Pea Souper, the penthouse safes
+
+Tyler: "figure out why the ping is so bad … fix it here"; a thick noir fog ("the rats always have to be visible … the lights breaking through the fog"); a penthouse safe ("shoot it a lot to break it … it gives you an ironclad alibi, it gives you a hot pursuit, and … the next gun upgrade"). He agreed to every proposed safe number. Order: ping, fog, safe.
+
+- **The ping:** the public room ran in Seattle and the Matchmaker carried every frame. Now `public-live-v3`, first reached from Kansas City, with the history copied in, and joins go straight to the room. Production moves at the next release by [the public room steps](../live-service.md#the-public-room).
+- **The Pea Souper** (incident `pea-souper`, protocol 42): fog density .058 in yellow-grey, the sky with it; lamp haze cones and searchlights brighter (they ignore the fog); every rat's far outline from 3 to 12 units; a foghorn. Bots see the case and papers only within `FOG_REACH` (24), rats as ever. `FEEL.peaSouper` holds the numbers.
+- **Penthouse safes** ([`safes.ts`](../../src/shared/safes.ts), protocol 43): one per landmark top floor (Records and Needleworks at 16, Icebox and Pumping Station at 8). 30 hits (slug 2, laser 3); the cracking hit's rat gets Ironclad, Hot Pursuit and the safe's next gun (Persuader, Tommy Gun, Laser, Mousetrap in turn); it stands open 2 minutes with a restock dial, then locks again; a new round locks all. The door heats as it is shot. The radio calls the alarm at the first hit and the crack, naming the cracker. Bots shoot a locked safe in sight when no rat is their target, and an `arm-up` trip climbs to one (`mindVersion` 20). Rats walk through a safe (balls and beams meet it, as with a Mousetrap).
+
 ## The rules (what is true in play)
 
 - **Marks are true.** The server lays every mark from what happened; nothing is invented or attributed falsely. They belong to the round: `ChaosSimulation.reset` clears them all. Source: [`src/shared/cityMarks.ts`](../../src/shared/cityMarks.ts).
@@ -59,4 +67,5 @@ See [the receipt](../verification/chaos-evidence-2026-10-08.md).
 
 - Tyler's play: do tips change where you go? (The research test: "I saw X, so I went Y, and I was right.")
 - The lull track: a Strudel take, then the crossfade.
+- Penthouse safes: no bot has yet been seen to climb to the Icebox's (two 10-minute room benchmarks cracked the other three); whether they read across a room in play.
 - Rolling back past protocol 40 drops the marks harmlessly (older code ignores the fields), but a protocol 39 client cannot join a protocol 40 room.

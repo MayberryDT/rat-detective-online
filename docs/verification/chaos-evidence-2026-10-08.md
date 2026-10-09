@@ -109,4 +109,13 @@ Rooms first reached from Kansas City land in Chicago or Dallas (6 of 6); the `en
 
 **Checked (the fog):** static art inspection (`city-view.html?incident=pea-souper&rats=…`, Halla's GPU): on the quay, the cranes and warehouses vanish past about 35 units, the lamp cones glow through, and four rats at about 12–50 units stay plainly visible; the same view clear for comparison (`/home/halla/build/rat-detective/fog/`). Typecheck; worker 288, client 1,520, scripts 46 tests pass. Staging Worker `52f0e831-a163-40f4-a411-89b05a757fc5`.
 
-**Not checked:** the fog in live play by a human; the copy on production (next release).
+**The penthouse safes** (protocol 43, `mindVersion` 20): see [the plan](../plans/chaos-evidence-2026-10.md#round-5-9-october-the-ping-the-pea-souper-the-penthouse-safes).
+
+**Checked (the safes):**
+- Two 10-minute room benchmarks (`benchmark-server-tick.mjs --room --bots=9 --ticks=18000`, which decodes every frame as a client does): all four safes resolve at their anchors; bots cracked Records, the Needleworks and the Pumping Station (2–4 cracks each per run, by different bots), with the alarm and crack calls on the radio (`ATTENTION ALL CARS: THE SAFE AT THE RECORDS PENTHOUSE IS CRACKED: RAT 6 IS ARMED TO THE TEETH.`). The Icebox's safe took one stray hit and was never visited.
+- The tests caught a real wire bug before deploying: an absent `safes` decoded as `null` and every frame without safes was refused. The decoder now drops it like the other lists.
+- Hosted staging (Worker `e0076c44-934f-49fc-9d7f-fe2614bc1b28`), the agent probe for 180 s: protocol 43, 5,422 frames, 0 errors; bots cracked the Pumping Station's safe and brought Records' to 18 of 30; ping 21 / 26 / 90 / 222 ms (min / median / p95 / p99).
+- Static art inspection (`city-view.html?safes=…`, the Records penthouse): locked, damaged (glowing red) and cracked (door open, restock dial up) side by side (`/home/halla/build/rat-detective/safe/stages.png`).
+- Typecheck; worker 288, client 1,520, scripts 46 tests pass.
+
+**Not checked:** the fog and the safes in live play by a human; bots reaching the Icebox's safe; the copy on production (next release).
