@@ -707,7 +707,7 @@
       "environment": "production",
       "build": "production-2026-10-09-648ff6e",
       "from": "2026-10-09T00:40:35.689Z",
-      "to": null,
+      "to": "2026-10-09T07:30:19Z",
       "layout": 7,
       "mindVersion": 16,
       "protocol": 39,
@@ -719,6 +719,25 @@
       "baseline": "heavy-cheese",
       "receipt": "docs/verification/smooth-play-release-2026-10-09.md",
       "notes": "Exact BUILD membership is authoritative. Boundary is the observed end of the deploy command, not a provider timestamp. Finding the case changed for everyone (no ping), so case-time and assignment-length measures are not comparable with heavy-cheese without that caveat.",
+      "predictions": []
+    },
+    {
+      "id": "chaos-evidence",
+      "environment": "production",
+      "build": "production-2026-10-09-45dcd91",
+      "from": "2026-10-09T07:30:19Z",
+      "to": null,
+      "layout": 7,
+      "mindVersion": 20,
+      "protocol": 43,
+      "worker": "20f9db44-7857-42da-b88c-ccf1bb2eb1f7",
+      "commits": [
+        "45dcd91"
+      ],
+      "change": "Chaos leaves evidence (chalk outlines, sewer muck, hot wax, pigeons, the police scanner, fresher papers), the lull, the Evening Edition, the Persuader, Code Violation and Bad Ammunition removed, the lamp-state freeze fix, the Pea Souper fog incident, penthouse safes (bots read the scanner, pigeons and wax, see the case only up close in fog, and crack safes; mindVersion 17-20). The public room moved from public-live-v2 (Seattle) to public-live-v3 (Chicago) with its history copied in, and public joins connect straight to the room.",
+      "baseline": "case-papers",
+      "receipt": "docs/verification/chaos-evidence-release-2026-10-09.md",
+      "notes": "Exact BUILD membership is authoritative. Boundary is the observed end of the deploy command. Facts now carry room public-live-v3; v2's history was copied into v3's aggregates and events, so per-room filters must take both. Ping fell from about 83 ms to 23 ms median for Kansas City players, so hit rates and fight measures are not comparable with case-papers without that caveat.",
       "predictions": []
     }
   ]

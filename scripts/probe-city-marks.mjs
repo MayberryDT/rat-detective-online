@@ -17,6 +17,8 @@ url.searchParams.set('room',values.room??`graybox-practice-marks-${crypto.random
 // The compact chaos wire every game client asks for (CHAOS_WIRE_MODE); without it the room sends whole states.
 url.searchParams.set('chaos','compact-v2');
 const ws=new WebSocket(url,{headers:{Origin:url.origin.replace(/^ws/,'http')}});
+/** Penthouse safes: where each stands, the lowest hp seen and its cracks. */
+const safes=new Map();
 const seen={chalk:new Map(),muck:new Map(),wax:new Map(),flocks:new Map(),scanner:new Map()},deaths=[];
 let welcome,chaosStates=0,bots=0,carriers=new Set(),started=Date.now(),errors=0,lastChaos=0;
 /** Latency: a ping every 500 ms (pong round trips), and the gaps between chaos frames (a busy room sends late). */
@@ -39,6 +41,7 @@ ws.on('message',raw=>{
     if(lastChaos)gaps.push(Date.now()-lastChaos);lastChaos=Date.now();
     frames.push([Date.now()-started,message.state.time,message.state.tick??0]);
     chaosStates++;const s=message.state;if(s.case?.owner)carriers.add(s.case.owner);
+    for(const safe of s.safes??[]){const seen=safes.get(safe.id)??{p:[safe.x,safe.y,safe.z],lowestHp:safe.hp,cracks:safe.n};seen.lowestHp=Math.min(seen.lowestHp,safe.hp);seen.cracks=Math.max(seen.cracks,safe.n);safes.set(safe.id,seen);}
     for(const key of ['chalk','muck','wax','flocks','scanner'])for(const m of s[key]??[])if(!seen[key].has(m.id))seen[key].set(m.id,{...m,arrivedMs:now});
 });
 ws.on('error',()=>errors++);
@@ -56,13 +59,13 @@ const leg=i=>{const v=legs.map(l=>l[i]),low=Math.min(...v);return spread(v.map(x
 const report={target:url.origin,legsAboveMinMs:{up:leg(0),down:leg(1)},room:url.searchParams.get('room'),seconds,welcome,bots,chaosStates,errors,deaths:deaths.length,carriers:carriers.size,rttMs:spread(rtts),chaosGapMs:spread(gaps),late:{count:late.length,server:late.filter(l=>l.kind==='server').length,network:late.filter(l=>l.kind==='network').length,worst:[...late].sort((a,b)=>b.arriveMs-a.arriveMs).slice(0,12)},
     // Arrival minus server time per frame (clock offset plus one-way delay): its spread is the one-way jitter.
     oneWayJitterMs:{p50:Math.round(offsets[offsets.length>>1]-offsets[0]),p95:Math.round(offsets[Math.floor(offsets.length*.95)]-offsets[0]),max:Math.round(offsets[offsets.length-1]-offsets[0])},
-    marks:{chalk:list('chalk').length,muck:list('muck').length,wax:list('wax').length,flocks:list('flocks').length,scanner:list('scanner').length},
+    safes:Object.fromEntries(safes),marks:{chalk:list('chalk').length,muck:list('muck').length,wax:list('wax').length,flocks:list('flocks').length,scanner:list('scanner').length},
     chalk:list('chalk').map(m=>({id:m.id,p:m.p,h:m.h,c:m.c,arrivedMs:m.arrivedMs})),
     muck:list('muck').map(r=>({id:r.id,prints:r.f.length/4,first:r.f.slice(0,3),arrivedMs:r.arrivedMs})),
     wax:list('wax').map(r=>({id:r.id,drops:r.f.length/4,carrier:r.c,first:r.f.slice(0,3),arrivedMs:r.arrivedMs})),
     flocks:list('flocks').map(f=>({id:f.id,p:f.p,carrier:f.c,arrivedMs:f.arrivedMs})),
     scanner:list('scanner').map(l=>({kind:l.kind,text:l.text,lead:!!l.p,delayMs:l.seen!==undefined?l.at-l.seen:undefined,arrivedMs:l.arrivedMs}))};
 if(values.output)await writeFile(values.output,JSON.stringify(report,null,2)+'\n');
-console.log(JSON.stringify({welcome,bots,chaosStates,errors,deaths:report.deaths,carriers:report.carriers,rttMs:report.rttMs,legsAboveMinMs:report.legsAboveMinMs,chaosGapMs:report.chaosGapMs,late:report.late,oneWayJitterMs:report.oneWayJitterMs,marks:report.marks,
+console.log(JSON.stringify({welcome,bots,chaosStates,errors,safes:report.safes,deaths:report.deaths,carriers:report.carriers,rttMs:report.rttMs,legsAboveMinMs:report.legsAboveMinMs,chaosGapMs:report.chaosGapMs,late:report.late,oneWayJitterMs:report.oneWayJitterMs,marks:report.marks,
     scanner:report.scanner.slice(0,12).map(l=>l.text)}));
 process.exit(errors?1:0);
