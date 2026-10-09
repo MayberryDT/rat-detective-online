@@ -91,6 +91,12 @@ export default {
         return respond(json({ ok: true, service: 'rat-detective', runtime: 'cloudflare-workers', build: buildName(env.BUILD) }));
       }
 
+      // Latency diagnosis (staging only): which data centre a room runs in. Waking it to ask starts no round.
+      if (url.pathname === '/status' && url.searchParams.has('colo') && (env as Env & {DIAG_LOCATION_ROOMS?:string}).DIAG_LOCATION_ROOMS === '1') {
+        const name = url.searchParams.get('colo') || DEFAULT_ROOM_NAME, hint = /^latency-(wnam|enam|sam|weur|eeur|apac|oc|afr|me)-/.exec(name)?.[1];
+        const stub = hint ? env.GAME_ROOM.get(env.GAME_ROOM.idFromName(name), {locationHint: hint as DurableObjectLocationHint}) : env.GAME_ROOM.getByName(name);
+        return respond(json({ room: name, colo: await stub.diagColo() }));
+      }
       if (url.pathname === '/status') {
         if (request.method === 'OPTIONS') {
           return respond(new Response(null, {
@@ -150,12 +156,6 @@ export default {
       const admin = await adminApi(request, url, env as AdminEnv);
       if (admin) return respond(admin);
 
-      // Latency diagnosis (staging only): which data centre a room runs in. Waking it to ask starts no round.
-      if (url.pathname === '/diag/colo' && (env as Env & {DIAG_LOCATION_ROOMS?:string}).DIAG_LOCATION_ROOMS === '1') {
-        const name = url.searchParams.get('room') || DEFAULT_ROOM_NAME, hint = /^latency-(wnam|enam|sam|weur|eeur|apac|oc|afr|me)-/.exec(name)?.[1];
-        const stub = hint ? env.GAME_ROOM.get(env.GAME_ROOM.idFromName(name), {locationHint: hint as DurableObjectLocationHint}) : env.GAME_ROOM.getByName(name);
-        return respond(json({ room: name, colo: await stub.diagColo() }));
-      }
       if (url.pathname === '/ws') {
         if (request.headers.get('Upgrade') !== 'websocket') {
           return respond(json({ error: 'Expected WebSocket upgrade' }, { status: 400 }));
