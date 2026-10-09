@@ -150,6 +150,8 @@ const HELD_JOIN_MS = 20_000;
 export const BOT_HEARTBEAT_MS = 15_000;
 export const STALE_PLAYER_MS = 2 * 60_000;
 export const CHECKPOINT_MS = 2_500;
+/** How often a playing room writes its routine state (chaos, rats due a checkpoint). */
+export const ROUTINE_CHECKPOINT_MS = 3_000;
 const RECENT_SHOT_LIMIT = 24;
 /** A human counts as present for Jev while they played this recently; a `minds` fact covers this long. */
 const JEV_PRESENCE_MS = 60_000, JEV_REPORT_MS = 60_000;
@@ -1730,15 +1732,12 @@ export class GameRoom extends DurableObject<Env> {
       this.highlights.tick(now,this.players,this.chaos.caseHolderId,this.chaos.assignmentState);
       if(this.round.phase==='playing')this.awards.sample(this.players.values(),Math.min(.2,gapMs/1000),state.case.owner,state.assignment?.deliverySerial??0,state.pressure?.launches,state.dispatch,state.assignment);
       const signature=state.case.owner+':'+state.case.returningUntil+':'+state.dispatch.serial+':'+state.dispatch.phase+':'+state.assignment?.revision;
-      // Ownership/Dispatch/assignment changes persist before any client sees them.
-      // Routine checkpoints hold nothing clients depend on, so write after this
-      // tick's frames are sent instead of holding them behind the output gate.
+      // Every write holds this object's outgoing frames until it is durable (the output gate), and the room's clients
+      // sit far from it, so a held frame arrives in a bunch (Tyler, 9 October: "old crappy shooter game lag"). Ownership,
+      // Dispatch and assignment changes are checkpointed at once and routine state every `ROUTINE_CHECKPOINT_MS`, both
+      // after this tick's frames are sent: a crash in between costs at most the last moments, never a client's frame.
       const critical=signature!==this.chaosSignature;
-      const routine=!critical&&now-this.chaosSavedAt>=1000;
-      if(critical){
-        this.checkpointGame(state);this.chaosSavedAt=now;this.chaosSignature=signature;
-        this.observeCheckpointSettlement();
-      }
+      const routine=!critical&&now-this.chaosSavedAt>=ROUTINE_CHECKPOINT_MS;
       this.publishCompanion();
       // Legacy recipients share one serialization. Compact recipients use their
       // own delivered baseline and bounded acknowledgement window.
@@ -1756,7 +1755,7 @@ export class GameRoom extends DurableObject<Env> {
         if(bytes)this.diagnostics.count('snapshotAccepted');
         if(bytes){recipients++;sentBytes+=bytes;maxBytes=Math.max(maxBytes,bytes);}
       }
-      if(routine){this.checkpointGame(state);this.chaosSavedAt=now;this.observeCheckpointSettlement();}
+      if(critical||routine){this.checkpointGame(state);this.chaosSavedAt=now;this.chaosSignature=signature;this.observeCheckpointSettlement();}
       const metrics=this.diagnostics.tick(now,{gapMs,costMs:performance.now()-tickStart,steps,balls:state.shots.length,
         snapshotBytes:recipients?sentBytes/recipients:0,maxSnapshotBytes:maxBytes,sentBytes,recipients});
       if(metrics)log('info','room diagnostics',{roomId:this.ctx.id.toString(),colo:this.colo,players:this.players.size,
@@ -1777,7 +1776,9 @@ export class GameRoom extends DurableObject<Env> {
     // Every storage write holds this object's outgoing frames until it settles
     // (output gate). Per-rat checkpoint phases gated ~13% of snapshot ticks by
     // ~50 ms; routine poses now share the running room's 1 Hz chaos checkpoint.
-    if (!force && this.chaosTimer) { this.dueCheckpoints.add(player.id); return; }
+    // While the room plays every rat's write waits for the next checkpoint, forced ones included (a hit, a kill, a
+    // respawn deadline): one write a checkpoint instead of one a hit, each holding every client's frames.
+    if (this.chaosTimer) { this.dueCheckpoints.add(player.id); return; }
     this.writePlayer(player, now, now);
   }
 
