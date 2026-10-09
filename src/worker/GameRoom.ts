@@ -1758,6 +1758,10 @@ export class GameRoom extends DurableObject<Env> {
     },1000/30);
   }
 
+  /** Latency diagnosis (staging only, `DIAG_NO_WRITES=1`): no player or room writes while the room plays, to measure
+   * what the output gate (outgoing frames held until each write is durable) costs delivery. Never set on production. */
+  private get diagNoWrites(): boolean { return (this.env as Env & { DIAG_NO_WRITES?: string }).DIAG_NO_WRITES === '1' && !!this.chaosTimer; }
+
   private persistPlayer(player: PlayerData, force: boolean): void {
     const now = this.now();
     this.lastActiveAt.set(player.id, now);
@@ -1771,6 +1775,7 @@ export class GameRoom extends DurableObject<Env> {
   }
 
   private writePlayer(player: PlayerData, now: number, activeAt: number): void {
+    if (this.diagNoWrites) return;
     this.ctx.storage.sql.exec(
       `INSERT INTO players (id, data, updated_at, last_active_at)
        VALUES (?, ?, ?, ?)
@@ -1981,28 +1986,28 @@ export class GameRoom extends DurableObject<Env> {
 
   /** The city map's aggregates over UTC days `from`–`to`, unflushed counts included (docs/city-map.md). */
   async cityHeat(range: Range, filter: Filter = {}, now = this.now()) {
-    this.cityRecorder?.flush(now);
+    if (!this.diagNoWrites) this.cityRecorder?.flush(now);
     return { ...range, ...this.cityStore.days(range), cell: HEAT_CELL, layers: this.cityStore.cells(range, filter) };
   }
   async cityPlaces(range: Range, filter: Filter = {}, now = this.now()) {
-    this.cityRecorder?.flush(now);
+    if (!this.diagNoWrites) this.cityRecorder?.flush(now);
     return { ...range, ...this.cityStore.days(range), modes: this.cityStore.modes(range, filter), builds: this.cityStore.builds(range), places: this.cityStore.places(range, filter), minds: this.cityStore.minds(range, filter) };
   }
   async cityFlows(range: Range, filter: Filter = {}, now = this.now()) {
-    this.cityRecorder?.flush(now);
+    if (!this.diagNoWrites) this.cityRecorder?.flush(now);
     return { ...range, ...this.cityStore.days(range), flows: this.cityStore.flows(range, filter) };
   }
 
   /** Discrete city facts from the last 30 days. */
   async cityEvents(filter: { type?: string; round?: string; since?: number; limit: number }, now = this.now()): Promise<unknown[]> {
-    this.cityRecorder?.flush(now);
+    if (!this.diagNoWrites) this.cityRecorder?.flush(now);
     return this.cityStore.events(filter).map(row => JSON.parse(row.data) as unknown);
   }
   /** The rollback step (docs/live-service.md, "Rolling back past packed aggregates"): with `CITY_AGGREGATES=rows`, moves
    * a batch of packed aggregates into the per-key tables a release from before packing reads. */
   async cityUnpack(maxBytes: number, now = this.now()): Promise<{ ok: true; mode: 'rows' } & UnpackResult | { ok: false; mode: AggregateMode; message: string }> {
     if (this.cityStore.mode !== 'rows') return { ok: false, mode: this.cityStore.mode, message: 'Deploy with CITY_AGGREGATES=rows first: packs keep arriving otherwise.' };
-    this.cityRecorder?.flush(now);
+    if (!this.diagNoWrites) this.cityRecorder?.flush(now);
     return { ok: true, mode: 'rows', ...this.cityStore.unpackBatch(maxBytes) };
   }
 
@@ -2013,6 +2018,7 @@ export class GameRoom extends DurableObject<Env> {
   }
 
   private writeRoomState(key: string, value: string): void {
+    if (this.diagNoWrites) return;
     this.diagnostics.count('roomWrite');
     // A value equal to the stored one updates nothing, so SQLite writes (and Cloudflare bills) no row for it: the
     // routine checkpoint rewrites the assignment rotation and often the round unchanged every second.
