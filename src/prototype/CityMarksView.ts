@@ -138,9 +138,6 @@ function chalkPen(g:CanvasRenderingContext2D,seed:number){
     const dust=(count:number,w:number,h:number)=>{g.globalCompositeOperation='destination-out';for(let i=0;i<count;i++){g.globalAlpha=.3+random()*.7;g.beginPath();g.arc(random()*w,random()*h,.6+random()*1.8,0,Math.PI*2);g.fill();}g.globalAlpha=1;g.globalCompositeOperation='source-over';};
     return {stroke,dust,random};
 }
-const ellipse=(cx:number,cy:number,rx:number,ry:number,turn=0,n=28):[number,number][]=>Array.from({length:n},(_,i)=>{
-    const a=i/n*Math.PI*2,x=Math.cos(a)*rx,y=Math.sin(a)*ry;return [cx+x*Math.cos(turn)-y*Math.sin(turn),cy+x*Math.sin(turn)+y*Math.cos(turn)] as [number,number];});
-
 let outline:THREE.CanvasTexture|undefined;
 /** A sprawled rat in chalk, head toward the canvas's foot (the plane's +z, the heading): one rough contour around the
  * whole body (head and ears, body, flung sleeves and feet, a long curling tail), as police draw them. The body is
