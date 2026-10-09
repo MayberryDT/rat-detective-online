@@ -1,4 +1,5 @@
 import { AUTHORED_LIGHT_GAIN } from '../session/lightingTuning';
+import { perfMark } from '../session/perfMarks';
 import { yieldToPage } from '../session/yieldToPage';
 import {CENTRAL_BUILDINGS} from '../shared/skyline';
 import * as THREE from 'three';
@@ -60,6 +61,8 @@ export class Neighborhood {
     private readonly nearestDistances:number[]=[];
     /** The eight pooled sewer lamps. Hidden, not merely dark, away from the
      * sewers: every lit pixel loops over each visible light (-30% GPU time). */
+    /** Whether the sewer lamps were showing last frame (a flip is marked for the perf reporter). */
+    private lampsLit=false;
     get sewerLights():readonly THREE.PointLight[] {return this.lampPool;}
     private overhead?:StreetLightPool;
     /** The four actor lights (none with `lighting=classic`); in a Blackout they carry other rats' flashlights. */
@@ -424,7 +427,9 @@ export class Neighborhood {
         // Only sewer lamps follow the player. Street and interior light is baked once.
         const p=anchor??camera.position;
         // All eight show or hide together: two shader variants, both compiled before entry.
-        if(!sewerLightingActive(p)){for(const light of this.lampPool){light.intensity=0;light.visible=false;}return;}
+        const lit=sewerLightingActive(p);
+        if(lit!==this.lampsLit){this.lampsLit=lit;perfMark(lit?'lamps-on':'lamps-off');}
+        if(!lit){for(const light of this.lampPool){light.intensity=0;light.visible=false;}return;}
         for(const light of this.lampPool)light.visible=true;
         const px=p.x,py=p.y,pz=p.z,count=this.lampPool.length,nearest=this.nearestLamps,distances=this.nearestDistances;
         // The nearest `count` sources, kept sorted by insertion; equal distances keep source order.

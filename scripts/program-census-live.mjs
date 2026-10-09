@@ -17,7 +17,8 @@ const HOOK=`(()=>{const d=window.__THREE_DEVTOOLS__=new EventTarget();
 d.addEventListener('observe',e=>{const o=e.detail;if(o.render&&o.domElement&&!o.__wrapped){o.__wrapped=1;const r=o.render.bind(o);
  o.render=(s,c)=>{if(c&&c.isPerspectiveCamera&&s.children.length>50){window.__renderer=o;window.__scene=s;}return r(s,c);};}});
  let last=performance.now();window.__longest=0;(function f(t){window.__longest=Math.max(window.__longest,t-last);last=t;requestAnimationFrame(f);})(last);
- window.__seen=new Set();
+ window.__seen=new Set();window.__scannerAdds=0;
+ new MutationObserver(list=>{for(const m of list)for(const n of m.addedNodes)if(n.classList?.contains('scanner-line'))window.__scannerAdds++;}).observe(document.documentElement,{childList:true,subtree:true});
  window.__newPrograms=()=>{const R=window.__renderer,S=window.__scene;if(!R)return [];const fresh=(R.info.programs??[]).filter(p=>!window.__seen.has(p.cacheKey));
   if(!fresh.length)return [];const keys=new Set(fresh.map(p=>p.cacheKey));for(const k of keys)window.__seen.add(k);const users=new Map();
   S.traverse(o=>{if(!o.material)return;for(const m of [o.material].flat()){const p=R.properties.get(m)?.currentProgram;if(p&&keys.has(p.cacheKey)){const u=users.get(p.cacheKey)??new Set();u.add((o.name||o.type)+'/'+(m.name||m.type));users.set(p.cacheKey,u);}}});
@@ -44,8 +45,10 @@ try{
     await send('Page.navigate',{url:url.toString()});
     for(let i=0;i<400&&!await ev(`!!document.querySelector('#enter-city-btn')&&!document.querySelector('#enter-city-btn').disabled`);i++)await sleep(100);
     await ev(`document.querySelector('#enter-city-btn').click()`);
+    const clicked=Date.now();await ev('window.__longest=0');
     for(let i=0;i<900&&!await ev(`!!performance.getEntriesByName('city-first-play-frame')[0]&&!!window.__ratReplay&&!!window.__renderer`);i++)await sleep(200);
     if(!await ev('!!window.__renderer'))throw Error('never reached play');
+    report.entryMs=Date.now()-clicked;report.entryLongestMs=Math.round(await ev('window.__longest'));console.log('entry',report.entryMs,'ms, longest frame',report.entryLongestMs,'ms');
     report.build=await ev('fetch("/health").then(r=>r.json()).then(r=>r.build).catch(()=>null)');
     report.atPlay=await ev('window.__newPrograms().length');
     await sleep(1500);await click();await sleep(400);await ev('window.__longest=0');
@@ -70,6 +73,7 @@ try{
     }
     await poll();
     report.totalPrograms=await ev('window.__renderer.info.programs.length');
+    report.scannerLines=await ev('window.__scannerAdds');console.log('scanner lines shown',report.scannerLines,'in',values.play,'s');
     writeFileSync(join(values.out,`programs-${values.label}.json`),JSON.stringify(report,null,2)+'\n');
     console.log('total programs',report.totalPrograms,'errors',report.errors.length);
 }finally{chrome.kill('SIGTERM');await sleep(500);rmSync(profile,{recursive:true,force:true});}

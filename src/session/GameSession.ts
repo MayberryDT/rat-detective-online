@@ -52,6 +52,7 @@ import {ReplayStage} from '../replay/ReplayStage';
 import type {ReplayClip} from '../replay/types';
 import {Exhibits} from '../ui/Exhibits';
 import {frontPage} from '../ui/eveningEdition';
+import {perfMark} from './perfMarks';
 import {ASSIGNMENTS} from '../shared/assignments';
 import {FeelDirector} from '../feel/FeelDirector';
 import {IncidentStory,STORY} from '../feel/IncidentStory';
@@ -75,6 +76,8 @@ const HEADSHOT_NORMAL=new THREE.Vector3();
 /** K3: where a buffed carrier's ball struck a rat, and the way its red sparks spray. */
 const CARRIER_HIT=new THREE.Vector3(),CARRIER_SPRAY=new THREE.Vector3();
 /** Longest a welcome waits for off-thread shader links before drawing anyway. */
+/** The other lamp state's background warm: how long a frame may spend, how many objects a compile takes, how often new programs are looked for. */
+const LAMP_WARM={sliceMs:4,batch:6,everyMs:2000} as const;
 const WELCOME_COMPILE_MS=2500;
 /** Fill slot `n` of the reused footstep list in place; returns the next slot. */
 function pooledSource(n:number,id:string,position:THREE.Vector3,grounded?:boolean):number {
@@ -166,8 +169,11 @@ export class GameSession {
     /** When the Persuader's hammer is back (performance time). */
     private persuaderReadyAt=0;
     private compiling?:Promise<unknown>;
-    /** The background warm of the other sewer-lamp state (`compileOtherLampState`): programs counted after the last one. */
+    /** The background warm of the other sewer-lamp state (`warmLampStates`): programs counted after the last pass, the
+     * objects still to compile (one per material) and the materials done. */
     private lampWarm?:{programs:number;at:number;busy:boolean}={programs:0,at:0,busy:false};
+    private lampQueue?:THREE.Object3D[]=[];
+    private lampWarmed?:WeakSet<THREE.Material>=new WeakSet();
     private compileTimer?:ReturnType<typeof setTimeout>;
     private readonly lineup?:PoliceLineup;
     private pendingLineup?:{entries:LineupEntry[];at:number};
@@ -461,7 +467,7 @@ export class GameSession {
             this.chaos.onCorpseJolt=p=>this.feel.corpseJolt(p,this.stage.camera);
             this.chaos.onSuperball=p=>this.feel.superballBounce(p);
             this.chaos.onCasePaper=(p,kind)=>this.feel.casePaper(p,kind);
-            this.chaos.onClaim=(kind,camera,lockMs)=>{this.feel.claimed(kind,this.rat?.entity,camera,lockMs);if(['laser','tommy-gun','mousetrap','persuader'].includes(kind)){this.feel.heavyPickup(kind);this.feel.heavyArsenal(kind==='laser'?'laser-pickup':kind==='tommy-gun'?'tommy-pickup':kind==='persuader'?'persuader-pickup':'trap-pickup');}};
+            this.chaos.onClaim=(kind,camera,lockMs)=>{perfMark('claim:'+kind);this.feel.claimed(kind,this.rat?.entity,camera,lockMs);if(['laser','tommy-gun','mousetrap','persuader'].includes(kind)){this.feel.heavyPickup(kind);this.feel.heavyArsenal(kind==='laser'?'laser-pickup':kind==='tommy-gun'?'tommy-pickup':kind==='persuader'?'persuader-pickup':'trap-pickup');}};
             this.chaos.onTriggerHit=(_machine,at,busy,level)=>this.feel.triggerHit(at,busy,level,this.stage.camera);
             this.chaos.onDispatchShot=(_station,at)=>this.feel.dispatchShot(at,this.stage.camera);
             this.chaos.onVentErupted=vent=>{
@@ -497,31 +503,48 @@ export class GameSession {
         // Bounded: three's readiness poll can throw inside its timer (a material
         // disposed mid-link, context loss) and never settle.
         clearTimeout(this.compileTimer);
-        const compiling=Promise.race([Promise.all([this.stage.renderer.compileAsync(this.stage.scene,this.stage.camera),this.compileOtherLampState()]).then(()=>{uploadTextures(this.stage.renderer,this.stage.scene);return checkPrograms(this.stage.renderer);}),
+        const compiling=Promise.race([this.stage.renderer.compileAsync(this.stage.scene,this.stage.camera).then(()=>{uploadTextures(this.stage.renderer,this.stage.scene);return checkPrograms(this.stage.renderer);}),
             new Promise(resolve=>{this.compileTimer=setTimeout(resolve,WELCOME_COMPILE_MS);})]).catch(()=>undefined)
             .finally(()=>{if(this.compiling===compiling){clearTimeout(this.compileTimer);this.compiling=undefined;}});
         this.compiling=compiling;
     }
 
-    /** Compile every visible program for the sewer-lamp state not showing (the eight lamps light only underground, so
-     * the light count, and every lit program with it, has two states). A flip to a state whose programs were never
-     * compiled relinks them all at once: Tyler's 9 October 5 s freeze, 36 programs when a respawn passed a sewer
-     * mouth. The links run off the main thread (KHR_parallel_shader_compile); nothing waits for them to draw. */
-    private compileOtherLampState():Promise<unknown> {
-        const lamps=this.city instanceof Neighborhood?this.city.sewerLights??[]:[];
-        if(!lamps.length)return Promise.resolve();
-        const shown=lamps[0]!.visible;
-        for(const lamp of lamps)lamp.visible=!shown;
-        try{return this.stage.renderer.compileAsync(this.stage.scene,this.stage.camera);}
-        finally{for(const lamp of lamps)lamp.visible=shown;}
-    }
-    /** Every 2 s of play: programs that appeared since (a new effect, a rat, a prop) get their other lamp state too. */
+    /** The sewer-lamp state not showing, compiled in the background a slice at a time (the eight lamps light only
+     * underground, so the light count, and every lit program with it, has two states). A flip to a state whose programs
+     * were never compiled relinks them all at once: Tyler's 9 October 5 s freeze (36 programs when a respawn passed a
+     * sewer mouth). Compiling the whole scene for it at the welcome doubled the entry's links (his second session's
+     * 3 s entry freezes), so the objects queue, one per material, and each frame compiles them for at most
+     * `LAMP_WARM.sliceMs`; the links run off the main thread (KHR_parallel_shader_compile), then are checked between
+     * yields. Every `LAMP_WARM.everyMs` of play, programs that appeared since (a new effect, a rat, a prop) queue again. */
     private warmLampStates(now:number):void {
         const warm=this.lampWarm??={programs:0,at:0,busy:false},renderer=this.stage.renderer,count=renderer.info?.programs?.length??0;
-        if(warm.busy||this.compiling||now-warm.at<2000||count<=warm.programs)return;
-        warm.busy=true;warm.at=now;
-        this.compileOtherLampState().then(()=>checkPrograms(renderer)).catch(()=>undefined)
-            .finally(()=>{warm.busy=false;warm.programs=renderer.info.programs?.length??0;});
+        const lamps=this.city instanceof Neighborhood?this.city.sewerLights??[]:[];
+        if(!lamps.length||this.compiling||warm.busy)return;
+        const queue=this.lampQueue??=[],done=this.lampWarmed??=new WeakSet();
+        if(!queue.length){
+            if(now-warm.at<LAMP_WARM.everyMs||count<=warm.programs)return;
+            warm.at=now;
+            const seen=new Set<THREE.Material>();
+            this.stage.scene.traverseVisible(object=>{
+                const material=(object as THREE.Mesh).material;if(!material)return;
+                for(const m of [material].flat())if(!done.has(m)&&!seen.has(m)){seen.add(m);queue.push(object);break;}
+            });
+            if(!queue.length){warm.programs=count;return;}
+        }
+        const start=performance.now(),shown=lamps[0]!.visible,chunk:THREE.Object3D[]=[];
+        const proxy={traverse:(fn:(o:THREE.Object3D)=>void)=>{for(const o of chunk)fn(o);},traverseVisible:()=>{}} as unknown as THREE.Object3D;
+        for(const lamp of lamps)lamp.visible=!shown;
+        try{
+            while(queue.length&&performance.now()-start<LAMP_WARM.sliceMs){
+                chunk.length=0;chunk.push(...queue.splice(0,LAMP_WARM.batch));
+                renderer.compile(proxy,this.stage.camera,this.stage.scene);
+                for(const o of chunk)for(const m of [(o as THREE.Mesh).material].flat())if(m)done.add(m);
+            }
+        }finally{for(const lamp of lamps)lamp.visible=shown;}
+        if(queue.length)return;
+        // Every new program's first use, now and between yields, not on the frame that first draws it.
+        warm.busy=true;
+        void checkPrograms(renderer).catch(()=>undefined).finally(()=>{warm.busy=false;warm.programs=renderer.info?.programs?.length??0;});
     }
 
     private receive(message: ServerMessage): void {
@@ -553,7 +576,7 @@ export class GameSession {
                 for(const id of this.caughtTraps)if((message.state.buffs?.[id]?.trappedUntil??0)<=message.state.time){this.caughtTraps.delete(id);this.feel.heavyArsenal('trap-release');}
                 this.lastChaos = message.state;
                 break;
-            case 'welcome': this.admin.reset(); this.welcome(message); break;
+            case 'welcome': perfMark('welcome'); this.admin.reset(); this.welcome(message); break;
             case 'currentPlayers': break; // Atomic welcome already applied the complete state.
             case 'playerJoined': if (message.player.id !== this.myId) this.remotes.add(message.player); break;
             case 'playerMoved': this.remotes.move(message.player, message.at); break;
@@ -656,6 +679,7 @@ export class GameSession {
                 break;
             }
             case 'playerDied': {
+                if (message.victimId === this.myId) perfMark('died');
                 // The kill event owns lethal confirmation, independently of the
                 // damage packet or whether world playback already hid the rat.
                 const headshot=message.headshot===true,bank=message.bounces?message.bounces>=2?'TRICK SHOT':'BANK SHOT':undefined;
@@ -703,6 +727,7 @@ export class GameSession {
                 break;
             }
             case 'playerRespawn':
+                if (message.id === this.myId) perfMark('respawn');
                 if (message.id === this.myId && this.rat) this.rat.setLegs(1);
                 if (message.id === this.myId) {
                     this.stats?.event('respawn'); this.rat?.entity.respawn(message); this.rat?.resetGrounding(); this.feel.reset(); this.feel.health(message.hp); settleQuality();

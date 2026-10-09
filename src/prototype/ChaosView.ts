@@ -298,7 +298,7 @@ export class ChaosView {
         this.jurisdictionZones=new JurisdictionZones(scene);
         if(!replay){
             this.hud=new DispatchHud(frequency=>this.feedback?this.feedback('tick'):this.bell(frequency),this.feedback);
-            this.scanner=new PoliceScannerFeed(document,()=>this.synth('radio',undefined,.97+Math.random()*.06,.7));
+            this.scanner=new PoliceScannerFeed(document,()=>this.synth('radio',undefined,.97+Math.random()*.06,.32));
             this.assignmentDestinations=new AssignmentDestinations();
             const bar=this.buffBar=document.createElement('div');
             bar.className='pickup-buffs';bar.style.display='none';

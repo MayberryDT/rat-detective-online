@@ -22,10 +22,12 @@ export interface ConnectionReport {
  * stayed alive. `script`/`render`: main-thread script and rendering time from long-animation-frame timing that
  * overlaps it (none: the main thread was free, so the stall was in the GPU, compositor or system). `top`: the
  * longest script there, as a short `file:function`. `msgs`: server messages handled during it; `firstMsg`: when the
- * first was handled, from the stall's start (-1 none). `programs`: shader programs linked during it. */
+ * first was handled, from the stall's start (-1 none). `programs`: shader programs linked during it; `shaders`: which
+ * (their shader names and counts); `events`: what the game marked in and just before it (`perfMarks`). */
 export interface PerfStall {
   ms: number; at: number; script?: number; render?: number; top?: string; msgs: number; firstMsg: number;
   hidden: number; focus: number; net?: string; programs?: number; heapBefore?: number; heapAfter?: number;
+  shaders?: string; events?: string;
 }
 export const PERF_STALLS = 4;
 
@@ -79,7 +81,7 @@ function parseStall(value: unknown): PerfStall | null {
   const stall: PerfStall = { ms, at, msgs, firstMsg, hidden, focus };
   const optional = { script: num(v.script, 0, 3_600_000, 1), render: num(v.render, 0, 3_600_000, 1), top: text(v.top, 80),
     net: typeof v.net === 'string' && /^[a-z]{1,16}$/.test(v.net) ? v.net : undefined, programs: int(v.programs, 0, 10_000),
-    heapBefore: num(v.heapBefore, 0, 65_536), heapAfter: num(v.heapAfter, 0, 65_536) };
+    heapBefore: num(v.heapBefore, 0, 65_536), heapAfter: num(v.heapAfter, 0, 65_536), shaders: text(v.shaders, 160), events: text(v.events, 120) };
   for (const [key, field] of Object.entries(optional)) if (field !== undefined) Object.assign(stall, { [key]: field });
   return stall;
 }

@@ -1,4 +1,5 @@
 import type * as THREE from 'three';
+import { perfMarksBetween } from './perfMarks';
 import { PERF_STALLS, type ConnectionReport, type PerfBrowser, type PerfOs, type PerfReport, type PerfStall } from '../shared/perfReport';
 
 /** Play time per report; a leaving player sends what it has from this much. */
@@ -27,6 +28,8 @@ export class PerfReporter {
   private skip = false;
   private machine?: Machine;
   private stalls: PerfStall[] = [];
+  /** When each recorded stall ended (performance time), for attribution that arrives after it. */
+  private readonly stallEnds = new WeakMap<PerfStall, number>();
   private longFrames: LongFrame[] = [];
   private longFrameCount = 0;
   private messages = 0;
@@ -87,7 +90,11 @@ export class PerfReporter {
   }
 
   private stall(frameMs: number, now: number): void {
-    const start = now - frameMs, heap = heapMb(), programs = this.renderer.info?.programs?.length ?? 0;
+    const start = now - frameMs, heap = heapMb(), all = this.renderer.info?.programs ?? [], programs = all.length;
+    // Which shaders linked: the programs past the last sample, by shader name, with counts.
+    const linked = new Map<string, number>();
+    for (const p of all.slice(this.lastPrograms)) { const name = String((p as { name?: string }).name ?? '?'); linked.set(name, (linked.get(name) ?? 0) + 1); }
+    const shaders = [...linked].map(([name, n]) => n > 1 ? `${name}x${n}` : name).join(',').slice(0, 160), events = perfMarksBetween(start - 1500, now);
     let script = 0, render = 0, top: string | undefined, topMs = 0;
     for (const f of this.longFrames) {
       if (f.end < start || f.start > now) continue;
@@ -96,8 +103,9 @@ export class PerfReporter {
     }
     this.stalls.push({ ms: r1(frameMs), at: Math.round(this.ms), msgs: this.messages, firstMsg: this.firstMessageAt !== undefined ? Math.round(this.firstMessageAt - start) : -1,
       hidden: document.hidden ? 1 : 0, focus: document.hasFocus() ? 1 : 0, ...(this.connection ? { net: this.connection() } : {}),
-      ...(this.longFrames.length ? { script: Math.round(script), render: Math.round(render) } : {}), ...(top ? { top } : {}),
-      programs: Math.max(0, programs - this.lastPrograms), ...(this.lastHeap !== undefined ? { heapBefore: this.lastHeap } : {}), ...(heap !== undefined ? { heapAfter: heap } : {}) });
+      ...(script || render ? { script: Math.round(script), render: Math.round(render) } : {}), ...(top ? { top } : {}),
+      programs: Math.max(0, programs - this.lastPrograms), ...(shaders ? { shaders } : {}), ...(events ? { events } : {}), ...(this.lastHeap !== undefined ? { heapBefore: this.lastHeap } : {}), ...(heap !== undefined ? { heapAfter: heap } : {}) });
+    this.stallEnds.set(this.stalls[this.stalls.length - 1]!, now);
   }
 
   private longFrame(entry: PerformanceEntry): void {
@@ -110,6 +118,12 @@ export class PerfReporter {
     }
     const end = e.startTime + e.duration, render = e.renderStart ? Math.max(0, end - e.renderStart) : 0;
     this.longFrames.push({ start: e.startTime, end, script, render, ...(top ? { top } : {}), topMs });
+    // The entry often arrives after the stall it covers was recorded (the observer runs after the frame): attribute it then.
+    for (const stall of this.stalls) {
+      const stallEnd = this.stallEnds.get(stall);
+      if (stall.script !== undefined || stallEnd === undefined || e.startTime > stallEnd || end < stallEnd - stall.ms) continue;
+      stall.script = Math.round(script); stall.render = Math.round(render); if (top) stall.top = top;
+    }
     const cutoff = end - LOAF_KEEP_MS;
     while (this.longFrames.length && this.longFrames[0]!.end < cutoff) this.longFrames.shift();
     if (this.longFrames.length > 200) this.longFrames.shift();

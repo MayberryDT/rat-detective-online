@@ -6,7 +6,7 @@ import {placePhrase} from './radioPlaces';
  * `SCANNER.delayMs` ago (a part of town, never a pin) and which way it was heading, the case changing hands or lying
  * loose, rats going down, rats in the air, pigeons spooked. A line carrying a lead names the point and when it was true
  * (`p`, `seen`) and whose it is (`c`), so a bot hears exactly what a player reads. */
-export const SCANNER={lines:6,lineMs:20_000,gapMs:2_200,carrierEveryMs:8_000,delayMs:4_000,headingMs:2_500,staleMs:6_000,downEveryMs:7_000} as const;
+export const SCANNER={lines:6,lineMs:20_000,gapMs:3_000,carrierEveryMs:8_000,delayMs:4_000,headingMs:2_500,staleMs:6_000,downEveryMs:7_000} as const;
 export type ScannerKind='carrier'|'taken'|'loose'|'down'|'airborne'|'pigeons';
 export interface ScannerLine {id:string;at:number;kind:ScannerKind;text:string;p?:Vec3Data;seen?:number;c?:string}
 const KINDS:readonly ScannerKind[]=['carrier','taken','loose','down','airborne','pigeons'];

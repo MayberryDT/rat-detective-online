@@ -61,11 +61,11 @@ export const WEAPON_TUNING = {
      * broken trap stays in the snapshot `trapBrokenMs` so clients can play the break. One per rat; it outlives its
      * owner's death, not the round. Acquisition is immediately ready; `trapLockMs` remains zero for legacy presentation callers. */
     /** The Persuader (Tyler, 9 October: a new noir gun as fun as the Tommy, never oppressive): a snub-nose revolver
-     * firing one big slow cheese slug a click, at most one every `persuaderIntervalMs` (the hammer). A slug flies at
-     * `persuaderSpeed` of a ball's speed (you can see it coming and dodge), `persuaderRadius` wide, deals
+     * firing one big cheese slug a click, at most one every `persuaderIntervalMs` (the hammer). A slug flies at
+     * `persuaderSpeed` of a ball's speed (.62 missed: Tyler's 18 shots on 9 October hit nothing), `persuaderRadius` wide, deals
      * `persuaderDamage` (headshots kill) and knocks the rat it hits flying (`persuaderShove` along the shot,
      * `persuaderLift` up), into walls, off roofs, into the harbour. Ironclad reflects it like any ball. */
-    persuaderIntervalMs: 550, persuaderSpeed: .62, persuaderRadius: .34, persuaderDamage: 2, persuaderShove: 30, persuaderLift: 13,
+    persuaderIntervalMs: 550, persuaderSpeed: .9, persuaderRadius: .38, persuaderDamage: 2, persuaderShove: 30, persuaderLift: 13,
     trapReach: 2.9, trapRadius: 1.5, trapFoot: .35, trapHeight: 1.2, trapHp: 8, laserTrapHits: 3, trapHoldMs: 3000, trapRearmMs: 900, trapBrokenMs: 700, trapLockMs: 0,
 } as const;
 /** The placed Mousetrap's size: the model's board (1.5 wide, 2.5 long) scaled so its half-length is `trapRadius`, and
