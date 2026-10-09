@@ -23,3 +23,32 @@
 - **Human play.** Whether tips change where players go is for Tyler's play.
 - The Strudel draft was not played; its syntax follows Strudel's documented functions but was not run.
 - Phones and the small-screen results layout were not captured.
+
+## Round 2 (9 October): the freeze, Code Violation out, wax, pigeons, scanner, the Persuader
+
+**Where:** commit `f1b73c4` and later on `juice/chaos-evidence`; staging build `staging-2026-10-09-f1b73c4` (Worker `0be7227b-c4e7-4947-9a61-fd1652a03caf`), then the display-pose fix redeployed (see the staging row in [live service](../live-service.md)). Protocol 41, `mindVersion` 18.
+
+### The freeze Tyler hit (diagnosis)
+
+- The staging city mirror (`node scripts/city-mirror.mjs --base=<staging>`, then the perf facts) held Tyler's session: at 02:07 UTC a **5,350 ms frame** with **36 programs linked** in the second before it; the connection then closed on `delivery-timeout` (close 1013) and recovered 1.1 s later. The recorder's facts put it right after a respawn (killed by a Tommy Gun at 02:06:56, respawned in the Icebox at 02:06:59). His laptop played at low quality, 0.7 scale; its program count kept rising in play (181 → 278).
+- `scripts/program-census-live.mjs` (a muted agent browser in the real client against staging, naming each program first linked in play and the light set) reproduced the class: about 60 programs linked after play began, and when the eight sewer lamps became visible **26 programs linked at once with a 750 ms frame** (Halla's GPU), 6 more as they hid. Cause: the welcome re-adopts the city's materials and compiled only the showing lamp state.
+- Keeping the lamps always counted (at zero intensity) was measured and rejected: `test/visual/lamp-cost.html` (`scripts/run-fixture.mjs`) shows **+15–17% GPU time** on three street views (12.2 → 14.1, 14.4 → 16.9, 13.5 → 15.8 ms at 1280×720 on Halla).
+- Fix: compile both lamp states at the welcome, and every 2 s of play compile the other state for programs that appeared since.
+
+### Checked
+
+| Check | Result |
+| --- | --- |
+| Live program census on staging, fix only (two 180 s runs) | **0 programs linked during play** in either run; the lamps flipped 9 times |
+| Live program census on round-2 staging (180 s) | **0 programs linked during play**; longest frames 117–150 ms (headless Halla, none with a link) |
+| `npm run typecheck`; worker suite; client suite; script tests | Pass: worker 33/33 files, client 172 files (1 skipped), scripts 46/46 |
+| Staging probe, round 2 (`probe-city-marks.mjs`, 180 s, `public-live-v2`) | Protocol 41, 6 bots, 22 deaths, 5 carriers, 0 errors: 29 chalk outlines, 6 muck runs, 78 wax runs, 4 flocks, **44 radio calls** (e.g. `ALL UNITS: INSPECTOR CHISEL HAS THE CASE AT RECORDS.`, `DISPATCH: SUSPECT WITH THE CASE HOLED UP OUTSIDE RECORDS.`) |
+| Headless room, 10 bots, 3 min (weapons handed out every 10 s) | 647 Persuader slugs fired, 13 knock-flying shoves, every chaos frame decoded; median tick 4.6 ms |
+| Stills: wax, pigeons, the Persuader display and held gun | Looked at. Wax first read as tiny dots and the pigeons as invisible edge-on V's, then as white slashes; reworked to bigger glowing drops, camera-facing pigeon silhouettes that burst at head height, and a near-lens shrink. The revolver display was floating, then end-on; it now stands on its grip on the box. The fixture's own clock ran backwards on its first frame (headless frame timestamps lag the clock) and is fixed. |
+
+### Not checked
+
+- Sound: the wing clatter, the scanner squelch, the wax hiss (not built: no audio hook in the marks view yet), the Persuader's shot, hit and claim. Never heard.
+- Whether the pigeons are obvious from across the city in real play (the stills are close; a far flock was not captured).
+- The Persuader in human hands; the 550 ms hammer and the knockback strength are first guesses.
+- Smaller hitches Tyler felt ("little hang-ups"): the headless runs show 100–150 ms frames with no program link; not yet attributed.

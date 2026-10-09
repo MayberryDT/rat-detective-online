@@ -69,8 +69,8 @@ function weaponDisplay(kind:'tommy-gun'|'laser'|'mousetrap'|'persuader',kit:Part
         for(const x of [-.26,.24]){kit.box(.04,.2,.18,x,.72,0,f.brass,.015);kit.box(.04,.04,.2,x,.63,0,f.brass,.015);}
         kit.box(.56,.04,.06,0,.62,0,f.brass,.015);
     }else if(kind==='persuader'){
-        // The revolver, big, lying on an evidence box: walnut with a velvet top and brass trim, a tag hanging off it.
-        place(kit,0,.5,0,-.15,Math.PI/2,0,1.7);revolver(kit,f);revolverCylinder(kit,f);
+        // The revolver, big, standing on its grip on an evidence box (walnut, a velvet top, brass trim, a tag): its side to the street.
+        place(kit,.05,.68,0,0,Math.PI/2,.12,1.7);revolver(kit,f);revolverCylinder(kit,f);
         kit.frame.identity();
         kit.box(.95,.24,.62,0,.12,0,f.walnut,.04);
         kit.box(.88,.03,.56,0,.255,0,f.velvet,.01);

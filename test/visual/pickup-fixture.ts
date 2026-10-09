@@ -4,7 +4,7 @@ import {RatEntity} from '../../src/entities/RatEntity';
 import {createCaseGrip,disposeCaseGrip} from '../../src/prototype/CaseGrip';
 import {powerupCard} from '../../src/prototype/pickupArtwork';
 import {PickupVisual} from '../../src/prototype/PickupVisual';
-import {BUFF_MS,PICKUP_KINDS,isTimedPickup} from '../../src/shared/pickups';
+import {BUFF_MS,PICKUP_KINDS,isTimedPickup,isWeaponKind} from '../../src/shared/pickups';
 import '../../src/style.css';
 import '../../src/prototype/dispatchHud.css';
 // Art inspection only. Human gameplay previews always use the hosted Worker.
@@ -23,6 +23,12 @@ const restock=new URLSearchParams(location.search).has('restock');
 if(restock)pickups.forEach((p,i)=>p.setAvailableAt(performance.now()+[45,23,5,33][i]*1000));
 const wall=new THREE.Mesh(new THREE.BoxGeometry(1,2.7,.5),new THREE.MeshStandardMaterial({color:0x3c3742}));
 wall.position.set(.7,1.35,-2);scene.add(wall);
+// `?focus=<kind>`: the camera on that kind's display, with the first rat holding it if it is a weapon (`held` too).
+const focus=new URLSearchParams(location.search).get('focus') as typeof PICKUP_KINDS[number]|null;
+if(focus&&PICKUP_KINDS.includes(focus)){
+    const x=PICKUP_KINDS.indexOf(focus)*4-6;camera.position.set(x+1.6,2.2,6.2);camera.lookAt(x-.6,.9,2);
+    if(isWeaponKind(focus)){rats[0]!.setWeapon(focus);rats[0]!.mesh.position.set(x-2.4,0,2.6);rats[0]!.mesh.rotation.y=Math.PI/2;}
+}
 const hud=document.createElement('div');hud.className='pickup-buffs';const cards=PICKUP_KINDS.map(kind=>{const c=powerupCard(kind);hud.appendChild(c);return c;});document.body.appendChild(hud);
 let previous=performance.now(),heal=0;
 renderer.setAnimationLoop(now=>{

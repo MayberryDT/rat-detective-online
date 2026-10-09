@@ -1,6 +1,6 @@
 # Chaos leaves evidence: the October batch
 
-**Status:** built on branch `juice/chaos-evidence` (Halla `/home/halla/workspaces/rat-detective-chaos-evidence`), **protocol 40**, `mindVersion` 17. Not deployed. Needs Tyler's play and OK before staging or production.
+**Status:** round 2 built on branch `juice/chaos-evidence` (Halla `/home/halla/workspaces/rat-detective-chaos-evidence`), **protocol 41**, `mindVersion` 18, on staging for Tyler's play. Not in production.
 
 ## Why
 
@@ -9,18 +9,38 @@ Tyler, 8 October: improve the game across the board by pushing what makes Rat De
 | # | Idea | Kind | Status |
 | --- | --- | --- | --- |
 | 1 | **Chalk outlines**: where a body lay, a chalk outline and the rat's fedora; rain wears them down | Server mark + presentation | Built |
-| 2 | **Dead rats talk**: a rat that saw the carrier in its last 6 s drops a tip, a note with a chalk arrow to where it saw them; bots read tips too | Rule (information) | Built |
+| 2 | **Dead rats talk**: a rat that saw the carrier in its last 6 s drops a tip, a note with a chalk arrow to where it saw them; bots read tips too | Rule (information) | Removed in round 2 |
 | 3 | **Sewer muck**: a rat climbing out of the sewer tracks dark prints for about 12 units | Server mark + presentation | Built |
 | 4 | **The lull**: no incident, nothing near you for 8 s, not carrying: the music drops back, the rain comes up, the neon hums | Presentation (audio) | Built; Strudel lull track drafted, not yet in the game |
 | 5 | Inner monologue lines | — | **Turned down** (Tyler: "not a huge fan") |
 | 6 | **The Evening Edition**: the results banner becomes a front page; the headline is Exhibit A where it happened; the round opens on a typed case file name | Presentation | Built |
 
+## Round 2 (Tyler's staging play, 9 October)
+
+Tyler played round 1 on staging: "I hate code violation ... we gotta get rid of it"; a 5 s freeze with a disconnect; "I
+haven't seen when rats die how they point people to the case"; "I like the chalk outlines with the fedoras". Then: "I love
+it all. Let's implement all of it ... make the pigeon scatter super obvious ... we want a lot more police scanner."
+
+| Change | Status |
+| --- | --- |
+| **The freeze:** a respawn near a sewer mouth flipped the eight sewer lamps; the welcome compiled only the showing lamp state, so 36 programs linked at once (5.35 s on Tyler's laptop, then a delivery-timeout disconnect). The welcome now compiles both lamp states, and every 2 s of play new programs get the other state in the background (`GameSession.compileOtherLampState`). | Fixed; verified live (below) |
+| **Code Violation removed** (stored rooms run Crossfire); its faulty supplies, misfires and hopping supplies go. | Done |
+| **Dead rats talk removed** (too rare and too small to read); chalk outlines and fedoras stay. | Done |
+| **Fresher trail:** each case paper shows its age: crisp bright white when just laid, yellowing, grimy after two minutes. | Done |
+| **Hot wax:** the carried case drips sealing wax along the carrier's real path, a drop every 1.6 units; white-orange and glowing as it lands, cooling to a dark red bead, gone after 25 s. | Done |
+| **Pigeons:** in the open the carrier flushes a flock every 12–18 s: 44 big pale pigeons burst out across the street at head height, climb and circle over the roofs, then scatter; feathers drift down; a clatter of wings. | Done |
+| **Police scanner:** the radio calls the carrier's whereabouts every 8 s (where it was 4 s ago, coarse: a landmark, the sewers, the roofs, or the part of town, and its heading), the case taken or loose, rats down, rats airborne, pigeons spooked; about one call every 4 s. A POLICE BAND strip bottom left, case calls in case red, a squelch and two chirps. | Done |
+| **The Persuader:** a snub-nose revolver pickup (random supply sites, kill streak rewards). 15 s on a timer like every weapon; one big slow slug a click, at most one every 550 ms; 2 damage, headshots kill; every hit knocks the rat flying. Brass cylinder and cheese sight, an evidence-box display, a card, its own claim, shot and hit sounds. | Done |
+
+Bots read the same evidence a player does (`CarrierSight.lead`, `mindVersion` 18): radio calls (heard by all), pigeons
+over the roofs in sight, the freshest wax drop in sight.
+
 ## The rules (what is true in play)
 
 - **Marks are true.** The server lays every mark from what happened; nothing is invented or attributed falsely. They belong to the round: `ChaosSimulation.reset` clears them all. Source: [`src/shared/cityMarks.ts`](../../src/shared/cityMarks.ts).
 - **Chalk** (`ChaosState.chalk`, at most 24): drawn when a corpse goes the ordinary way (it lay its 10 s, or a newer body took its slot), on the floor under it, head toward the body's long axis. None for bodies lost in the harbour or outside the city, or for drownings. The client draws it in over 0.9 s, then wears it to 40% over 3 minutes, with a fedora in the rat's hat colour beside the head.
-- **Tips** (`ChaosState.tips`, at most 8): every 250 ms the server notes which living rats have a clear line to the case carrier within 80 units (eye to body, the bots' sight range). When such a rat dies (with a body) within 6 s of its last sighting, while that same rat still carries the case, a tip lies where it fell, pointing at where it saw them. A tip goes when that rat stops carrying the case, or after 45 s. The carrier killing a witness that saw them leaves a tip pointing at the carrier: being seen is the danger.
-- **Bots read tips** (`mindVersion` 17) the way a player reads the arrow: a tip in sight within 30 units updates their fix on the carrier if it is newer than their own. Same information for everyone; no new sight. `CarrierSight.tip` in [`carriers.ts`](../../src/shared/bots/motor/carriers.ts).
+- **Tips** (round 1 only, removed in round 2): a dead witness's note and chalk arrow toward where it saw the carrier.
+- **Wax** (`ChaosState.wax`, runs of up to 8 drops, at most 40, each kept 25 s), **flocks** (`ChaosState.flocks`, at most 6, kept 9 s) and the **scanner** (`ChaosState.scanner`, the last 6 calls, kept 20 s; [`policeScanner.ts`](../../src/shared/policeScanner.ts), place words in [`radioPlaces.ts`](../../src/shared/radioPlaces.ts)).
 - **Muck** (`ChaosState.muck`, at most 32 runs of up to 6 prints, each kept 30 s): any rat whose feet go from below y −2 to above lays prints on supported ground (`BotNavigation.printGround`) for 12 units or 6 s. Every rat, so a print says "someone came up here", not who. Bots do not read muck.
 - **No clocks, no x-ray.** Nothing here times a mode or shows a rat through walls. Tips point at a past sighting, never a live position.
 

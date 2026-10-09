@@ -111,7 +111,7 @@ const windows=[[0,300],[300,900],[900,1200],[1200,1800]];
 for(let a=1800;a<TICKS;a+=1800)windows.push([a,Math.min(TICKS,a+1800)]);
 const parts=['bots','chaos','snapshot','wire','checkpoint',...(city?['city']:[])];
 const cost=Array.from({length:TICKS},()=>({bots:0,chaos:0,snapshot:0,wire:0,checkpoint:0,city:0}));
-const marks={chalk:new Set(),tips:new Set(),muck:new Set()};
+const marks={chalk:new Set(),muck:new Set(),wax:new Set(),flocks:new Set(),scanner:new Set(),slugs:new Set(),shoves:new Set()};
 const hash=createHash('sha256');let state=sim.snapshot(false),bytes=0,peak=0,bursts=0;
 // Per tick: what one recipient was sent (chars; the wire is ASCII), its chaos frame bytes by field, and the time that
 // recipient's client takes to decode and validate the frame (ChaosDecoder, as NetworkManager runs it).
@@ -164,7 +164,9 @@ for(let tick=0;tick<TICKS;tick++){
     }
     if(tick%30===0){at=clock();JSON.stringify(sim.snapshot(false));c.checkpoint=ms(at,clock());}
     peak=Math.max(peak,state.shots.length);
-    for(const k of ['chalk','tips','muck'])for(const m of state[k]??[])marks[k].add(m.id);
+    for(const k of ['chalk','muck','wax','flocks','scanner'])for(const m of state[k]??[])marks[k].add(m.id);
+    for(const b of state.shots)if(b.slug)marks.slugs.add(b.id);
+    for(const e of state.pressure?.shoves??[])marks.shoves.add(e.id??JSON.stringify(e));
     for(const id of ids){const p=players.get(id);hash.update(`${id}:${p.x.toFixed(4)},${p.y.toFixed(4)},${p.z.toFixed(4)};`);}
     for(const s of state.shots)hash.update(`${s.id}:${s.p.x.toFixed(4)},${s.p.y.toFixed(4)},${s.p.z.toFixed(4)};`);
     hash.update(`s${state.shots.length};`);
