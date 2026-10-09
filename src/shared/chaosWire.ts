@@ -10,12 +10,12 @@ export const CHAOS_WIRE_MODE = 'compact-v2';
  * the miss of a straight-line prediction from them (balls fly smooth arcs, so most rows are a few small numbers).
  * Trailing zeros are left off. */
 export const MOTION_ENCODING = 'predict-v1';
-const REST_KEYS = ['clues','prints','chalk','muck','wax','flocks','scanner','case','extraCases','dispatch','pressure','possession','corpses','notice','assignment','pickups','buffs','traps','beams'] as const;
+const REST_KEYS = ['clues','prints','chalk','muck','wax','flocks','scanner','case','extraCases','dispatch','pressure','possession','corpses','notice','assignment','pickups','buffs','traps','safes','beams'] as const;
 /** Lists of things with ids. While a list changes only by edits, removals and additions at its end, it travels as
  * `{put,drop}` (changed and new items, ids gone) when that is shorter than the whole list. */
-const KEYED_KEYS: Record<string, true> = { clues: true, prints: true, chalk: true, muck: true, wax: true, flocks: true, scanner: true, corpses: true, beams: true, traps: true };
+const KEYED_KEYS: Record<string, true> = { clues: true, prints: true, chalk: true, muck: true, wax: true, flocks: true, scanner: true, corpses: true, beams: true, traps: true, safes: true };
 const restValue=(state:ChaosState,key:typeof REST_KEYS[number]):unknown=>
-  state[key]??(key==='extraCases'?[]:key==='clues'||key==='prints'||key==='chalk'||key==='muck'||key==='wax'||key==='flocks'||key==='scanner'||key==='pressure'||key==='assignment'||key==='pickups'||key==='buffs'||key==='traps'||key==='beams'?null:undefined);
+  state[key]??(key==='extraCases'?[]:key==='clues'||key==='prints'||key==='chalk'||key==='muck'||key==='wax'||key==='flocks'||key==='scanner'||key==='pressure'||key==='assignment'||key==='pickups'||key==='buffs'||key==='traps'||key==='safes'||key==='beams'?null:undefined);
 type Definition = [number, string, string | null];
 type KeyedItem = {id:string;text:string};
 export interface ChaosAck { type:'chaosAck'; stream:string; seq:number }
@@ -250,6 +250,7 @@ export class ChaosDecoder {
     if(rest.pickups===null)delete rest.pickups;
     if(rest.buffs===null)delete rest.buffs;
     if(rest.traps===null)delete rest.traps;
+    if(rest.safes===null)delete rest.safes;
     if(rest.beams===null)delete rest.beams;
     const message=parseServerMessage({type:'chaos',state:{...rest,time:f.time,...(f.epoch===undefined?{}:{epoch:f.epoch}),...(f.tick===undefined?{}:{tick:f.tick}),shots,impacts}});
     if(!message||message.type!=='chaos')return null;

@@ -27,8 +27,9 @@ import type { ExhibitMessage, HighlightMarker } from './highlights';
  *     (`tips`) and sewer muck (`muck`) (staging only).
  * 41: tips out; hot wax along the carrier's path (`wax`), pigeons it flushes (`flocks`), the police scanner
  *     (`scanner`); Code Violation removed; the Persuader (a weapon pickup; `slug` balls).
- * 42: Bad Ammunition removed; the Pea Souper incident (`pea-souper`). */
-export const PROTOCOL_VERSION = 42;
+ * 42: Bad Ammunition removed; the Pea Souper incident (`pea-souper`).
+ * 43: the penthouse safes (`safes`; the `safe-contact` shot outcome, the `safe` laser surface, radio and reward). */
+export const PROTOCOL_VERSION = 43;
 /** Body hits deal 1; a headshot is always lethal. */
 export const MAX_HP = 5;
 export const KILLS_TO_WIN = 20;
@@ -228,7 +229,7 @@ export interface ShotDescriptor {
 
 export type PickupTarget = 'case' | 'pickup';
 export type PickupRejectReason = 'stale'|'unavailable'|'blocked'|'ineligible'|'too-far'|'invalid-target'|'rate-limited';
-export type ShotResultOutcome = 'first-step'|'rat-body'|'rat-head'|'ironclad-reflect'|'case-contact'|'world-bounce'|'dispatch-contact'|'pressure-contact'|'trap-contact'|'lifetime'|'capacity'|'reset'|'rejected';
+export type ShotResultOutcome = 'first-step'|'rat-body'|'rat-head'|'ironclad-reflect'|'case-contact'|'world-bounce'|'dispatch-contact'|'pressure-contact'|'trap-contact'|'safe-contact'|'lifetime'|'capacity'|'reset'|'rejected';
 
 export type ClientMessage = (
   | { type: 'join'; protocolVersion: number; name: string; appearance: RatAppearance; resumeToken?: string; hold?: true }

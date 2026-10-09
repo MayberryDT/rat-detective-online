@@ -112,6 +112,8 @@ for(let a=1800;a<TICKS;a+=1800)windows.push([a,Math.min(TICKS,a+1800)]);
 const parts=['bots','chaos','snapshot','wire','checkpoint',...(city?['city']:[])];
 const cost=Array.from({length:TICKS},()=>({bots:0,chaos:0,snapshot:0,wire:0,checkpoint:0,city:0}));
 const marks={chalk:new Set(),muck:new Set(),wax:new Set(),flocks:new Set(),scanner:new Set(),slugs:new Set(),shoves:new Set()};
+/** Penthouse safes: where each stands, its hits (distinct `hitAt`), cracks (`n`) and who cracked it; radio calls about them. */
+const safes=new Map(),safeCalls=new Set();
 const hash=createHash('sha256');let state=sim.snapshot(false),bytes=0,peak=0,bursts=0;
 // Per tick: what one recipient was sent (chars; the wire is ASCII), its chaos frame bytes by field, and the time that
 // recipient's client takes to decode and validate the frame (ChaosDecoder, as NetworkManager runs it).
@@ -166,6 +168,9 @@ for(let tick=0;tick<TICKS;tick++){
     peak=Math.max(peak,state.shots.length);
     for(const k of ['chalk','muck','wax','flocks','scanner'])for(const m of state[k]??[])marks[k].add(m.id);
     for(const b of state.shots)if(b.slug)marks.slugs.add(b.id);
+    for(const safe of state.safes??[]){const seen=safes.get(safe.id)??{p:[safe.x,safe.y,safe.z].map(v=>Math.round(v*10)/10),hits:new Set(),cracks:0,by:new Set()};
+        if(safe.hitAt!==undefined)seen.hits.add(safe.hitAt);seen.cracks=Math.max(seen.cracks,safe.n);if(safe.by)seen.by.add(safe.by);safes.set(safe.id,seen);}
+    for(const line of state.scanner??[])if(line.kind==='safe')safeCalls.add(line.text);
     for(const e of state.pressure?.shoves??[])marks.shoves.add(e.id??JSON.stringify(e));
     for(const id of ids){const p=players.get(id);hash.update(`${id}:${p.x.toFixed(4)},${p.y.toFixed(4)},${p.z.toFixed(4)};`);}
     for(const s of state.shots)hash.update(`${s.id}:${s.p.x.toFixed(4)},${s.p.y.toFixed(4)},${s.p.z.toFixed(4)};`);
@@ -206,7 +211,7 @@ const citySharePct=city?+(100*sum(300,TICKS,'city')/parts.reduce((t,k)=>t+sum(30
 const spread=a=>{const s=[...a].sort((x,y)=>x-y),q=p=>+s[Math.min(s.length-1,Math.floor(s.length*p))].toFixed(3);return {median:q(.5),p95:q(.95),p99:q(.99),max:+s[s.length-1].toFixed(3)};};
 const warm=cost.slice(300).map(c=>parts.reduce((t,k)=>t+c[k],0)),sentTicks=TICKS-300;
 const result={label,scenario,incident:values.incident??null,room:!!room,bots,recipients,ref:ref??'worktree',peakBalls:peak,shots:shot,bursts,...(room?hits:{}),avgFrameBytes:recipients?Math.round(bytes/TICKS/recipients):0,
-    trajectory:hash.digest('hex').slice(0,16),marks:Object.fromEntries(Object.entries(marks).map(([k,v])=>[k,v.size])),profiled:!!session,...(cityReport?{city:{citySharePct,...cityReport}}:{}),
+    trajectory:hash.digest('hex').slice(0,16),marks:Object.fromEntries(Object.entries(marks).map(([k,v])=>[k,v.size])),safes:Object.fromEntries([...safes].map(([id,v])=>[id,{p:v.p,hits:v.hits.size,cracks:v.cracks,by:[...v.by]}])),safeCalls:[...safeCalls],profiled:!!session,...(cityReport?{city:{citySharePct,...cityReport}}:{}),
     tickMs:spread(warm),...(recipients?{clientBytesPerTick:spread(clientBytes.subarray(300)),clientKBps:+(clientBytes.subarray(300).reduce((t,b)=>t+b,0)/sentTicks*30/1000).toFixed(1),
         ...(room?{otherMessagesPerTick:+(others.messages/recipients/TICKS).toFixed(2)}:{}),
         chaosFieldBytesPerTick:Object.fromEntries(Object.entries(fields).sort((a,b)=>b[1]-a[1]).map(([k,v])=>[k,Math.round(v/TICKS)])),clientDecodeMs:spread(decodeMs.subarray(300))}:{}),

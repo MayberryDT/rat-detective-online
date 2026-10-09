@@ -1,3 +1,4 @@
+import type {SafeState} from './safes';
 import type { EnvironmentCause, PlayerData, QuatData, RatAppearance, Vec3Data } from './networkProtocol';
 import type { IncidentId } from './incidentCatalog';
 import type { BadRound } from './shotBallistics';
@@ -177,7 +178,7 @@ export const EXTRA_CASE_IDS = ['evidence-1','evidence-2','evidence-3','evidence-
 export interface TrapState { id:string; owner:string; x:number; y:number; z:number; yaw:number; hp:number; at:number; shotId?:string; held?:string; flight?:Vec3Data; flightAge?:number; landedAt?:number; snapAt?:number; hitAt?:number; brokenAt?:number }
 export const MAX_TRAPS = 16;
 /** What a laser beam struck at a point. */
-export const LASER_SURFACES = ['world','armor','rat','head','trap','case','trigger','corpse'] as const;
+export const LASER_SURFACES = ['world','armor','rat','head','trap','safe','case','trigger','corpse'] as const;
 export type LaserSurface = typeof LASER_SURFACES[number];
 /** A laser shot (`id` is its shot id): `points[0]` is the muzzle, then each reflection (`on` 'world' or 'armor')
  * and the end, where `on` names what stopped it (absent: it ran out of range in the air). Kept `laserBeamMs`. */
@@ -220,6 +221,8 @@ export interface ChaosState {
     buffs?: BuffMap;
     /** Set Mousetraps. */
     traps?: TrapState[];
+    /** The penthouse safes (`safes.ts`). */
+    safes?: SafeState[];
     /** Recent laser beams, newest last. */
     beams?: LaserBeam[];
     possession: Record<string, number>;

@@ -5,6 +5,7 @@
  *   ?eye=x,y,z&at=x,y,z  any camera.
  *   ?incident=<id>  an incident's look, already set in (e.g. `pea-souper`).
  *   ?rats=x,z;x,z…  remote rats standing on the street there (their far outlines).
+ *   ?safes=x,y,z,yaw,hp;…  penthouse safes in those states (hp 30 locked … 0 cracked, its door open and dial up).
  * `window.cityViewReady` turns true once a few frames have rendered (for screenshots).
  */
 import * as THREE from 'three';
@@ -12,6 +13,8 @@ import {createStage} from '../../src/session/createStage';
 import {Neighborhood} from '../../src/prototype/Neighborhood';
 import {FeelDirector} from '../../src/feel/FeelDirector';
 import {RatEntity} from '../../src/entities/RatEntity';
+import {SafeField} from '../../src/prototype/SafeVisual';
+import {SAFE} from '../../src/shared/safes';
 import {isIncidentId} from '../../src/shared/incidentCatalog';
 
 const VIEWS:Record<string,[number[],number[]]>={
@@ -58,6 +61,9 @@ const rats=(params.get('rats')??'').split(';').filter(Boolean).map((xz,i)=>{
     const [x,z]=xz.split(',').map(Number);
     return new RatEntity(stage.scene,stage.world,new THREE.Vector3(x,0,z),`Witness ${i+1}`,undefined,true);
 });
+const safes=new SafeField(stage.scene);
+safes.apply((params.get('safes')??'').split(';').filter(Boolean).map((v,i)=>{const [x,y,z,yaw,hp]=v.split(',').map(Number);
+    return {id:`s${i}`,x:x!,y:y!,z:z!,yaw:yaw!,hp:hp!,n:0,...(hp===0?{at:SAFE.restockMs*.6}:{})};}),false);
 const named=VIEWS[params.get('view')??'overview']??VIEWS.overview!;
 const parse=(v:string|null,fallback:number[])=>v?v.split(',').map(Number):fallback;
 const [ex,ey,ez]=parse(params.get('eye'),named[0]!),[ax,ay,az]=parse(params.get('at'),named[1]!);
@@ -73,6 +79,7 @@ stage.renderer.setAnimationLoop(now=>{
     city.update(dt,stage.camera,stage.camera.position);feel.update(dt,stage.camera,stage.camera.position);
     const unitsPerPixel=2*Math.tan(THREE.MathUtils.degToRad(stage.camera.fov)/2)/innerHeight;
     for(const rat of rats){rat.presentAlive(dt);rat.fitOutline(stage.camera.position,unitsPerPixel);}
+    safes.update(dt,0,stage.camera);
     stage.renderer.render(stage.scene,stage.camera);
     // Every frame: a headless screenshot may land before the thirtieth.
     info.textContent=`static art inspection · draws ${stage.renderer.info.render.calls} · tris ${stage.renderer.info.render.triangles} · programs ${stage.renderer.info.programs?.length??0}`;

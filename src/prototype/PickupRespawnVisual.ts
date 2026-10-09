@@ -97,9 +97,10 @@ export class PickupRespawnVisual {
                 }`});
         this.root.add(new THREE.Mesh(new THREE.PlaneGeometry(1.75,1.75),this.fill));
     }
-    update(now:number,availableAt:number,camera:THREE.Camera):void {
+    /** `durationMs`: the whole wait (a supply site's 45 s; a penthouse safe's own). */
+    update(now:number,availableAt:number,camera:THREE.Camera,durationMs:number=PICKUP_TUNING.respawnMs):void {
         camera.getWorldQuaternion(this.root.quaternion);
-        this.fill.uniforms.progress.value=1-Math.max(0,Math.min(1,(availableAt-now)/PICKUP_TUNING.respawnMs));
+        this.fill.uniforms.progress.value=1-Math.max(0,Math.min(1,(availableAt-now)/durationMs));
     }
     /** The icon stays: it is shared by every dial of its kind. */
     dispose():void {this.root.removeFromParent();disposeMeshResources(this.root);}

@@ -174,7 +174,7 @@ export class SolidGrid {
 
 const BALL_LAYERS: Record<ShotResultOutcome, string> = { 'first-step': 'ball-first-step', 'rat-body': 'ball-rat-body', 'rat-head': 'ball-rat-head', 'ironclad-reflect': 'ball-ironclad-reflect',
   'case-contact': 'ball-case-contact', 'world-bounce': 'ball-world-bounce', 'dispatch-contact': 'ball-dispatch-contact', 'pressure-contact': 'ball-pressure-contact',
-  'trap-contact': 'ball-trap-contact', lifetime: 'ball-lifetime', capacity: 'ball-capacity', reset: 'ball-reset', rejected: 'ball-rejected' };
+  'trap-contact': 'ball-trap-contact', 'safe-contact': 'ball-safe-contact', lifetime: 'ball-lifetime', capacity: 'ball-capacity', reset: 'ball-reset', rejected: 'ball-rejected' };
 const SHOTS: Record<Who, string> = { human: 'shots-human', bot: 'shots-bot', agent: 'shots-agent' };
 const HITS: Record<Who, string> = { human: 'hits-human', bot: 'hits-bot', agent: 'hits-agent' };
 const BANK_HITS: Record<Who, string> = { human: 'bank-hits-human', bot: 'bank-hits-bot', agent: 'bank-hits-agent' };
@@ -454,8 +454,14 @@ export class CityRecorder {
 
   pickups(events: readonly PickupEvent[], players: ReadonlyMap<string, PlayerData>, now: number): void {
     if (!events.length) return;
-    if (events.some(e => e.kind !== 'healed' && !this.lives.has(e.playerId))) this.drain();
+    if (events.some(e => e.kind !== 'healed' && e.kind !== 'safe' && !this.lives.has(e.playerId))) this.drain();
     for (const e of events) {
+      if (e.kind === 'safe') {
+        const place = this.places.at(e.p.x, e.p.y, e.p.z).id;
+        this.measure(now, place, 'safe:crack');
+        this.emit({ ...this.context(now), type: 'safe', ...(e.playerId && players.has(e.playerId) ? { a: this.actor(e.playerId) } : {}), safe: e.safeId, gun: e.gun, p: p3(e.p), place });
+        continue;
+      }
       const player = players.get(e.playerId);
       if (!player) continue;
       if (e.kind === 'healed') { this.emit({ ...this.context(now), type: 'heal', a: this.actor(player.id), cause: e.cause, hp: e.hp }); continue; }

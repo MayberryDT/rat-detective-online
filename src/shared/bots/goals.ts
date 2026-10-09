@@ -7,6 +7,11 @@ import type {KnownCarrier} from './motor/carriers';
 import {activeZone} from '../jurisdiction';
 import {JURISDICTION_ZONE_IDS,JURISDICTION_ZONES,jurisdictionTravelPoint,zoneContains,type JurisdictionZoneId} from '../jurisdictionZones';
 import {DISPATCH_STATIONS,type ChaosState} from '../chaosState';
+import type {SafeState} from '../safes';
+
+/** A safe trip: how far (horizontally) a bot will go for one, where it stands (units before the door) and when it
+ * gives up an unopened safe. */
+const SAFE_TRIP={range:70,stand:3.5,giveUpMs:45_000} as const;
 import {incidentInfo} from '../incidentCatalog';
 import {activeDestination,destinationPoint,ASSIGNMENT_DESTINATIONS} from '../assignments';
 import {hasIronclad,type PickupState} from '../pickups';
@@ -67,6 +72,8 @@ export interface GoalContext extends GoalInput {
     pickup?:PickupState;
     /** A mapped Ironclad site worth an occasional trip. */
     armor?:PickupState;
+    /** A locked penthouse safe worth the climb (`safeTrip`). */
+    safe?:SafeState;
     /** Nearby ready alarm pillars worth a detour, nearest first. */
     pillars:readonly Place[];
     delivery?:Post;
@@ -216,6 +223,17 @@ export class BotGoals {
         return candidates[0];
     }
 
+        /** The penthouse safes are map knowledge too: a locked one within reach, on the same occasional trips as armor
+     * (it is armor, a buff and a gun at once). The bot climbs to stand before it and shoots it like a bell. */
+    private safeTrip(state:ChaosState|undefined,self:PlayerData,now:number):SafeState|undefined{
+        const candidates=state?.safes?.filter(s=>s.hp>0&&Math.hypot(s.x-self.x,s.z-self.z)<SAFE_TRIP.range&&!this.motor.suppressed(`safe:${s.id}`,s,now))??[];
+        const current=candidates.find(s=>this.motor.key===`safe:${s.id}`);
+        if(current)return current;
+        if(now<this.supplyTripAt)return;
+        candidates.sort((a,b)=>distance(self,a)-distance(self,b));
+        return candidates[0];
+    }
+
     /** Gather every candidate, in the old ladder's order and with its side effects (delivery two-step, zone
      * post rotation, evade timer, abandoned pillar detours). */
     survey(input:GoalInput,available:CaseEntry|undefined):GoalContext {
@@ -239,6 +257,7 @@ export class BotGoals {
         // A mapped roof trip is still possible between objectives, but a
         // live case takes priority even when it is on the other side of town.
         const armor=!carrying&&!carrier&&!(available&&(active||distance(self,available.value.p)<24))?this.armorTrip(state,self,now):undefined;
+        const safe=!armor&&!carrying&&!carrier&&!(available&&(active||distance(self,available.value.p)<24))?this.safeTrip(state,self,now):undefined;
         // A short detour to a nearby ready alarm pillar whose bell is not yet in reach, to ring it from
         // its open side: never with the case, in a fight, with a loose case close by, or when the case
         // or its carrier is less than twice as far as the pillar (gremlins: up to twice as far away, and
@@ -319,7 +338,7 @@ export class BotGoals {
         let clue=seen.find(c=>!this.inspectedClues.has(c.id)&&along(c)&&!motor.suppressed('clue:'+c.id,c.p,now));
         if(!clue&&walking)clue={id:prints.id!,p:{...prints.end!},at:0,s:0};
         if(!clue&&!carrying&&now-this.inspectedAt<2500&&now>=prints.until)motor.searchAround(now);
-        const ctx:GoalContext={...input,active,visible,carrier,available,combat,clue,sighting:motor.sighted,pickup,armor,pillars,delivery,
+        const ctx:GoalContext={...input,active,visible,carrier,available,combat,clue,sighting:motor.sighted,pickup,armor,safe,pillars,delivery,
             intercept:intercept&&{key:`intercept:${jurisdiction?`${intercept.x},${intercept.z}`:next}`,point:intercept},zone,offered:[],memo:{},
             places:goal=>(ctx.memo.options??={})[goal]??=this.placeOptions(goal,ctx)};
         ctx.offered=GOALS.filter(goal=>this.offers(goal,ctx));
@@ -336,7 +355,7 @@ export class BotGoals {
         case 'hunt':return !!ctx.combat;
         case 'flee':return ctx.visible.length>0;
         case 'heal':return ctx.pickup?.kind==='quick-fix';
-        case 'arm-up':return !!(ctx.pickup&&ctx.pickup.kind!=='quick-fix'||ctx.armor);
+        case 'arm-up':return !!(ctx.pickup&&ctx.pickup.kind!=='quick-fix'||ctx.armor||ctx.safe);
         case 'ambush':return !ctx.carrying&&!!ctx.carrier&&ctx.active&&!!(ctx.state?.assignment?.jurisdiction||activeDestination(ctx.state!.assignment!));
         case 'mischief':return ctx.pillars.length>0;
         case 'roam':return true;
@@ -350,6 +369,11 @@ export class BotGoals {
         case 'heal':return ctx.pickup?.kind==='quick-fix'?{goal,mode:'pickup',key:`pickup:${ctx.pickup.id}`,destination:ctx.pickup}:undefined;
         case 'arm-up':{
             const supply=ctx.pickup&&ctx.pickup.kind!=='quick-fix'?ctx.pickup:ctx.armor;
+            if(!supply&&ctx.safe){
+                // Stand a few paces in front of its door (it faces local +z), then shoot it from there.
+                const s=ctx.safe;
+                return {goal,mode:'dispatch',key:`safe:${s.id}`,destination:{x:s.x+Math.sin(s.yaw)*SAFE_TRIP.stand,y:s.y,z:s.z+Math.cos(s.yaw)*SAFE_TRIP.stand}};
+            }
             return supply&&{goal,mode:'pickup',key:`pickup:${supply.id}`,destination:supply};
         }
         case 'mischief':{const pillar=pick(ctx.pillars);return pillar&&{goal,mode:'dispatch',key:pillar.key,destination:pillar.point};}
@@ -387,6 +411,7 @@ export class BotGoals {
     adopt(plan:Plan,ctx:GoalContext):void {
         const {now}=ctx,changed=this.motor.key!==plan.key;
         if(plan.mode==='pickup'){if(changed&&plan.key!==`pickup:${ctx.pickup?.id}`)this.supplyTripAt=now+25000+this.random()*10000;}
+        else if(plan.key.startsWith('safe:')){if(changed){this.dispatchGiveUpAt=now+SAFE_TRIP.giveUpMs;this.supplyTripAt=now+25000+this.random()*10000;}}
         else if(plan.mode==='dispatch'){
             const detour=`${plan.key}:${ctx.state?.dispatch.serial}`;
             if(detour!==this.dispatchDetour){this.dispatchDetour=detour;this.dispatchGiveUpAt=now+DISPATCH_DETOUR_MS;}

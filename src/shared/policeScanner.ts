@@ -7,9 +7,9 @@ import {placePhrase} from './radioPlaces';
  * loose, rats going down, rats in the air, pigeons spooked. A line carrying a lead names the point and when it was true
  * (`p`, `seen`) and whose it is (`c`), so a bot hears exactly what a player reads. */
 export const SCANNER={lines:6,lineMs:20_000,gapMs:3_000,carrierEveryMs:8_000,delayMs:4_000,headingMs:2_500,staleMs:6_000,downEveryMs:7_000} as const;
-export type ScannerKind='carrier'|'taken'|'loose'|'down'|'airborne'|'pigeons';
+export type ScannerKind='carrier'|'taken'|'loose'|'down'|'airborne'|'pigeons'|'safe';
 export interface ScannerLine {id:string;at:number;kind:ScannerKind;text:string;p?:Vec3Data;seen?:number;c?:string}
-const KINDS:readonly ScannerKind[]=['carrier','taken','loose','down','airborne','pigeons'];
+const KINDS:readonly ScannerKind[]=['carrier','taken','loose','down','airborne','pigeons','safe'];
 
 export function validScanner(value:unknown):value is ScannerLine[]{
     const ids=new Set<string>();
@@ -93,5 +93,7 @@ export class PoliceScanner {
     airborne(p:Vec3Data,now:number):void {this.say({at:now,kind:'airborne',text:`${this.prefix()} RAT AIRBORNE ${placePhrase(p)}.`});}
     /** Pigeons flushed by the carrier: a lead, as the flock is to anyone who sees it. */
     pigeons(p:Vec3Data,carrier:string,now:number):void {this.say({at:now,kind:'pigeons',text:`${this.prefix()} PIGEONS SPOOKED ${placePhrase(p)}.`,p:{...p},seen:now,c:carrier});}
+    /** A penthouse safe's alarm or its cracking (`text` names the place). */
+    safe(text:string,now:number):void {this.say({at:now,kind:'safe',text:`${this.prefix()} ${text}`});}
     clear():void {this.lines=[];this.track.length=0;this.queue.length=0;this.carrier='';this.owner=null;this.nextCarrier=0;this.lastLine=0;this.lastDown=0;}
 }

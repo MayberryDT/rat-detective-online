@@ -1,3 +1,5 @@
+import {SafeField,type SafeEvent} from './SafeVisual';
+import type {SafeState} from '../shared/safes';
 import {CaseFiles} from './CaseFiles';
 import { effectsOutput, type VoiceRoute } from '../audio/PlayerAudioMix';
 import { JurisdictionZones } from './JurisdictionZones';
@@ -151,8 +153,11 @@ export class ChaosView {
     private readonly pickups=new Map<string,PickupVisual>();
     /** Placed Mousetraps, pooled. */
     private readonly traps=new TrapField(this.root,true);
+    /** The penthouse safes. */
+    private readonly safes=new SafeField(this.root);
     /** A placed trap set down, snapped, hit or broke (after the view's first state), for sounds and the SNAP. */
     onTrap?:(event:TrapEvent,trap:TrapState)=>void;
+    onSafe?:(event:SafeEvent,safe:SafeState)=>void;
     /** Rats shown holding a special weapon. */
     private readonly armed=new Set<string>();
     private readonly buffBar?:HTMLElement;
@@ -307,6 +312,7 @@ export class ChaosView {
         this.impacts=new CheeseImpactEffects(scene);this.crossfire=new CrossfireVisual(scene,this.synth);
         this.beams=new LaserBeamVisual(scene,(cue,at,local)=>{if(!local||!feelState().on('heavyCheese'))this.feedback?.(cue,at);});
         this.traps.onEvent=(event,p)=>this.onTrap?.(event,p);
+        this.safes.onEvent=(event,safe)=>this.onSafe?.(event,safe);
     }
     /** Only the authoritative heal event confirms this instant pickup. */
     showHealing():void {
@@ -373,7 +379,7 @@ export class ChaosView {
         // Supply sites remember what they last showed (their claim and restock bursts): they start the clip afresh,
         // keeping their built props (rebuilding every site's was a quarter of each loop's restart).
         for(const visual of this.pickups.values())visual.restart();
-        this.traps.clear();this.impacts.clear();this.crossfire.clear();
+        this.traps.clear();this.safes.clear();this.impacts.clear();this.crossfire.clear();
         this.gripSwing=0;this.gripHitAt=-Infinity;
     }
     get trapPending():boolean{return this.traps.pending;}
@@ -517,6 +523,7 @@ export class ChaosView {
         this.syncPickups(state);
         this.syncWeapons(state);
         this.traps.apply(state.traps,previous!==undefined,state.time);
+        this.safes.apply(state.safes,previous!==undefined);
         this.noteLocalBuffs(state);
         for(const hit of state.impacts){
             if(!hit.audioOnly)this.impacts.emit(this.impactPoint.set(hit.p.x,hit.p.y,hit.p.z),this.impactNormal.set(hit.n.x,hit.n.y,hit.n.z),hit.surface,hit.scale??1);
@@ -721,6 +728,7 @@ export class ChaosView {
         this.carrierFlash.hide();
         for(const visual of this.extraCases.values())visual.update(camera,renderTime,now);
         for(const visual of this.pickups.values())visual.update(now,camera);
+        this.safes.update(dt,now,camera);
         if(this.buffBar)this.updateBuffs(s.buffs,now);
         if(this.onCarry){
             const self=this.resolveRat(this.myId),mine=s.case.owner===this.myId&&s.assignment?.phase==='active'&&!!self&&!self.dead;
@@ -949,7 +957,7 @@ export class ChaosView {
         for(const visual of this.extraCases.values())visual.dispose();this.extraCases.clear();
         // Supply sites live at the scene root: a reconnect's new view would otherwise draw over stale ones.
         for(const visual of this.pickups.values())visual.dispose();this.pickups.clear();
-        this.traps.dispose();for(const id of this.armed)this.resolveRat(id)?.setWeapon(undefined);this.armed.clear();
+        this.traps.dispose();this.safes.dispose();for(const id of this.armed)this.resolveRat(id)?.setWeapon(undefined);this.armed.clear();
         this.pressureMachine.dispose();this.carrierFlash.dispose();this.setCarrier(null);this.hotLook.dispose();this.hud?.dispose();this.scanner?.dispose();this.root.removeFromParent();this.caseRoot.removeFromParent();
         const contacts=contactShadowsOf(this.scene);contacts?.remove(this.caseRoot);for(const c of this.corpses.values())contacts?.remove(c.mesh);
         disposeMeshResources(this.caseRoot);

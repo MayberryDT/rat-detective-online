@@ -303,6 +303,7 @@ function describe(goal:Goal,ctx:GoalContext,alias:(id:string)=>string):string {
     case 'heal':return ctx.pickup?`Pick up the Quick Fix medkit ${relative(self,ctx.pickup)}; it restores full HP.`:'Pick up a Quick Fix medkit to restore full HP.';
     case 'arm-up':{
         const supply=ctx.pickup&&ctx.pickup.kind!=='quick-fix'?ctx.pickup:ctx.armor;
+        if(!supply&&ctx.safe)return `Climb to the penthouse safe ${relative(self,ctx.safe)} and shoot it open: it holds armour, speed and a gun.`;
         return supply?`Pick up ${PICKUPS[supply.kind]}, ${relative(self,supply)}.`:'Pick up armour or speed.';
     }
     case 'ambush':return 'Wait where the rat carrying the case must pass, and shoot it as it arrives.';

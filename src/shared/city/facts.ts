@@ -151,7 +151,10 @@ export type CityFact = FactContext & (
    * `place` and `hp`: the nearest the rat came (horizontal, to 0.1 u), where, and its health there. */
   /** A supply handed over on the spot: for a kill streak title, calling Dispatch or a Most Wanted bounty (and, before the
    * hot case heartbeat in protocol 29, for taking the case: old facts may say 'case'). */
-  | { type: 'reward'; a: number; kind: PickupKind; why: 'case' | 'streak' | 'dispatch' | 'bounty' | 'admin'; p: P3; place: string }
+  | { type: 'reward'; a: number; kind: PickupKind; why: 'case' | 'streak' | 'dispatch' | 'bounty' | 'admin' | 'safe'; p: P3; place: string }
+  /** A penthouse safe cracked (protocol 43): by `a` (absent when no rat's hit did it), handing over `gun` with Ironclad
+   * and Hot Pursuit (each also a `reward` fact, why 'safe'). */
+  | { type: 'safe'; a?: number; safe: string; gun: WeaponKind; p: P3; place: string }
   | { type: 'pickup-passed'; a: number; site: string; kind: PickupKind; dist: number; p: P3; place: string; hp: number }
   /** A bot's goal ended; `from` is where it was taken up, `p` and `place` where it ended. */
   | { type: 'goal-end'; a: number; goal: Goal; motor: MotorMode; mind: MindName; personality?: Personality; outcome: GoalOutcome; durationMs: number; from: string; p: P3; place: string }

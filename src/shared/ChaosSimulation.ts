@@ -2,6 +2,7 @@ import * as C from 'cannon-es';
 import {CaseClues} from './caseClues';
 import {CityMarks,type MarkWorld} from './cityMarks';
 import {PoliceScanner} from './policeScanner';
+import {SAFE,SAFE_ANCHORS,safeGun,validSafes,type SafeState} from './safes';
 import {trapOrigin,trapLaunch,trapAdvance,trapVelocity,TRAP_THROW} from './trapThrow';
 import {resolveShotPattern,tommyHeat} from './shotPattern';
 import {laserPath,type LaserCast} from './laser';
@@ -46,7 +47,7 @@ const outsideCity=(x:number,z:number)=>x<CITY_BOUNDS.min||x>CITY_BOUNDS.max||z<C
 const vec=(v:Vec3Data)=>new C.Vec3(v.x,v.y,v.z);
 const data=(v:Vec3Data)=>({x:v.x,y:v.y,z:v.z});
 const pose=(b:C.Body):PhysicalPose=>({p:data(b.position),q:{x:b.quaternion.x,y:b.quaternion.y,z:b.quaternion.z,w:b.quaternion.w},v:data(b.velocity),spin:data(b.angularVelocity)});
-type Target = { kind:'world'|'case'|'dispatch'|'pressure'|'corpse'|'rat'|'trap'; player?:PlayerData; head?:C.Sphere; corpseId?:string; machineId?:string; caseId?:string; trapId?:string };
+type Target = { kind:'world'|'case'|'dispatch'|'pressure'|'corpse'|'rat'|'trap'|'safe'; player?:PlayerData; head?:C.Sphere; corpseId?:string; machineId?:string; caseId?:string; trapId?:string; safeId?:string };
 /** A rat a swept ball or beam reached, rewound to the shooter's view when `compensated`. */
 interface RatContact {hit:C.RaycastResult;target:Target;compensated:boolean;ironclad:boolean;rewindMs:number;targetDelta:number}
 interface CaseRuntime {
@@ -83,8 +84,12 @@ export type PickupEvent =
     /** A supply handed over on the spot (`rewardSupply`), not from a site. */
     | { kind:'rewarded'; playerId:string; pickup:PickupKind; why:RewardReason }
     /** A Mousetrap was set down, snapped on a rat and holds it (`victim`), or destroyed (`by` the rat whose hit broke it). */
-    | { kind:'trap'; what:'launch'|'set'|'snap'|'break'; trapId:string; playerId:string; p:Vec3Data; victim?:string; by?:string|null; hits?:number };
-export type RewardReason='streak'|'dispatch'|'bounty'|'admin';
+    | { kind:'trap'; what:'launch'|'set'|'snap'|'break'; trapId:string; playerId:string; p:Vec3Data; victim?:string; by?:string|null; hits?:number }
+    /** A penthouse safe cracked by `playerId`'s hit (its loot follows as `rewarded` events, why `safe`). */
+    | { kind:'safe'; safeId:string; playerId:string|null; p:Vec3Data; gun:WeaponKind };
+export type RewardReason='streak'|'dispatch'|'bounty'|'admin'|'safe';
+/** Penthouse safe spots per world (`seedSafes`). */
+const SAFE_POINTS=new Map<string,SafeState[]>();
 /** Supply sites per world (`seedPickups`): the same layout always resolves the same points. */
 const SUPPLY_POINTS=new Map<string,PickupPoint[]>();
 /** One authoritative simulation, also usable by the solo preview. No rendering or DOM. */
@@ -135,6 +140,7 @@ export class ChaosSimulation {
     /** Set Mousetraps by id, each with its shootable static body and the rat it holds (or just let go, until that rat
      * steps clear); at most one per rat. */
     private readonly traps=new Map<string,{state:TrapState;body:C.Body;held?:string}>();
+    private readonly safes=new Map<string,{state:SafeState;body:C.Body;name:string}>();
     private trapSerial=0;
     /** Recent laser beams for the snapshot, newest last. */
     private beams:LaserBeam[]=[];
@@ -242,6 +248,7 @@ export class ChaosSimulation {
             this.addControl(machine.box,'world');this.addControl(machine.target,'pressure',machine.id);
         }
         this.seedPickups(spec);
+        this.seedSafes(spec);
         this.primaryCase=this.createCase('primary');
         if(saved){this.epoch=saved.epoch??this.epoch;this.tick=saved.tick??0;this.restore(saved);}else this.placeCaseAtSpawn();
     }
@@ -257,6 +264,49 @@ export class ChaosSimulation {
         if(!this.fixtureSupplies&&!points){points=resolvePickupPoints(clear,14,p=>this.supportedSpot(p));if(key)SUPPLY_POINTS.set(key,points);}
         this.pickupPoints=this.fixtureSupplies?[...this.fixtureSupplies]:[...points!];
         for(const point of this.pickupPoints){this.pickups.set(point.id,{kind:this.fixtureSupplies?point.kind:siteKind(point.kind),p:{...point.p},availableAt:0});}
+    }
+    /** A penthouse safe on each landmark's top floor (`safes.ts`), at the clear supported spot nearest its anchor
+     * (none when the anchor has none within `SAFE.search`): a ball-and-beam block like a Mousetrap's. */
+    private seedSafes(spec?:WorldSpec):void{
+        const key=spec?`${spec.version}:${spec.seed}`:'fixture';
+        let spots=SAFE_POINTS.get(key);
+        if(!spots){
+            spots=[];
+            for(const anchor of SAFE_ANCHORS){
+                const offsets:[number,number][]=[];
+                for(let dx=-SAFE.search;dx<=SAFE.search;dx+=.5)for(let dz=-SAFE.search;dz<=SAFE.search;dz+=.5)offsets.push([dx,dz]);
+                offsets.sort((a,b)=>Math.hypot(...a)-Math.hypot(...b));
+                const found=offsets.find(([dx,dz])=>this.supportedSpot({x:anchor.x+dx,y:anchor.y+.7,z:anchor.z+dz}));
+                if(found)spots.push({id:anchor.id,x:anchor.x+found[0],y:anchor.y,z:anchor.z+found[1],yaw:anchor.yaw,hp:SAFE.hits,n:0});
+            }
+            SAFE_POINTS.set(key,spots);
+        }
+        for(const spot of spots){
+            const h=SAFE.half,body=new C.Body({mass:0,type:C.Body.STATIC,shape:new C.Box(new C.Vec3(h.x,h.y,h.z)),position:new C.Vec3(spot.x,spot.y+h.y,spot.z),
+                collisionFilterGroup:4,collisionFilterMask:16});
+            body.quaternion.setFromAxisAngle(new C.Vec3(0,1,0),spot.yaw);
+            this.world.addBody(body);this.targets.set(body,{kind:'safe',safeId:spot.id});
+            this.safes.set(spot.id,{state:{...spot},body,name:SAFE_ANCHORS.find(a=>a.id===spot.id)!.name});
+        }
+    }
+    /** `hits` on a safe; the hit that cracks it hands its cracker Ironclad, Hot Pursuit and the safe's next gun. The
+     * first hit on a locked safe trips its alarm on the police radio. */
+    private damageSafe(id:string,hits:number,by:string|null):void{
+        const safe=this.safes.get(id);if(!safe||safe.state.hp<=0)return;
+        const s=safe.state,p={x:s.x,y:s.y+SAFE.half.y,z:s.z},where=`THE ${safe.name} PENTHOUSE`;
+        if(s.hp===SAFE.hits)this.scanner.safe(`ALARM AT ${where}: SOMEONE IS WORKING ON THE SAFE.`,this.now);
+        s.hp=Math.max(0,s.hp-hits);s.hitAt=this.now;
+        if(s.hp>0)return;
+        const gun=safeGun(s.n);s.n++;s.at=this.now+SAFE.restockMs;
+        if(by)s.by=by;else delete s.by;
+        this.pickupEvents.push({kind:'safe',safeId:id,playerId:by,p,gun});
+        const cracker=by?this.players.get(by):undefined;
+        this.scanner.safe(`THE SAFE AT ${where} IS CRACKED${cracker?`: ${cracker.name.toUpperCase()} IS ARMED TO THE TEETH`:''}.`,this.now);
+        if(by)for(const kind of ['ironclad','hustle',gun] as const)this.rewardSupply(by,'safe',kind);
+    }
+    /** Cracked safes stand open until restocked and locked again. */
+    private stepSafes(now:number):void{
+        for(const {state} of this.safes.values())if(state.hp<=0&&(state.at??0)<=now){state.hp=SAFE.hits;delete state.at;delete state.by;}
     }
     /** A supply-sized volume at `p` (prop height .7 above the foot) is clear of
      * static boxes, stands on flat floor with headroom, and has no wall hugging it. */
@@ -831,7 +881,7 @@ export class ChaosSimulation {
             const target=useRat?rat!.target:hit.body?this.targets.get(hit.body):undefined;
             last={target,hit,compensated:useRat&&rat!.compensated,rewindMs:useRat?rat!.rewindMs:0,targetDelta:useRat?rat!.targetDelta:0};
             const on=target?.kind==='rat'?useRat&&rat!.ironclad?'armor':hit.shape===target.head?'head':'rat'
-                :target?.kind==='trap'?'trap':target?.kind==='case'?'case':target?.kind==='dispatch'||target?.kind==='pressure'?'trigger':target?.kind==='corpse'?'corpse':'world';
+                :target?.kind==='trap'?'trap':target?.kind==='safe'?'safe':target?.kind==='case'?'case':target?.kind==='dispatch'||target?.kind==='pressure'?'trigger':target?.kind==='corpse'?'corpse':'world';
             return{distance:hit.distance,point:data(hit.hitPointWorld),normal:data(hit.hitNormalWorld),on};
         };
         const points=laserPath(shot.origin,shot.direction,cast),end=points[points.length-1]!;
@@ -853,6 +903,7 @@ export class ChaosSimulation {
             return;
         }
         if(target?.kind==='trap'&&target.trapId){this.damageTrap(target.trapId,W.laserTrapHits,owner);result('trap-contact',{point,normal});return;}
+        if(target?.kind==='safe'&&target.safeId){this.damageSafe(target.safeId,SAFE.laserHits,owner);result('safe-contact',{point,normal});return;}
         if(target?.kind==='case'){
             const c=this.cases.get(target.caseId??'primary');
             if(c)this.shootCase(c,incoming,shot.shotId,owner);
@@ -1512,6 +1563,7 @@ export class ChaosSimulation {
         }
         this.stepPickups(now,playing);
         this.stepTraps(now,playing,dt);
+        this.stepSafes(now);
         while(this.beams.length&&now-this.beams[0]!.at>W.laserBeamMs)this.beams.shift();
         // Small physical steps keep the theatrical bodies within their collision surfaces.
         this.stepBodies(dt,playing);
@@ -1578,6 +1630,13 @@ export class ChaosSimulation {
                 this.finishShot(shot,headshot?'rat-head':'rat-body',{victimId:target.player.id,damage,point:data(hit.hitPointWorld),normal:data(normal),compensated,
                     ...(useRat?{rewindMs:ratHit!.rewindMs,targetDelta:ratHit!.targetDelta}:{}),
                     ...(viewAttempted&&!compensated?{fallback:'history-unavailable'}:{})});
+                this.shots.splice(i,1);continue;
+            }
+            if(target?.kind==='safe'&&target.safeId&&(this.safes.get(target.safeId)?.state.hp??0)>0){
+                // A locked safe takes the hit (a Persuader slug counts double); an open one is only steel.
+                if(playing)this.damageSafe(target.safeId,shot.slug?SAFE.slugHits:1,shot.owner);
+                this.impacts.push({p:data(hit.hitPointWorld),n:data(normal),surface:false,scale:.9,cue:'thud'});
+                this.finishShot(shot,'safe-contact',{point:data(hit.hitPointWorld),normal:data(normal)});
                 this.shots.splice(i,1);continue;
             }
             if(target?.kind==='trap'&&target.trapId){
@@ -1732,6 +1791,7 @@ export class ChaosSimulation {
             extraCases:[...this.cases.values()].filter(c=>c!==this.primaryCase).map(c=>({id:c.id,...this.caseSnapshot(c)})),dispatch:{...this.dispatch},pressure:{...this.pressure,levels:{...this.pressure.levels},...(this.pressure.blowing?{blowing:{...this.pressure.blowing}}:{}),...(this.pressure.fired?{fired:{...this.pressure.fired}}:{}),...(this.pressure.boosts?{boosts:{...this.pressure.boosts}}:{}),...(this.pressure.shoves?{shoves:this.pressure.shoves.map(e=>({...e,velocity:{...e.velocity}}))}:{}),...(this.pressure.vents?{vents:this.pressure.vents.map(v=>({...v}))}:{}),launches:this.pressure.launches.map(e=>({...e,velocity:{...e.velocity}}))},possession:{...this.possession},
             pickups:[...this.pickups].map(([id,site])=>({id,kind:site.kind,x:site.p.x,y:site.p.y,z:site.p.z,availableAt:site.availableAt})),
             buffs:this.buffSnapshot(),
+            ...(this.safes.size?{safes:[...this.safes.values()].map(s=>({...s.state}))}:{}),
             ...(this.traps.size?{traps:[...this.traps.values()].map(t=>({...t.state,...(t.state.flight?{flight:data(t.state.flight)}:{})}))}:{}),
             ...(this.beams.length?{beams:this.beams.map(b=>({...b,points:b.points.map(p=>({...p}))}))}:{}),
             corpses:[...this.corpses.values()].map(c=>({...c.state,...pose(c.body)})),
@@ -1743,6 +1803,8 @@ export class ChaosSimulation {
         this.buffs={};this.pickupEvents.length=0;this.tommyHeat.clear();this.persuaderReady.clear();this.beams=[];
         for(const id of [...this.traps.keys()])this.removeTrap(id);
         for(const site of this.pickups.values()){site.availableAt=0;site.kind=siteKind(site.kind);}
+        // A new round locks every safe again; each keeps its turn of guns.
+        for(const {state} of this.safes.values()){state.hp=SAFE.hits;delete state.at;delete state.by;delete state.hitAt;}
         this.primaryCase.previousOwner=null;this.primaryCase.pickupAfter=0;
         this.dispatch={phase:'ready',started:this.now,until:0,serial:this.dispatch.serial+1};this.casesWeaponized=false;this.syncExtraCases();
         this.pressure={serial:this.pressure.serial+1,levels:{},launches:[]};this.flights.clear();this.thrownUntil.clear();this.pendingVents.clear();
@@ -1771,6 +1833,11 @@ export class ChaosSimulation {
         for(const saved of s.pickups??[]){
             const site=this.pickups.get(saved.id);
             if(site&&(saved.kind==='quick-fix')===(site.kind==='quick-fix')&&Number.isFinite(saved.availableAt)){site.kind=saved.kind;site.availableAt=Math.max(0,saved.availableAt!);}
+        }
+        if(validSafes(s.safes))for(const saved of s.safes){
+            const safe=this.safes.get(saved.id);if(!safe)continue;
+            safe.state.hp=saved.hp;safe.state.n=saved.n;
+            if(saved.at!==undefined)safe.state.at=saved.at;if(saved.by!==undefined)safe.state.by=saved.by;
         }
         const assignment=restoreAssignment(s.assignment,Date.now());if(assignment)this.setAssignment(assignment);
         // Pressure is kept through a restore (it never leaks), including a machine

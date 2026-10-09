@@ -462,6 +462,8 @@ export class GameSession {
                 this.feedback.play(event==='set'?'trap-set':event==='hit'?'trap-splinter':'trap-break',trap);
                 // The SNAP! where a trap catches a rat (the word always for its owner and anyone near).
             };
+            // A penthouse safe: a heavy clang per hit; cracked, the heavy plate of the loot for everyone near.
+            this.chaos.onSafe=(event,safe)=>{const at={x:safe.x,y:safe.y+1,z:safe.z};this.feedback.play(event==='hit'?'armor-clang':'pickup-ironclad',at);};
             this.chaos.onLanding=(p,speed)=>this.feel.landed(LANDING_POSITION.set(p.x,p.y,p.z),speed,this.stage.camera);
             this.chaos.onLauncherFired=(machine,boost)=>this.launcherFired(machine,boost);
             this.chaos.onCorpseJolt=p=>this.feel.corpseJolt(p,this.stage.camera);

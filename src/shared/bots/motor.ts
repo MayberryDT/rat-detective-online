@@ -4,6 +4,7 @@ import {JURISDICTION_ZONES,zoneContains,type JurisdictionZoneId} from '../jurisd
 import {activeZone} from '../jurisdiction';
 import {activeDestination,destinationPoint} from '../assignments';
 import {exposedCarrierCase,shotHitsIronclad} from '../BotTargeting';
+import {SAFE} from '../safes';
 import {DISPATCH_STATIONS,LAUNCH_MACHINES,PRESSURE_TUNING,type CaseState,type ChaosState,type LaunchMachine} from '../chaosState';
 import {incidentInfo,type IncidentId} from '../incidentCatalog';
 import {hasIronclad,heldWeapon,legScale,WEAPON_TUNING,type WeaponKind} from '../pickups';
@@ -130,6 +131,8 @@ export class BotMotor {
     private visible:PlayerData[]=[];
     /** A ready Dispatch control in ringing range; shot in passing. */
     private bell?: Vec3Data;
+    /** The bell is a penthouse safe's door (a smaller mark, shot at the rat's own pace). */
+    private bellSafe=false;
     private readonly bellAim={x:0,y:0,z:0};
     private bellAimAt=0;
     private route: BotWaypoint[] = [];
@@ -516,6 +519,13 @@ export class BotMotor {
         this.bell=state?.dispatch.phase==='ready'&&!quietBell&&!this.shotTarget ? DISPATCH_STATIONS.map(station=>station.target)
             .filter(target=>distance(self,target)<26&&clearControl(target))
             .sort((a,b)=>distance(self,a)-distance(self,b))[0] : undefined;
+        // With no rat to shoot and no bell to ring, a locked penthouse safe in sight is shot open, as a player does.
+        this.bellSafe=false;
+        if(!this.bell&&!this.shotTarget&&!quietBell){
+            const safe=state?.safes?.filter(s=>s.hp>0).map(s=>({x:s.x,y:s.y+SAFE.half.y,z:s.z}))
+                .filter(p=>distance(self,p)<26&&clearControl(p)).sort((a,b)=>distance(self,a)-distance(self,b))[0];
+            if(safe){this.bell=safe;this.bellSafe=true;}
+        }
     }
 
     /** Gunfire from rats out of sight (the rat turns toward it), and how the fight's rival has been firing. A
@@ -734,7 +744,7 @@ export class BotMotor {
         if(hop){jump=true;this.hopAt=now+400;this.hopClicks=2;this.hopClickAt=now;}
         if(this.hopClicks&&now>this.hopClickAt+HOP.clickWindowMs)this.hopClicks=0;
         const bell=this.bell;
-        const dispatchReady=!!bell&&state?.dispatch.phase==='ready'&&clearControl(bell);
+        const dispatchReady=!!bell&&(this.bellSafe||state?.dispatch.phase==='ready')&&clearControl(bell);
         // Follow an armored carrier without running into their gun at point-blank range.
         if(!obstacleJump&&this.mode==='carrier'&&this.destination&&grounded){
             const carrier=this.protectedVisible.find(p=>`carrier:${p.id}`===this.key);
@@ -765,7 +775,7 @@ export class BotMotor {
         let shoot:Vec3Data|undefined;
         if(dispatchReady&&bell&&!visibleTarget){
             // The bell is a big box shootable from any side; aim somewhere on it, imperfectly.
-            if(now>=this.bellAimAt){this.bellAimAt=now+700;this.bellAim.x=bell.x+(this.motorRandom()-.5)*3;this.bellAim.y=bell.y+(this.motorRandom()-.5)*2.4;this.bellAim.z=bell.z+(this.motorRandom()-.5)*3;}
+            if(now>=this.bellAimAt){const size=this.bellSafe?.4:1;this.bellAimAt=now+700;this.bellAim.x=bell.x+(this.motorRandom()-.5)*3*size;this.bellAim.y=bell.y+(this.motorRandom()-.5)*2.4*size;this.bellAim.z=bell.z+(this.motorRandom()-.5)*3*size;}
             this.aim.look(eye,this.bellAim,true);
         }else if(trick&&!visibleTarget)this.aim.look(eye,trick,true);
         else if(suppressing){this.lost.x=seen!.p.x;this.lost.y=seen!.p.y+1.2;this.lost.z=seen!.p.z;this.aim.look(eye,this.lost,true);}
@@ -777,7 +787,7 @@ export class BotMotor {
         if(trapping){if(this.setTrap(now,self,state,grounded,visibleTarget))shoot=this.aim.point(eye,30);}
         else if(now>=this.shotAt){
             if(dispatchReady&&bell&&!visibleTarget){
-                if(this.aim.offBy(eye,this.bellAim)<.06){shoot=this.aim.point(eye,distance(eye,this.bellAim));this.shotAt=now+350+this.random()*400;}
+                if(this.aim.offBy(eye,this.bellAim)<.06){shoot=this.aim.point(eye,distance(eye,this.bellAim));this.shotAt=now+(this.bellSafe?tommy?WEAPON_TUNING.tommyIntervalMs-HELD_SLACK_MS:Math.max(this.skill.fireGapMs,this.weapon==='persuader'?WEAPON_TUNING.persuaderIntervalMs:0):350+this.random()*400);}
             }else if(trick&&!visibleTarget){
                 // A bank is lined up with care; a chaos shot only needs to be close.
                 if(!this.aim.flicking&&this.aim.felt<(trick===bank?0.02:0.05)){shoot=this.aim.point(eye,distance(eye,trick));if(trick===bank)this.tricks.banked();}
