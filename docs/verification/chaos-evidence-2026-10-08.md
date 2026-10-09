@@ -85,3 +85,28 @@
 **Changed:** print runs capped at 16; Bad Ammunition removed (stored rooms run Crossfire); admin **Give me** (any pickup to the admin's own rat, game socket only); a carrier never sees or hears its own flock.
 
 **Checked:** typecheck; worker suite 32/33 with the recorder test passing alone (17/17; it timed out under load); client suite 172 files; the 3-minute room benchmark decodes every frame after the fix. Staging Worker `256c57f0-72c2-43f0-919d-7a10443a7407`, build `staging-2026-10-09-dfab77b`.
+
+## Round 5 (9 October): the ping, the Pea Souper
+
+**Tyler:** "figure out why the ping is so bad, and we need to fix it. Don't hotfix production, fix it here"; a thick noir fog with the rats always visible and the lights breaking through; a penthouse safe (below, in progress).
+
+**Found (the ping):** the room, not the build. Staging's `public-live-v2` runs in **Seattle** (`/status?colo=`, staging diagnosis), as does its Matchmaker; this machine and Halla enter Cloudflare at **Kansas City**. Probes (`probe-city-marks.mjs`, an agent rat, every 500 ms):
+
+| Room | Ping min / median / p95 / p99 | Late chaos frames |
+|---|---|---|
+| `public-live-v2`, Seattle, through the Seattle Matchmaker | 56 / 83 / 225 / 1,700 ms | about 140 in 120 s, all network |
+| Bot-free test room, Chicago, direct | 18–19 / 28–37 / 83–88 ms | (no frames) |
+| `public-live-v3`, Dallas, through the Chicago Matchmaker | 50 / 62 / 190 / 333 ms | 137 in 120 s, all network |
+| `public-live-v3`, Dallas, direct (the fix) | 17–42 / 25–54 / 97–102 / 182–221 ms | 48–70 in 90 s, almost all network |
+
+Rooms first reached from Kansas City land in Chicago or Dallas (6 of 6); the `enam` hint also gave Atlanta, Miami and Newark (3 of 8). A WebSocket returned through a Durable Object keeps flowing through it, so the Matchmaker's place counts as much as the room's.
+
+**Changed:** the public city is `public-live-v3`, first reached from Kansas City (staging: Dallas), with the old room's history copied in (`POST /api/city/v1/copy`, `scripts/copy-city.mjs`); public joins connect the Worker straight to the room (the Matchmaker only for overflow); `/status` names the colo. Production moves at the next release, by the steps in [the public room](../live-service.md#the-public-room).
+
+**Checked (the copy):** staging copied 5,451,031 rows in about 9 minutes; the new room's `/api/heat/v1?days=all`, `/api/city/v1/places?days=all`, `/api/city/v1/flows?days=all` and the first 10,000 events are identical to the old room's before the move (snapshots under `/home/halla/build/rat-detective/room-move/`).
+
+**The Pea Souper:** a new incident (protocol 42): fog density .058 in yellow-grey `0x4b4a36` over the city and sky; lamp haze cones 2.8× brighter and 1.5× wider, searchlights 4× (both unfogged shaders, so they glow through); rat bodies already ignore the fog, and every rat's far outline now starts at 3 units and is full at 12, 2.4 px, .9 opaque; a foghorn when it rolls in and every 16 s. Only uniforms change: no program links. Bots see the case and its papers only within 24 units in it (`FOG_REACH`, `mindVersion` 19); rats as ever.
+
+**Checked (the fog):** static art inspection (`city-view.html?incident=pea-souper&rats=…`, Halla's GPU): on the quay, the cranes and warehouses vanish past about 35 units, the lamp cones glow through, and four rats at about 12–50 units stay plainly visible; the same view clear for comparison (`/home/halla/build/rat-detective/fog/`). Typecheck; worker 288, client 1,520, scripts 46 tests pass. Staging Worker `52f0e831-a163-40f4-a411-89b05a757fc5`.
+
+**Not checked:** the fog in live play by a human; the copy on production (next release).
