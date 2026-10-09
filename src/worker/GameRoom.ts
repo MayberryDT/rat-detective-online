@@ -261,10 +261,13 @@ export class GameRoom extends DurableObject<Env> {
 
   /** The Cloudflare data centre this room runs in (latency diagnosis; in each diagnostics line). */
   private colo = '?';
+  private coloReady?: Promise<void>;
+  /** Latency diagnosis (staging `/diag/colo`): where this room runs. */
+  async diagColo(): Promise<string> { await this.coloReady; return this.colo; }
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
     // Where this room runs (latency diagnosis): Cloudflare's trace names the data centre the object lives in.
-    void fetch('https://www.cloudflare.com/cdn-cgi/trace').then(r => r.text()).then(text => { this.colo = /colo=(\w+)/.exec(text)?.[1] ?? '?'; }).catch(() => undefined);
+    this.coloReady = fetch('https://www.cloudflare.com/cdn-cgi/trace').then(r => r.text()).then(text => { this.colo = /colo=(\w+)/.exec(text)?.[1] ?? '?'; }).catch(() => undefined);
     this.cityStore = new CityStore(ctx.storage.sql, fn => ctx.storage.transactionSync(fn), aggregateMode(env.CITY_AGGREGATES));
     ctx.blockConcurrencyWhile(async () => {
       this.migrate();
