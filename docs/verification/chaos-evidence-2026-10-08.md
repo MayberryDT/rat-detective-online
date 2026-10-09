@@ -71,3 +71,17 @@
 - `verify-entry.mjs`, staging vs production on Halla's headless Chrome: warm room 1.6–1.8 s (production 2.1–3.4 s); cold room clicked after load 13.3 s on the first wake after the deploy (welcome 11.6 s), then 3.3 s (production 2.3–2.6 s); clicking at once, both 15–25 s (the page itself loads in 13–15 s on this machine). EN2 failed only on the first post-deploy wake.
 
 **Not checked:** a human session on this build; whether the first wake after a deploy is slower than before this branch (not measured on main right after a deploy).
+
+## Round 4 (9 October, Tyler's third staging session)
+
+**Tyler:** faster to get in; latency ("hitting people feels off", running over pickups without taking them); the flock is distracting from the carrier; get rid of Bad Ammunition; wants to equip a Persuader through admin tools.
+
+**Found:**
+- His pings this session: 160–205 ms (lowest 115 ms; jitter to 67 ms; max 336 ms), against a 54 ms lowest at 00:00 on production's build. Bot playback delay rose to 250–350 ms, beyond the 250 ms shot compensation bound, so shots at what he saw could miss.
+- The server's CPU is not the cause: `benchmark-server-tick --room --bots=10` main vs branch, median tick 4.9 vs 4.7 ms, p95 33.2 vs 25.7 ms.
+- From Halla (edge MCI), plain requests to the room server take 160–200 ms on **production and staging alike**; an agent's WebSocket ping on staging was 54 ms at best, 82 ms median, but 235 ms p95 and 1.1 s p99. The spikes are not attributed yet.
+- **A real bug, also in production:** `caseClues.printFor` could lay a 17th paw print in a run (a pair pushed past `PRINTS.run`); `validPrints` then made every client refuse the whole chaos frame and reconnect, again and again while the run lived. The room benchmark hit it at tick 3743. Fixed on the branch; production still has it.
+
+**Changed:** print runs capped at 16; Bad Ammunition removed (stored rooms run Crossfire); admin **Give me** (any pickup to the admin's own rat, game socket only); a carrier never sees or hears its own flock.
+
+**Checked:** typecheck; worker suite 32/33 with the recorder test passing alone (17/17; it timed out under load); client suite 172 files; the 3-minute room benchmark decodes every frame after the fix. Staging Worker `256c57f0-72c2-43f0-919d-7a10443a7407`, build `staging-2026-10-09-dfab77b`.
