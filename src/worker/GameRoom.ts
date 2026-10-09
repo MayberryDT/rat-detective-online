@@ -261,6 +261,8 @@ export class GameRoom extends DurableObject<Env> {
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
+    // Where this room runs (latency diagnosis): Cloudflare's trace names the data centre the object lives in.
+    void fetch('https://www.cloudflare.com/cdn-cgi/trace').then(r => r.text()).then(text => log('info', 'room colo', { colo: /colo=(\w+)/.exec(text)?.[1] ?? '?' })).catch(() => undefined);
     this.cityStore = new CityStore(ctx.storage.sql, fn => ctx.storage.transactionSync(fn), aggregateMode(env.CITY_AGGREGATES));
     ctx.blockConcurrencyWhile(async () => {
       this.migrate();
