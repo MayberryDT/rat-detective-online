@@ -21,6 +21,9 @@ const seen={chalk:new Map(),muck:new Map(),wax:new Map(),flocks:new Map(),scanne
 let welcome,chaosStates=0,bots=0,carriers=new Set(),started=Date.now(),errors=0,lastChaos=0;
 /** Latency: a ping every 500 ms (pong round trips), and the gaps between chaos frames (a busy room sends late). */
 const rtts=[],gaps=[];
+/** Each pong's legs (up: sent → the room read it; down: the room answered → it arrived), on the room's clock; an
+ * unknown clock offset shifts both, so read each leg's spread above its own minimum. */
+const legs=[];
 /** Every chaos frame: when it arrived (ms since start), the server's clock and step in it. A late frame whose server time
  * also jumped was produced late (the room was blocked or held it back); one whose server time did not was delayed on the way. */
 const frames=[];
@@ -30,7 +33,7 @@ ws.on('message',raw=>{
     const now=Date.now()-started;
     if(message.type==='welcome'){welcome={protocol:message.protocolVersion,atMs:now,players:Object.keys(message.players).length};bots=Object.keys(message.players).length-1;}
     if(message.type==='error')errors++;
-    if(message.type==='pong'&&typeof message.sentAt==='number')rtts.push(Date.now()-message.sentAt);
+    if(message.type==='pong'&&typeof message.sentAt==='number'){rtts.push(Date.now()-message.sentAt);if(typeof message.receivedAt==='number')legs.push([message.receivedAt-message.sentAt,Date.now()-message.receivedAt]);}
     if(message.type==='playerDied')deaths.push({atMs:now,cause:message.cause??(message.headshot?'headshot':'shot')});
     if(message.type!=='chaos')return;
     if(lastChaos)gaps.push(Date.now()-lastChaos);lastChaos=Date.now();
@@ -49,7 +52,8 @@ const late=[];
 for(let i=1;i<frames.length;i++){const [a0,t0,k0]=frames[i-1],[a1,t1,k1]=frames[i],arrive=a1-a0;
     if(arrive>100)late.push({atMs:a0,arriveMs:arrive,serverMs:Math.round(t1-t0),steps:k1-k0,kind:t1-t0>arrive*.6?'server':'network'});}
 const offsets=frames.map(([a,t])=>a+started-t).sort((x,y)=>x-y);
-const report={target:url.origin,room:url.searchParams.get('room'),seconds,welcome,bots,chaosStates,errors,deaths:deaths.length,carriers:carriers.size,rttMs:spread(rtts),chaosGapMs:spread(gaps),late:{count:late.length,server:late.filter(l=>l.kind==='server').length,network:late.filter(l=>l.kind==='network').length,worst:[...late].sort((a,b)=>b.arriveMs-a.arriveMs).slice(0,12)},
+const leg=i=>{const v=legs.map(l=>l[i]),low=Math.min(...v);return spread(v.map(x=>x-low));};
+const report={target:url.origin,legsAboveMinMs:{up:leg(0),down:leg(1)},room:url.searchParams.get('room'),seconds,welcome,bots,chaosStates,errors,deaths:deaths.length,carriers:carriers.size,rttMs:spread(rtts),chaosGapMs:spread(gaps),late:{count:late.length,server:late.filter(l=>l.kind==='server').length,network:late.filter(l=>l.kind==='network').length,worst:[...late].sort((a,b)=>b.arriveMs-a.arriveMs).slice(0,12)},
     // Arrival minus server time per frame (clock offset plus one-way delay): its spread is the one-way jitter.
     oneWayJitterMs:{p50:Math.round(offsets[offsets.length>>1]-offsets[0]),p95:Math.round(offsets[Math.floor(offsets.length*.95)]-offsets[0]),max:Math.round(offsets[offsets.length-1]-offsets[0])},
     marks:{chalk:list('chalk').length,muck:list('muck').length,wax:list('wax').length,flocks:list('flocks').length,scanner:list('scanner').length},
@@ -59,6 +63,6 @@ const report={target:url.origin,room:url.searchParams.get('room'),seconds,welcom
     flocks:list('flocks').map(f=>({id:f.id,p:f.p,carrier:f.c,arrivedMs:f.arrivedMs})),
     scanner:list('scanner').map(l=>({kind:l.kind,text:l.text,lead:!!l.p,delayMs:l.seen!==undefined?l.at-l.seen:undefined,arrivedMs:l.arrivedMs}))};
 if(values.output)await writeFile(values.output,JSON.stringify(report,null,2)+'\n');
-console.log(JSON.stringify({welcome,bots,chaosStates,errors,deaths:report.deaths,carriers:report.carriers,rttMs:report.rttMs,chaosGapMs:report.chaosGapMs,late:report.late,oneWayJitterMs:report.oneWayJitterMs,marks:report.marks,
+console.log(JSON.stringify({welcome,bots,chaosStates,errors,deaths:report.deaths,carriers:report.carriers,rttMs:report.rttMs,legsAboveMinMs:report.legsAboveMinMs,chaosGapMs:report.chaosGapMs,late:report.late,oneWayJitterMs:report.oneWayJitterMs,marks:report.marks,
     scanner:report.scanner.slice(0,12).map(l=>l.text)}));
 process.exit(errors?1:0);
