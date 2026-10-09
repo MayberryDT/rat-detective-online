@@ -74,6 +74,25 @@ function json(data: unknown, init: ResponseInit = {}): Response {
   });
 }
 
+/** Joins the public city straight to its GameRoom, so the game socket runs Worker → room and never through the
+ * Matchmaker's data centre (9 October: a directory in Chicago and a room in Dallas added about 30 ms to every frame;
+ * a socket returned through a Durable Object keeps flowing through it). The room reserves its own seats, as it
+ * always has; only a full room (overflow) or a way back into an overflow room asks the Matchmaker, which still
+ * carries those rare sockets. */
+async function joinPublicCity(request: Request, url: URL, env: Env): Promise<Response> {
+  const preferred = url.searchParams.get('preferred');
+  const directory = () => env.MATCHMAKER.getByName(DEFAULT_ROOM_NAME).fetch(request);
+  if (preferred && preferred !== DEFAULT_ROOM_NAME) return directory();
+  const room = env.GAME_ROOM.getByName(DEFAULT_ROOM_NAME);
+  await room.enableMatchmaking(DEFAULT_ROOM_NAME);
+  if (url.searchParams.get('prepare') === '1') { await room.prepareEntry(); return room.fetch(request); }
+  const resume = url.searchParams.get('resume') === '1', routed = new URL(request.url), headers = new Headers(request.headers);
+  routed.searchParams.set('room', DEFAULT_ROOM_NAME);
+  if (!resume) headers.set('x-rat-admission-deadline', String(Date.now() + 5_000));
+  const response = await room.fetch(new Request(routed, { method: request.method, headers }));
+  return response.status === 503 && !resume ? directory() : response;
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
@@ -181,7 +200,7 @@ export default {
         const selection=url.searchParams.get('assignment');
         if (roomName === DEFAULT_ROOM_NAME) {
           if(selection!==null)return respond(json({error:'Assignment selection requires a private room'},{status:400}));
-          return respond(await env.MATCHMAKER.getByName(roomName).fetch(request));
+          return respond(await joinPublicCity(request, url, env));
         }
         const room = hint ? env.GAME_ROOM.get(env.GAME_ROOM.idFromName(roomName), {locationHint: hint as DurableObjectLocationHint}) : env.GAME_ROOM.getByName(roomName);
         if(selection!==null){
