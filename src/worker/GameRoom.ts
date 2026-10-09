@@ -259,10 +259,12 @@ export class GameRoom extends DurableObject<Env> {
   /** Tests replace this to age checkpoints without waiting real time. */
   private clock: () => number = () => Date.now();
 
+  /** The Cloudflare data centre this room runs in (latency diagnosis; in each diagnostics line). */
+  private colo = '?';
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
     // Where this room runs (latency diagnosis): Cloudflare's trace names the data centre the object lives in.
-    void fetch('https://www.cloudflare.com/cdn-cgi/trace').then(r => r.text()).then(text => log('info', 'room colo', { colo: /colo=(\w+)/.exec(text)?.[1] ?? '?' })).catch(() => undefined);
+    void fetch('https://www.cloudflare.com/cdn-cgi/trace').then(r => r.text()).then(text => { this.colo = /colo=(\w+)/.exec(text)?.[1] ?? '?'; }).catch(() => undefined);
     this.cityStore = new CityStore(ctx.storage.sql, fn => ctx.storage.transactionSync(fn), aggregateMode(env.CITY_AGGREGATES));
     ctx.blockConcurrencyWhile(async () => {
       this.migrate();
@@ -1754,7 +1756,7 @@ export class GameRoom extends DurableObject<Env> {
       if(routine){this.checkpointGame(state);this.chaosSavedAt=now;this.observeCheckpointSettlement();}
       const metrics=this.diagnostics.tick(now,{gapMs,costMs:performance.now()-tickStart,steps,balls:state.shots.length,
         snapshotBytes:recipients?sentBytes/recipients:0,maxSnapshotBytes:maxBytes,sentBytes,recipients});
-      if(metrics)log('info','room diagnostics',{roomId:this.ctx.id.toString(),players:this.players.size,
+      if(metrics)log('info','room diagnostics',{roomId:this.ctx.id.toString(),colo:this.colo,players:this.players.size,
         connections:this.ctx.getWebSockets().length,roundPhase:this.round.phase,incident:state.dispatch.incident??null,...metrics,
         ...(this.cityStore.scans.length?{cityScans:this.cityStore.scans.splice(0)}:{})});
     },1000/30);
