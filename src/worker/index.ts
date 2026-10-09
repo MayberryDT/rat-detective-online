@@ -93,7 +93,9 @@ export default {
 
       // Latency diagnosis (staging only): which data centre a room runs in. Waking it to ask starts no round.
       if (url.pathname === '/status' && url.searchParams.has('colo') && (env as Env & {DIAG_LOCATION_ROOMS?:string}).DIAG_LOCATION_ROOMS === '1') {
-        const name = url.searchParams.get('colo') || DEFAULT_ROOM_NAME, hint = /^latency-(wnam|enam|sam|weur|eeur|apac|oc|afr|me)-/.exec(name)?.[1];
+        const asked = url.searchParams.get('colo') || DEFAULT_ROOM_NAME;
+        if (asked.startsWith('matchmaker:')) return respond(json({ matchmaker: asked.slice(11), colo: await env.MATCHMAKER.getByName(asked.slice(11)).colo() }));
+        const name = asked, hint = /^latency-(wnam|enam|sam|weur|eeur|apac|oc|afr|me)-/.exec(name)?.[1];
         const stub = hint ? env.GAME_ROOM.get(env.GAME_ROOM.idFromName(name), {locationHint: hint as DurableObjectLocationHint}) : env.GAME_ROOM.getByName(name);
         return respond(json({ room: name, colo: await stub.colo() }));
       }

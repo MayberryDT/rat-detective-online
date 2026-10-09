@@ -41,6 +41,11 @@ export class Matchmaker extends DurableObject<Env> {
     ctx.storage.sql.exec('CREATE TABLE IF NOT EXISTS jev_spend (day TEXT NOT NULL, room TEXT NOT NULL, dollars REAL NOT NULL, PRIMARY KEY (day, room))');
   }
 
+  /** Latency diagnosis (staging `/status?colo=matchmaker:<pool>`): where this directory runs. */
+  async colo(): Promise<string> {
+    return fetch('https://www.cloudflare.com/cdn-cgi/trace').then(r => r.text()).then(text => /colo=(\w+)/.exec(text)?.[1] ?? '?', () => '?');
+  }
+
   async fetch(request: Request): Promise<Response> {
     if (request.headers.get('Upgrade') !== 'websocket') return new Response('WebSocket required', {status:400});
     const url=new URL(request.url);
