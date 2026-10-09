@@ -48,7 +48,7 @@
 
 ### Not checked
 
-- Sound: the wing clatter, the scanner squelch, the wax hiss (not built: no audio hook in the marks view yet), the Persuader's shot, hit and claim. Never heard.
+- Sound: the wing clatter, the scanner squelch, the wax hiss (a fresh drop within 14 units, at most every 350 ms), the Persuader's shot, hit and claim. Never heard.
 - Whether the pigeons are obvious from across the city in real play (the stills are close; a far flock was not captured).
 - The Persuader in human hands; the 550 ms hammer and the knockback strength are first guesses.
 - Smaller hitches Tyler felt ("little hang-ups"): the headless runs show 100–150 ms frames with no program link; not yet attributed.

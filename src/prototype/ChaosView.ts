@@ -281,6 +281,8 @@ export class ChaosView {
         this.clock=replay?.clock??(()=>performance.now());this.synth=replay?.synth??playSynth;
         // The hot case spooks pigeons: their clatter where they burst up (heard far off, in the ranked world mix).
         this.caseFiles.marks.pigeons.onFlush=p=>this.synth('flutter',p,.95+Math.random()*.1,1.6);
+        // Hot wax hissing as it hits the street beside you.
+        this.caseFiles.marks.onDrip=p=>this.synth('sizzle',p,.9+Math.random()*.25,.8);
         this.reactions=new RatReactionEvents(resolveRat);
         this.localShots=new LocalShotPresentation(traceShot);
         this.root.add(this.draws.root);

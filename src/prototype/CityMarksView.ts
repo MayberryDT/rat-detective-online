@@ -10,7 +10,7 @@ export const MUCK_INK=0x6f7a3a;
  * `worn` over `wearMs`. A new outline is drawn in over `drawMs` as the body goes. */
 const CHALK={size:3.4,worn:.4,wearMs:180_000,drawMs:900} as const;
 /** Hot wax: a drop's size, how long it glows, how long it takes to cool dark, and how near it is drawn. */
-const WAX={size:.95,glowMs:3_500,coolMs:20_000,range:70} as const;
+const WAX={size:.95,glowMs:3_500,coolMs:20_000,range:70,hissRange:14,hissMs:350} as const;
 const UP=new THREE.Vector3(0,1,0);
 
 interface Marks {chalk?:readonly ChalkMark[];muck?:readonly MuckRun[];wax?:readonly WaxRun[];flocks?:readonly Flock[]}
@@ -24,6 +24,10 @@ export class CityMarksView {
     private readonly chalk:Decals;
     private readonly wax:THREE.InstancedMesh;
     readonly pigeons=new PigeonFlocks();
+    /** A fresh drop of wax landing near you: its hiss (at most every `WAX.hissMs`). */
+    onDrip?:(p:THREE.Vector3)=>void;
+    private hissAt=-Infinity;
+    private readonly dripAt=new THREE.Vector3();
     private readonly hats:THREE.InstancedMesh;
     private readonly pose=new THREE.Object3D();
     private readonly color=new THREE.Color();
@@ -69,6 +73,7 @@ export class CityMarksView {
             const x=r.f[i]!,y=r.f[i+1]!,z=r.f[i+2]!;
             if(Math.hypot(x-eye.x,z-eye.z)>WAX.range)continue;
             const age=still?WAX.glowMs:Math.max(0,now-(r.at+r.f[i+3]!));
+            if(!still&&age<250&&now-this.hissAt>WAX.hissMs&&Math.hypot(x-eye.x,z-eye.z)<WAX.hissRange){this.hissAt=now;this.onDrip?.(this.dripAt.set(x,y,z));}
             const hot=1-Math.min(1,age/WAX.glowMs),cool=Math.min(1,age/WAX.coolMs),fade=1-Math.max(0,(age-(MARKS.waxMs-3000))/3000);
             // White-orange as it lands, the case's red as it sets, a dark bead at the end.
             color.setRGB((.55+.6*(1-cool)+1.8*hot)*fade,(.05+.16*(1-cool)+.9*hot)*fade,(.04+.06*(1-cool)+.35*hot)*fade);
