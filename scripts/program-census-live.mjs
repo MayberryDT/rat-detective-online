@@ -18,7 +18,7 @@ d.addEventListener('observe',e=>{const o=e.detail;if(o.render&&o.domElement&&!o.
  o.render=(s,c)=>{if(c&&c.isPerspectiveCamera&&s.children.length>50){window.__renderer=o;window.__scene=s;}return r(s,c);};}});
  let last=performance.now();window.__longest=0;(function f(t){window.__longest=Math.max(window.__longest,t-last);last=t;requestAnimationFrame(f);})(last);
  window.__seen=new Set();window.__scannerAdds=0;
- new MutationObserver(list=>{for(const m of list)for(const n of m.addedNodes)if(n.classList?.contains('scanner-line'))window.__scannerAdds++;}).observe(document.documentElement,{childList:true,subtree:true});
+ addEventListener('DOMContentLoaded',()=>new MutationObserver(list=>{for(const m of list)for(const n of m.addedNodes)if(n.classList?.contains('scanner-line'))window.__scannerAdds++;}).observe(document.body,{childList:true,subtree:true}));
  window.__newPrograms=()=>{const R=window.__renderer,S=window.__scene;if(!R)return [];const fresh=(R.info.programs??[]).filter(p=>!window.__seen.has(p.cacheKey));
   if(!fresh.length)return [];const keys=new Set(fresh.map(p=>p.cacheKey));for(const k of keys)window.__seen.add(k);const users=new Map();
   S.traverse(o=>{if(!o.material)return;for(const m of [o.material].flat()){const p=R.properties.get(m)?.currentProgram;if(p&&keys.has(p.cacheKey)){const u=users.get(p.cacheKey)??new Set();u.add((o.name||o.type)+'/'+(m.name||m.type));users.set(p.cacheKey,u);}}});

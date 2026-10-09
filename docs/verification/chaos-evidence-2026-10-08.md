@@ -52,3 +52,22 @@
 - Whether the pigeons are obvious from across the city in real play (the stills are close; a far flock was not captured).
 - The Persuader in human hands; the 550 ms hammer and the knockback strength are first guesses.
 - Smaller hitches Tyler felt ("little hang-ups"): the headless runs show 100–150 ms frames with no program link; not yet attributed.
+
+## Round 3 (9 October, Tyler's second staging session)
+
+**Tyler:** the police band "a thousand lines a second", "super loud and obnoxious"; freezes again and a slow entry; "shot through a rat's head like five times" and nothing happened; "we gotta log that stuff so you can figure out what's going on".
+
+**What his session logged** (staging mirror, session 03:49:37–03:51:57 UTC, build `staging-2026-10-09-e8aa1fa`):
+- First 30 s: stalls of 1,250, 3,267 and 1,067 ms (worst frame 4.3 s), with 259 and 291 programs linked: the welcome compiling both sewer-lamp states at once (round 2's fix) doubled the entry's links.
+- He took the Persuader at 03:50:14 and fired 18 shots: none hit (`targets` empty); several reached the server 66–130 ms apart and were refused by the 550 ms hammer (no slug), and a slug at .62 of ball speed outlived the 250 ms view compensation.
+- His deaths were bot headshots from 32–39 m.
+- The scanner feed (client): a call scrolled off by the three-row cap was re-added every frame, playing the squelch every frame.
+
+**Fixes:** the feed shows each call once (a `heard` set), two rows, only case calls key the set and quieter (.32), at least 3 s between calls on the server; the other lamp state is compiled in the background, a material at a time, at most 4 ms a frame; the Persuader slug at .9 of ball speed, .38 wide; **stall reports now carry `shaders` (which programs linked, by name and count) and `events` (`perfMarks`: welcome, lamps-on/off, died, respawn, claim, radio), and main-thread attribution that arrives after a stall is recorded is filled in.**
+
+**Checked** (staging `staging-2026-10-09-a61d969`, Worker `e30e27ee-39f8-4a03-9a29-0bdabdaf5f52`):
+- Worker 33/33, client 172 test files pass; typecheck passes.
+- Live census, 150 s: 1 program linked at the first play frame, none after; **38 scanner calls shown in 150 s** (one per 4 s, each once).
+- `verify-entry.mjs`, staging vs production on Halla's headless Chrome: warm room 1.6–1.8 s (production 2.1–3.4 s); cold room clicked after load 13.3 s on the first wake after the deploy (welcome 11.6 s), then 3.3 s (production 2.3–2.6 s); clicking at once, both 15–25 s (the page itself loads in 13–15 s on this machine). EN2 failed only on the first post-deploy wake.
+
+**Not checked:** a human session on this build; whether the first wake after a deploy is slower than before this branch (not measured on main right after a deploy).
