@@ -56,7 +56,7 @@ export const FEEL={
     /** Movement: landing dip (rad/s impulse), launch/Hot Pursuit view widening (degrees), speed streaks, dust count. */
     movement:{label:'16 Movement',toggle:true,params:{dip:-1.6,dipPush:-5,launchWiden:9,pursuitWiden:3.5,streaks:.8,dust:8}},
     /** Synthesized sound pass (volumes before Effects volume): footsteps, rustle, jostle, squelch, whizz, brass, stings, wind; echo/muffle by space. */
-    sound:{label:'17 Sound',toggle:true,params:{step:.07,remoteStep:.05,stepRange:14,rustle:.05,jostle:.08,squelch:.1,whizz:.2,whizzRange:1.8,brass:.12,headshot:.22,headshotRange:45,flashbulb:.18,shutter:.2,made:.16,hunch:.2,supply:.2,supplyRange:40,jam:.22,sting:.1,wind:.07,rain:.06,thunder:.16}},
+    sound:{label:'17 Sound',toggle:true,params:{step:.07,remoteStep:.05,stepRange:14,rustle:.05,jostle:.08,squelch:.1,whizz:.2,whizzRange:1.8,brass:.12,headshot:.22,headshotRange:45,flashbulb:.18,shutter:.2,made:.16,hunch:.2,supply:.2,supplyRange:40,jam:.22,sting:.1,wind:.07,rain:.06,thunder:.16,hum:.035}},
     /** Reactive city: a flock every N lamps, a trash can every N lamps, scare radius, seconds before props return. */
     city:{label:'18 City reacts',toggle:true,params:{flockEvery:5,canEvery:4,scare:7,respawn:25}},
     /** P4 case papers in the harbour wind: edges lift in passing gusts (strength scales the lift), loose sheets hop

@@ -15,7 +15,9 @@ const STAMP_MS=140,STAMP_GAP=110,FADE_MS=900,AFTER_PAPERS_MS=1300,ARRIVING_WINDO
 const UP=new THREE.Vector3(0,1,0);
 
 interface Print {x:number;y:number;z:number;h:number;normal?:THREE.Vector3;supported?:boolean}
-interface Run {r:CasePrints;prints:Print[];arrive?:number;leave?:number;shown:boolean}
+/** A run as laid: case paw prints (`CasePrints`) or sewer muck (`MuckRun`). */
+type PrintRun=Pick<CasePrints,'id'|'at'|'f'>;
+interface Run {r:PrintRun;prints:Print[];arrive?:number;leave?:number;shown:boolean}
 
 /** Paw prints beside the case papers (Tyler, 8 October), presentation only: the authority lays each run with a fixed
  * id and place: pairs of inked paws across the gap from one paper group to the next, darkest by the papers they leave.
@@ -38,7 +40,10 @@ export class PawPrints {
     private readonly live=new Set<string>();
     private primed=false;
 
-    constructor(ink:number=PAW_INK.red){
+    /** `afterMs`: how long after its birth a new run starts stamping in (case prints wait for their papers to land). */
+    private readonly afterMs:number;
+    constructor(ink:number=PAW_INK.red,options:{afterMs?:number;name?:string}={}){
+        this.afterMs=options.afterMs??AFTER_PAPERS_MS;
         const geometry=new THREE.PlaneGeometry(SIZE.w,SIZE.d);geometry.rotateX(-Math.PI/2);
         // Per print: its ink (0…1) and which paw (1: the right, the left one's art mirrored).
         this.inks=new THREE.InstancedBufferAttribute(new Float32Array(MAX*2),2);this.inks.setUsage(THREE.DynamicDrawUsage);
@@ -56,13 +61,13 @@ export class PawPrints {
         };
         this.material.customProgramCacheKey=()=>'case-paw-prints-v2';
         this.mesh=new THREE.InstancedMesh(geometry,this.material,MAX);
-        this.mesh.name='case-paw-prints';this.mesh.count=0;this.mesh.visible=false;this.mesh.frustumCulled=false;this.mesh.raycast=()=>{};
+        this.mesh.name=options.name??'case-paw-prints';this.mesh.count=0;this.mesh.visible=false;this.mesh.frustumCulled=false;this.mesh.raycast=()=>{};
         this.mesh.receiveShadow=true;this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     }
     setInk(color:number):void {this.material.color.setHex(color);this.material.emissive.setHex(color);}
 
     /** `eye`: the local rat. `motion`: stamping in (else prints only fade in); `still`: a replay, everything as it lies. */
-    update(prints:readonly CasePrints[],now:number,eye:THREE.Vector3,frustum:THREE.Frustum,motion:boolean,still:boolean):void {
+    update(prints:readonly PrintRun[],now:number,eye:THREE.Vector3,frustum:THREE.Frustum,motion:boolean,still:boolean):void {
         if(prints.length)this.ensureArt();
         this.sync(prints,now,eye,still);
         const candidates=this.candidates;candidates.length=0;
@@ -119,14 +124,14 @@ export class PawPrints {
     dispose():void {this.clear();this.mesh.geometry.dispose();this.material.dispose();this.mesh.dispose();}
 
     /** New runs stamp in if born moments ago near this view; gone ones fade if they were on screen. */
-    private sync(prints:readonly CasePrints[],now:number,eye:THREE.Vector3,still:boolean):void {
+    private sync(prints:readonly PrintRun[],now:number,eye:THREE.Vector3,still:boolean):void {
         const live=this.live;live.clear();
         for(const r of prints){
             live.add(r.id);if(this.runs.has(r.id))continue;
             const run:Run={r,prints:[],shown:false};
             for(let i=0;i+3<r.f.length;i+=4)run.prints.push({x:r.f[i]!,y:r.f[i+1]!,z:r.f[i+2]!,h:r.f[i+3]!});
             if(this.primed&&!still&&now-r.at<ARRIVING_WINDOW&&run.prints.length&&Math.hypot(run.prints[0]!.x-eye.x,run.prints[0]!.z-eye.z)<50){
-                run.arrive=Math.max(now,r.at+AFTER_PAPERS_MS);this.stats.stamped++;
+                run.arrive=Math.max(now,r.at+this.afterMs);this.stats.stamped++;
             }
             this.runs.set(r.id,run);
         }

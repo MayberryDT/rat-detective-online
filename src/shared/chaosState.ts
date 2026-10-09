@@ -186,6 +186,12 @@ export interface ChaosState {
     clues?: import('./caseClues').CaseClue[];
     /** Paw prints beside the paperwork, showing the way on; absent in older checkpoints. */
     prints?: import('./caseClues').CasePrints[];
+    /** Chalk outlines where bodies lay this round (`cityMarks.ts`); absent before protocol 40. */
+    chalk?: import('./cityMarks').ChalkMark[];
+    /** Dead witnesses' tips toward the carrier they saw; absent before protocol 40. */
+    tips?: import('./cityMarks').CaseTip[];
+    /** Sewer muck tracked onto the ground by rats climbing out; absent before protocol 40. */
+    muck?: import('./cityMarks').MuckRun[];
     time: number;
     /** Monotonic simulation identity for time-aligned interactions. Optional only
      * while restoring pre-protocol-15 checkpoints and older test fixtures. */

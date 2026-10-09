@@ -368,6 +368,23 @@ export class FeelAudio {
     /** Noir rain on the city, `level` 0…1 (muffled indoors by the world mix). */
     setRain(level:number,volume:number):void {this.loop('rain',level,volume,3200,.4);}
 
+    private humBed?:{oscillators:OscillatorNode[];gain:GainNode;nodes:AudioNode[]};
+    /** A neon sign's mains buzz, `level` 0…1: a low sawtooth hum with a little hiss of its gas, darkened. */
+    setHum(level:number,volume:number):void {
+        if(!this.ready())return;
+        if(level<=.001&&!this.humBed)return;
+        if(!this.humBed){
+            const c=this.context,gain=c.createGain(),filter=c.createBiquadFilter(),low=c.createOscillator(),high=c.createOscillator(),highGain=c.createGain();
+            low.type='sawtooth';low.frequency.value=120;high.type='square';high.frequency.value=240;high.detune.value=7;highGain.gain.value=.18;
+            filter.type='lowpass';filter.frequency.value=640;filter.Q.value=3;gain.gain.value=0;
+            low.connect(filter);high.connect(highGain);highGain.connect(filter);filter.connect(gain);gain.connect(effectsOutput(c));low.start();high.start();
+            this.humBed={oscillators:[low,high],gain,nodes:[filter,highGain,gain]};
+        }
+        const bed=this.humBed,at=this.context.currentTime;
+        bed.gain.gain.setTargetAtTime(level*volume,at,.4);
+        if(level<=.001){this.humBed=undefined;setTimeout(()=>{for(const o of bed.oscillators){o.stop();o.disconnect();}for(const n of bed.nodes)n.disconnect();},2000);}
+    }
+
     private readonly loops=new Map<string,{source:AudioBufferSourceNode;filter:BiquadFilterNode;gain:GainNode}>();
     /** A looped filtered-noise bed that fades in and out; stopped once silent. */
     private loop(name:string,level:number,volume:number,frequency:number,q:number):void {
@@ -385,5 +402,5 @@ export class FeelAudio {
         bed.filter.frequency.setTargetAtTime(frequency,at,.2);
         if(level<=.001){const done=bed;this.loops.delete(name);setTimeout(()=>{done.source.stop();done.source.disconnect();done.filter.disconnect();done.gain.disconnect();},600);}
     }
-    dispose():void {this.resetCombat();for(const name of [...this.loops.keys()])this.loop(name,0,0,1,1);this.lastAt.clear();}
+    dispose():void {this.resetCombat();for(const name of [...this.loops.keys()])this.loop(name,0,0,1,1);this.setHum(0,0);this.lastAt.clear();}
 }

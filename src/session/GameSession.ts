@@ -51,6 +51,8 @@ import {ReplayRecorder} from '../replay/ReplayRecorder';
 import {ReplayStage} from '../replay/ReplayStage';
 import type {ReplayClip} from '../replay/types';
 import {Exhibits} from '../ui/Exhibits';
+import {frontPage} from '../ui/eveningEdition';
+import {ASSIGNMENTS} from '../shared/assignments';
 import {FeelDirector} from '../feel/FeelDirector';
 import {IncidentStory,STORY} from '../feel/IncidentStory';
 import {headlines} from '../ui/Headlines';
@@ -178,6 +180,8 @@ export class GameSession {
     private nextRoundAt=0;
     private resultsShownAt=0;
     private pendingVictory?:{message:Extract<ServerMessage,{type:'gameWon'}>;at:number};
+    /** The round just won, for the Evening Edition on the results board. */
+    private lastWin?:Extract<ServerMessage,{type:'gameWon'}>;
     private lastChaos: ChaosState | null = null;
     private readonly caughtTraps=new Set<string>();
     /** Launch events already given their scream and view kick (L5/L6). */
@@ -187,7 +191,7 @@ export class GameSession {
     private dudsPrimed = false;
 
     constructor(renderer: THREE.WebGLRenderer, initialWorld?: WorldSpec, prepared: {
-        title?: TitleScreen; transport?: NetworkManager; music?: Pick<SessionMusic, 'start' | 'unlock' | 'dispose'>;
+        title?: TitleScreen; transport?: NetworkManager; music?: Pick<SessionMusic, 'start' | 'unlock' | 'dispose' | 'setLull'>;
         stage?: ReturnType<typeof createStage>; city?: CityGenerator | Neighborhood;
         releasePreparedModels?:()=>void;cameos?:CameoView;
     } = {}) {
@@ -688,7 +692,7 @@ export class GameSession {
             case 'playerLeft': this.remotes.remove(message.id); break;
             case 'scoreboardUpdate': this.chaos?.setScores(message.scores, this.myId); break;
             case 'gameWon': {
-                this.roundWon=true;this.clearInput();this.hud.hideRespawn();
+                this.lastWin=message;this.roundWon=true;this.clearInput();this.hud.hideRespawn();
                 this.awaitingContinue=!this.observing;this.continued=false;this.held=false;this.nextRoundAt=message.resetAt-this.serverOffset;
                 // Polish 19: let the winning moment play in slow motion before the card slams in.
                 const hold=this.feel.victory();
@@ -883,6 +887,7 @@ export class GameSession {
         this.feel.wanted(dt,wantedRat&&!wantedRat.dead?wantedRat.mesh.position:undefined,!!wanted&&wanted===this.myId);
         const presentationEnd=measure?performance.now():0;
         this.feel.update(dt,camera,this.rat?.entity.mesh.position);
+        this.music?.setLull(this.feel.lull);
         document.body.classList.toggle('heavy-cheese',this.feel.heavyActive);
         this.story?.update(camera,this.rat&&!this.rat.entity.dead?this.rat.entity.mesh.position:undefined);
         if(this.rat?.entity.dead)this.hud.pointRecap(undefined,0,'');
@@ -948,6 +953,12 @@ export class GameSession {
         const host=document.getElementById('victory-overlay');
         if(host)this.exhibits??=new Exhibits({player:this.replay,myId:()=>this.myId,send:message=>this.transport.send(message),host});
         this.exhibits?.show();
+        // The Evening Edition: Exhibit A (the round's best moment, the same on every client) makes the headline.
+        const win=this.lastWin;
+        if(win){
+            const lead=this.recorder.shared().map(id=>this.recorder.data(id)?.clip).find(clip=>!!clip);
+            this.hud.frontPage(frontPage({lead,report:win.report,winnerName:win.winnerName,roundId:win.assignment?.roundId,assignment:win.assignment?ASSIGNMENTS[win.assignment.id].title:undefined}));
+        }
         if(this.reading&&document.pointerLockElement)document.exitPointerLock();
     }
     /** A reader on the results board, still to CONTINUE. */

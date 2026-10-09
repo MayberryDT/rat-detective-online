@@ -1,4 +1,5 @@
 import './roundEnd.css';
+import type { FrontPage } from './eveningEdition';
 import { awardValue } from '../shared/awardUnits';
 import type {FoleyPlay} from '../audio/foleyCatalog';
 import { ASSIGNMENTS, objectiveTarget, type AssignmentState } from '../shared/assignments';
@@ -200,7 +201,7 @@ export class GameHud {
     showVictory(winnerName: string, kills: number, {assignment, awards, report, localId, winnerId}: RoundEnd = {}): void {
         if (this.disposed) return;
         if(!this.victoryVisible)this.victoryQuip=this.quips.next('victory');
-        this.caseFile?.list.parentElement?.remove();this.victoryText.replaceChildren();this.caseFile=undefined;
+        this.caseFile?.list.parentElement?.remove();this.victoryText.replaceChildren();this.victoryText.classList.remove('evening-edition');this.caseFile=undefined;
         this.headline?.remove();this.headline=report&&this.headlineStrip(report,assignment,localId);
         this.roundStats=report&&{winnerId:winnerId??'',winnerName,kills,...(assignment?{assignment}:{}),...(awards?{awards}:{}),report,...(localId?{localId}:{})};
         const lines = [
@@ -232,6 +233,22 @@ export class GameHud {
         }
         if(!this.victoryVisible){if(this.foley)this.foley('victory');else this.feedback('victory');}
         this.victoryVisible=true;this.overlay(this.victoryOverlay,true);
+        this.layoutResults();
+    }
+
+    /** The Evening Edition on the results board: the banner becomes the front page (masthead and dateline, the round's
+     * headline over CASE CLOSED BY, the deck under it). */
+    frontPage(page: FrontPage): void {
+        if (this.disposed || !this.victoryVisible) return;
+        this.victoryText.querySelectorAll('.paper').forEach(e=>e.remove());
+        const el=(tag:string,className:string,text:string)=>{const e=this.doc.createElement(tag);e.className=`paper ${className}`;e.textContent=text;return e;};
+        const masthead=el('div','paper-masthead','');
+        masthead.appendChild(el('b','paper-name',page.masthead));masthead.appendChild(el('small','paper-dateline',page.dateline));
+        const headline=el('h2','paper-headline',page.headline),deck=el('p','paper-deck',page.deck);
+        this.victoryText.insertBefore(headline,this.victoryText.firstChild);this.victoryText.insertBefore(masthead,headline);
+        const winner=this.victoryText.querySelector('.victory-winner');
+        this.victoryText.insertBefore(deck,winner?.nextSibling??null);
+        this.victoryText.classList.add('evening-edition');
         this.layoutResults();
     }
 

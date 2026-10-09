@@ -4,6 +4,8 @@ import type {Vec3Data} from '../shared/networkProtocol';
 import {gustAt,LOOSE,looseLifts,paperHash,windAt,type LooseLift} from '../shared/paperWind';
 import {casePaperArt,PAPER_BACK,paperCellOffset,paperUv} from './CasePaperArt';
 import {PawPrints} from './PawPrints';
+import {CityMarksView} from './CityMarksView';
+import type {ChaosState} from '../shared/chaosState';
 import {feelState} from '../feel/feelState';
 import {FEEL} from '../feel/feelTuning';
 import {reducedMotion} from '../ui/motion';
@@ -86,6 +88,8 @@ export class CaseFiles {
     readonly stats={arrivals:0,departures:0,evicted:0,popped:0,caught:0};
     /** The paw prints beside the papers, drawn with them. */
     readonly paws=new PawPrints();
+    /** What the chaos leaves: chalk outlines, witnesses' tips, sewer muck (`cityMarks.ts`). */
+    readonly marks=new CityMarksView();
     private lastCatch=-Infinity;
     private catches:{x:number;z:number;at:number}[]=[];
     private catchRays=0;
@@ -100,6 +104,7 @@ export class CaseFiles {
         this.root.userData.noNoir=true; // adopted explicitly with the dynamic dressing path
         this.root.userData.caseFiles=this;
         this.paws.support=p=>this.support(p);this.root.add(this.paws.mesh);
+        this.marks.muck.support=p=>this.support(p);this.root.add(this.marks.root);
         // The case file's art is drawn on first use (`ensureArt`); the load's warm-up does it, so the program links before play.
         this.material=new THREE.MeshStandardMaterial({
             emissive:0xffffff,emissiveIntensity:.55,roughness:1,metalness:0,side:THREE.FrontSide});
@@ -134,13 +139,14 @@ export class CaseFiles {
     }
     /** `now`: the authority's clock, so gusts and loose sheets agree across clients. `focus`: the local rat, which reads
      * papers out to `CLUES.range` like any rat; the orbiting camera must not move that edge. */
-    update(clues:readonly CaseClue[],now:number,camera:THREE.Camera,dt=1/60,focus?:THREE.Vector3,prints:readonly CasePrints[]=[]):void {
+    update(clues:readonly CaseClue[],now:number,camera:THREE.Camera,dt=1/60,focus?:THREE.Vector3,prints:readonly CasePrints[]=[],marks:Pick<ChaosState,'chalk'|'tips'|'muck'>={}):void {
         if(clues.length)this.ensureArt();
         camera.updateMatrixWorld();this.time=now;
         this.frustum.setFromProjectionMatrix(this.matrix.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse));
         const motion=this.motion(),eye=focus??camera.position;
         this.sync(clues,now,motion,eye);
         this.paws.update(prints,now,eye,this.frustum,motion,this.still);
+        this.marks.update(marks,now,eye,this.frustum,motion,this.still);
         this.catchRays=0;camera.getWorldPosition(this.cameraAt);
         const candidates=this.candidates;candidates.length=0;
         for(const sheet of this.sheets.values()){
@@ -213,11 +219,11 @@ export class CaseFiles {
     warm():void{
         this.ensureArt();
         for(const mesh of this.batches){mesh.count=1;mesh.visible=true;mesh.setMatrixAt(0,this.matrix.identity());mesh.instanceMatrix.needsUpdate=true;}
-        this.paws.warm();
+        this.paws.warm();this.marks.warm();
     }
-    clear():void{this.visibleIds=[];this.sheets.clear();this.primed=false;this.lastCatch=-Infinity;this.catches=[];for(const mesh of this.batches){mesh.count=0;mesh.visible=false;}this.paws.clear();}
+    clear():void{this.visibleIds=[];this.sheets.clear();this.primed=false;this.lastCatch=-Infinity;this.catches=[];for(const mesh of this.batches){mesh.count=0;mesh.visible=false;}this.paws.clear();this.marks.clear();}
     /** The atlas is shared for the page's life; only this view's meshes and material go. */
-    dispose():void{this.root.removeFromParent();this.clear();for(const mesh of this.batches){mesh.geometry.dispose();mesh.dispose();}this.material.dispose();this.paws.dispose();}
+    dispose():void{this.root.removeFromParent();this.clear();for(const mesh of this.batches){mesh.geometry.dispose();mesh.dispose();}this.material.dispose();this.paws.dispose();this.marks.dispose();}
 
     private motion():boolean {return !this.still&&feelState().on('paperWind')&&!reducedMotion();}
     /** The eye-catch: a sheet lying out in the open, first seen in the clear from this camera at a middle distance,

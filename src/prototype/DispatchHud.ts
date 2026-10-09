@@ -12,6 +12,7 @@ import {MunicipalQuips} from '../ui/municipalQuips';
 import {headlines} from '../ui/Headlines';
 import type {FeedbackCue} from '../audio/FeedbackAudio';
 import {incidentArtwork} from './incidentArtwork';
+import {caseName} from '../ui/eveningEdition';
 import {activeDestination, ASSIGNMENTS, ASSIGNMENT_DESTINATIONS, ASSIGNMENT_TUNING} from '../shared/assignments';
 
 /** How long (ms) an incident's title (its picture and one-line rule) stays up once it starts; then only the small tag. */
@@ -64,6 +65,8 @@ export class DispatchHud {
     private assignmentBar:HTMLElement;
     private assignmentReveal:HTMLElement;
     private assignmentRevealTitle:HTMLElement;
+    /** The round's case file (`caseName`), typed in under NEW CASE ASSIGNED. */
+    private assignmentRevealFile:HTMLElement;
     private assignmentRevealRule:HTMLElement;
     private assignmentFlavor:HTMLElement;
     private previousAssignment='';
@@ -95,13 +98,13 @@ export class DispatchHud {
     constructor(private sound:(frequency:number)=>void,private feedback?:(cue:FeedbackCue,origin?:Vec3Data)=>void){
         this.root.className='dispatch-hud';
         this.root.innerHTML=`<div class="dispatch-ledger"><div class="dispatch-alert-label"></div><div class="dispatch-status-row"><div class="dispatch-artwork" aria-hidden="true"></div><strong class="dispatch-status"></strong></div><p class="dispatch-brief"></p><div class="dispatch-clock"><small class="dispatch-next"></small><span class="dispatch-timer"></span></div><div class="dispatch-time-track"><div></div></div><div class="case-ledger"><strong></strong><small></small></div></div><div class="case-broadcast" hidden aria-live="polite"><small>HOT CASE</small><strong></strong><span></span></div><div class="dispatch-roulette" hidden><div class="roulette-heading"><span>! DISPATCH !</span><b>SELECTING INCIDENT</b></div><div class="roulette-caller" hidden></div><div class="roulette-window"><div class="roulette-strip"></div><i class="roulette-pointer">▶</i><div class="roulette-art" aria-hidden="true"></div></div><div class="roulette-stamp">CITYWIDE EMERGENCY!</div><p class="roulette-description"></p><div class="roulette-footer"><span>● LIVE</span></div></div>`;
-        this.root.innerHTML+=`<section class="assignment-ledger" hidden aria-label="Current assignment"><small class="assignment-counter"></small><strong class="assignment-title"></strong><p class="assignment-rule"></p><b class="assignment-progress"></b><span class="assignment-detail"></span><div class="assignment-track"><i></i></div><strong class="assignment-target"></strong><ol class="assignment-rankings" aria-label="Top five investigators"></ol><span class="assignment-leader"></span><small class="assignment-stats"></small></section><div class="jurisdiction-timer" hidden role="timer" aria-label="Zone relocation countdown"><small class="jurisdiction-timer-label">ZONE MOVES IN</small><strong class="assignment-zone-clock"></strong></div><div class="assignment-confirmation" hidden role="status" aria-live="polite"></div><div class="assignment-reveal" hidden><small>NEW CASE ASSIGNED</small><strong></strong><p></p><span></span></div>`;
+        this.root.innerHTML+=`<section class="assignment-ledger" hidden aria-label="Current assignment"><small class="assignment-counter"></small><strong class="assignment-title"></strong><p class="assignment-rule"></p><b class="assignment-progress"></b><span class="assignment-detail"></span><div class="assignment-track"><i></i></div><strong class="assignment-target"></strong><ol class="assignment-rankings" aria-label="Top five investigators"></ol><span class="assignment-leader"></span><small class="assignment-stats"></small></section><div class="jurisdiction-timer" hidden role="timer" aria-label="Zone relocation countdown"><small class="jurisdiction-timer-label">ZONE MOVES IN</small><strong class="assignment-zone-clock"></strong></div><div class="assignment-confirmation" hidden role="status" aria-live="polite"></div><div class="assignment-reveal" hidden><small>NEW CASE ASSIGNED</small><em class="assignment-file"></em><strong></strong><p></p><span></span></div>`;
         const get=(q:string)=>this.root.querySelector<HTMLElement>(q)!;
         this.rankings=get('.assignment-rankings');this.counter=get('.assignment-counter');this.destinationLabel=get('.assignment-target');this.zoneTimer=get('.jurisdiction-timer');this.zoneTimerLabel=get('.jurisdiction-timer-label');this.zoneClock=get('.assignment-zone-clock');
         this.confirmation=get('.assignment-confirmation');this.stats=get('.assignment-stats');this.leader=get('.assignment-leader');
         this.assignmentPanel=get('.assignment-ledger');this.assignmentTitle=get('.assignment-title');this.assignmentRule=get('.assignment-rule');
         this.assignmentProgress=get('.assignment-progress');this.assignmentDetail=get('.assignment-detail');this.assignmentBar=get('.assignment-track i');
-        this.assignmentReveal=get('.assignment-reveal');this.assignmentRevealTitle=get('.assignment-reveal strong');this.assignmentRevealRule=get('.assignment-reveal p');this.assignmentFlavor=get('.assignment-reveal span');
+        this.assignmentReveal=get('.assignment-reveal');this.assignmentRevealTitle=get('.assignment-reveal strong');this.assignmentRevealFile=get('.assignment-file');this.assignmentRevealRule=get('.assignment-reveal p');this.assignmentFlavor=get('.assignment-reveal span');
         this.status=get('.dispatch-status');this.timer=get('.dispatch-timer');this.timeBar=get('.dispatch-time-track div');this.nextPhase=get('.dispatch-next');this.caseLine=get('.case-ledger strong');this.caseDetail=get('.case-ledger small');
         this.alertLabel=get('.dispatch-alert-label');this.artwork=get('.dispatch-artwork');this.brief=get('.dispatch-brief');
         this.announcement=get('.case-broadcast');this.announcementTitle=get('.case-broadcast strong');this.announcementDetail=get('.case-broadcast span');
@@ -256,7 +259,7 @@ export class DispatchHud {
             }
             setText(this.counter,(this.observing?'OBSERVING · ':'')+`TOP FIVE · FIRST TO ${target}`);
             scrawl(this.assignmentTitle,info.title);setText(this.assignmentRule,info.rule);
-            scrawl(this.assignmentRevealTitle,info.title);setText(this.assignmentRevealRule,info.rule);setText(this.assignmentFlavor,info.flavor);
+            scrawl(this.assignmentRevealTitle,info.title);if(newAssignment){const file=caseName(a.roundId);scrawl(this.assignmentRevealFile,`CASE #${file.number} · ${file.title}`);}setText(this.assignmentRevealRule,info.rule);setText(this.assignmentFlavor,info.flavor);
             let progress='',detail='',fraction=0;
             if(j){
                 progress=`YOU: ${points} / ${target}`;fraction=rawPoints/target;

@@ -488,6 +488,8 @@ export class BotMotor {
             else if(this.destination&&distance(self,this.destination)<3)this.failGoal(now);
         }
         this.visible=visible;
+        // A dead witness's tip in sight says where it saw the carrier (mindVersion 17): read as a player reads its arrow.
+        for(const t of state?.tips??[])if(distance(self,t.p)<Math.min(sight,30)&&clear({x:t.p.x,y:t.p.y+.15,z:t.p.z}))this.carrierSight.tip('case',t.carrier,t.to,t.seen);
         this.carrierSight.see(self,visible,living,time);
         // A rat seen dying (the kill feed) is not banked at.
         if(this.sighting&&!living.some(p=>p.id===this.sighting?.id))this.sighting=undefined;

@@ -1,5 +1,6 @@
 import * as C from 'cannon-es';
 import {CaseClues} from './caseClues';
+import {CityMarks,type MarkWorld} from './cityMarks';
 import {trapOrigin,trapLaunch,trapAdvance,trapVelocity,TRAP_THROW} from './trapThrow';
 import {resolveShotPattern,tommyHeat} from './shotPattern';
 import {laserPath,type LaserCast} from './laser';
@@ -95,6 +96,13 @@ export class ChaosSimulation {
     readonly world = new C.World({gravity:new C.Vec3(0,-25,0)});
     private primaryCase!:CaseRuntime;
     private clues:CaseClues;
+    /** Chalk outlines, dead rats' tips and sewer muck (`cityMarks.ts`). */
+    private marks:CityMarks;
+    private readonly markWorld:MarkWorld={
+        sees:(a,b)=>!this.rayQuery.blocked(new C.Vec3(a.x,a.y,a.z),new C.Vec3(b.x,b.y,b.z),1),
+        floor:p=>{const hit=this.ray(new C.Vec3(p.x,p.y+.5,p.z),new C.Vec3(p.x,p.y-3,p.z),1);return hit.hasHit&&hit.hitNormalWorld.y>.7?hit.hitPointWorld.y:undefined;},
+        printGround:(p,h)=>this.clues.printGround(p,h),
+    };
     drainClueEvents(){return this.clues.drain();}
     private readonly cases=new Map<string,CaseRuntime>();
     get caseBody():C.Body{return this.primaryCase.body;}
@@ -212,6 +220,7 @@ export class ChaosSimulation {
     }
     constructor(private players:Map<string,PlayerData>,private onHit:(hit:ChaosHit)=>void, saved?:ChaosState, private readonly spec?:WorldSpec, private readonly fixtureSupplies?:readonly PickupPoint[]) {
         this.clues=new CaseClues(spec,saved?.clues,saved?.prints);
+        this.marks=new CityMarks(this.markWorld,saved);
         // The city is mostly static boxes; sweep-and-prune avoids testing every
         // static pair whenever a case or corpse moves.
         this.world.broadphase=new StaticCityBroadphase(this.world);
@@ -1180,7 +1189,9 @@ export class ChaosSimulation {
     /** Admin: the primary case leaves whoever holds it and returns to a fresh spawn point by the ordinary recovery. */
     resetCase():boolean{this.releaseCase(this.primaryCase);return this.recoverLooseCase();}
     death(victim:PlayerData,incoming:Vec3Data,owner:string|null=victim.id):boolean{
+        const carrier=this.primaryCase.owner;
         this.release(victim.id,incoming);
+        this.marks.death(victim.id,victim,carrier,this.now);
         if(this.incidentActive('most-wanted')&&this.dispatch.wanted===victim.id){
             // Bounty: whoever takes down the wanted rat gets a random supply, and everyone sees it claimed.
             const hunter=owner&&owner!==victim.id?this.players.get(owner):undefined;
@@ -1192,7 +1203,7 @@ export class ChaosSimulation {
             }
         }
         const incident=this.incidentActive('improper-disposal');
-        if(this.corpses.size>=T.maxCorpses){const first=this.corpses.keys().next().value;if(first)this.removeCorpse(first);}
+        if(this.corpses.size>=T.maxCorpses){const first=this.corpses.keys().next().value;if(first)this.retireCorpse(first);}
         const direction=vec(incoming);if(direction.lengthSquared()<.01)direction.set(0,0,1);direction.normalize();
         const body=new C.Body({mass:2,shape:new C.Box(new C.Vec3(.48,.92,.38)),
             position:new C.Vec3(victim.x,victim.y+.95,victim.z),collisionFilterGroup:8,collisionFilterMask:1|4|8|16,
@@ -1431,6 +1442,15 @@ export class ChaosSimulation {
         }
         body.updateAABB();
     }
+    /** A body goes the ordinary way (it lay its time, or a newer one needed the room): chalk where it lay. */
+    private retireCorpse(id:string){
+        const c=this.corpses.get(id);if(!c)return;
+        // The head end: the body's long axis (local y) along the ground, or its facing when it stands upright.
+        const q=c.body.quaternion,up=q.vmult(new C.Vec3(0,1,0)),fwd=q.vmult(new C.Vec3(0,0,1));
+        const axis=Math.hypot(up.x,up.z)>.35?up:fwd;
+        this.marks.body(data(c.body.position),Math.atan2(axis.x,axis.z),c.state.appearance.hatColor,this.now);
+        this.removeCorpse(id);
+    }
     private removeCorpse(id:string){const c=this.corpses.get(id);if(c){this.world.removeBody(c.body);this.targets.delete(c.body);this.corpses.delete(id);}}
     private ray(from:C.Vec3,to:C.Vec3,mask:number){
         return this.rayQuery.closest(from,to,mask);
@@ -1592,6 +1612,7 @@ export class ChaosSimulation {
         for(const c of this.cases.values())this.updateCase(c,dt,playing);
         this.recordCaseHistory(now);
         if(playing)this.stepClues(now);
+        if(playing){const owner=this.primaryCase.owner;this.marks.step(this.players.values(),owner?this.players.get(owner):undefined,now);}
         this.stepPickups(now,playing);
         this.stepTraps(now,playing,dt);
         while(this.beams.length&&now-this.beams[0]!.at>W.laserBeamMs)this.beams.shift();
@@ -1687,7 +1708,7 @@ export class ChaosSimulation {
             this.impacts.push({p:data(hit.hitPointWorld),n:data(normal),surface:true,...(target?.kind==='case'?{cue:'case-hit' as const}:target?.kind==='world'?{foley:superball?'boing' as const:firstWorld&&this.incidentActive('crossfire')?'charge' as const:'bounce' as const,energy:Math.min(300,Math.hypot(shot.v.x,shot.v.y,shot.v.z))}:{}),...(banked?{bounces:banked}:{})});
         }
         // A corpse knocked into the harbour sinks out of sight (the case rule's line: y -9).
-        for(const [id,c] of this.corpses)if(now>=c.state.expires||c.body.position.y< -9||outsideCity(c.body.position.x,c.body.position.z))this.removeCorpse(id);
+        for(const [id,c] of this.corpses)if(c.body.position.y< -9||outsideCity(c.body.position.x,c.body.position.z))this.removeCorpse(id);else if(now>=c.state.expires)this.retireCorpse(id);
         for(const c of this.cases.values())this.stepLooseCase(c,now,playing);
         for(const id of this.pickupApproaches.keys())if(!this.players.has(id))this.pickupApproaches.delete(id);
         for(const player of this.players.values()){
@@ -1804,7 +1825,7 @@ export class ChaosSimulation {
     }
     /** Sheets and print runs never change once laid, so the snapshot shares them (the wire caches their text). */
     snapshot(drain=true):ChaosState{
-        const state:ChaosState={time:this.now,epoch:this.epoch,tick:this.tick,clues:this.clues.items.slice(),prints:this.clues.prints.slice(),case:this.caseSnapshot(this.primaryCase),
+        const state:ChaosState={time:this.now,epoch:this.epoch,tick:this.tick,clues:this.clues.items.slice(),prints:this.clues.prints.slice(),chalk:this.marks.chalk.slice(),tips:this.marks.tips.slice(),muck:this.marks.muck.slice(),case:this.caseSnapshot(this.primaryCase),
             ...(this.assignment?{assignment:structuredClone(this.assignment.state)}:{}),
             extraCases:[...this.cases.values()].filter(c=>c!==this.primaryCase).map(c=>({id:c.id,...this.caseSnapshot(c)})),dispatch:{...this.dispatch},pressure:{...this.pressure,levels:{...this.pressure.levels},...(this.pressure.blowing?{blowing:{...this.pressure.blowing}}:{}),...(this.pressure.fired?{fired:{...this.pressure.fired}}:{}),...(this.pressure.boosts?{boosts:{...this.pressure.boosts}}:{}),...(this.pressure.shoves?{shoves:this.pressure.shoves.map(e=>({...e,velocity:{...e.velocity}}))}:{}),...(this.pressure.vents?{vents:this.pressure.vents.map(v=>({...v}))}:{}),launches:this.pressure.launches.map(e=>({...e,velocity:{...e.velocity}}))},possession:{...this.possession},
             pickups:[...this.pickups].map(([id,site])=>({id,kind:site.kind,x:site.p.x,y:site.p.y,z:site.p.z,availableAt:site.availableAt})),
@@ -1815,7 +1836,7 @@ export class ChaosSimulation {
             shots:this.shots.map(s=>this.shotSnapshot(s)),impacts:[...this.impacts.slice(-64),...(this.impacts.length<64?this.audioImpacts.slice(-(64-this.impacts.length)):[])].slice(0,64),notice:{...this.notice}};
         if(drain){this.impacts=[];this.audioImpacts=[];}return state;
     }
-    reset(){for(const shot of this.shots)this.finishShot(shot,'reset');this.pickupApproaches.clear();this.recentPickupClaims.clear();this.ratHistory.clear();this.caseHistory.length=0;this.ratLives.clear();this.shotViews.clear();this.shotTriggers.clear();this.epoch=crypto.randomUUID();this.tick=0;this.impacts=[];this.audioImpacts=[];for(const id of [...this.corpses.keys()])this.removeCorpse(id);this.shots=[];this.primaryCase.owner=null;this.primaryCase.missileOwner=undefined;this.primaryCase.hitAfter.clear();this.primaryCase.armed=false;this.possession={};
+    reset(){for(const shot of this.shots)this.finishShot(shot,'reset');this.pickupApproaches.clear();this.recentPickupClaims.clear();this.ratHistory.clear();this.caseHistory.length=0;this.ratLives.clear();this.shotViews.clear();this.shotTriggers.clear();this.epoch=crypto.randomUUID();this.tick=0;this.impacts=[];this.audioImpacts=[];for(const id of [...this.corpses.keys()])this.removeCorpse(id);this.marks.clear();this.shots=[];this.primaryCase.owner=null;this.primaryCase.missileOwner=undefined;this.primaryCase.hitAfter.clear();this.primaryCase.armed=false;this.possession={};
         this.assignment=undefined;
         this.buffs={};this.pickupEvents.length=0;this.tommyHeat.clear();this.beams=[];
         for(const id of [...this.traps.keys()])this.removeTrap(id);
@@ -1842,6 +1863,7 @@ export class ChaosSimulation {
     }
     private restore(s:ChaosState){
         this.clues=new CaseClues(this.spec,s.clues,s.prints);
+        this.marks=new CityMarks(this.markWorld,s);
         // Room hibernation/reconnection must not restock consumed supplies early.
         for(const saved of s.pickups??[]){
             const site=this.pickups.get(saved.id);

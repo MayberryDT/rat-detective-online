@@ -180,6 +180,8 @@ export class CaseClues {
             }
         }
     }
+    /** Ground for a print at `p` facing `heading` (BotNavigation.printGround); undefined without a city. */
+    printGround(p:Vec3Data,heading:number):number|undefined{return this.navigation?.printGround(p,heading);}
     /** Retire every sheet now. `reset`: a new round, so every living rat stands at a fresh spawn and gets a starter.
      * `at`: where the case was, for the fact. */
     clear(reset=false,at?:Vec3Data):void {

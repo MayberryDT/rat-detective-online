@@ -3,7 +3,9 @@ import {existsSync,mkdirSync,writeFileSync,rmSync,mkdtempSync,createReadStream} 
 import {createServer} from 'node:http';import {spawn,spawnSync} from 'node:child_process';
 import {extname,join,resolve} from 'node:path';import {tmpdir} from 'node:os';import net from 'node:net';
 const OUT=resolve(process.env.P4_OUT??'/home/halla/build/rat-detective/noir-papers-v2-20261007/candidate');
-const DIST=join(OUT,'visual'),proof=join(DIST,'proof');mkdirSync(proof,{recursive:true});
+const DIST=join(OUT,'visual'),proof=join(DIST,'proof');
+/** `VIEWS=chalk,tip`: only those stills (no chalk-ink comparison or clips). */
+const VIEWS=(process.env.VIEWS??'street,corner,prints,sewer,blackout,gallery,wind').split(',');mkdirSync(proof,{recursive:true});
 const MIME={'.html':'text/html','.js':'text/javascript','.css':'text/css','.png':'image/png','.webm':'video/webm'};
 function findChrome() {
   if (process.env.CHROME_BIN) return process.env.CHROME_BIN;
@@ -105,7 +107,7 @@ try{
   await send('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:false});
   await send('Page.navigate',{url:origin+'/case-clues.html?agent=1&mute=1'+(low?'&low=1':'')});
   let ready=false;for(let i=0;i<120;i++){const r=await send('Runtime.evaluate',{expression:"!!window.clueFixture",returnByValue:true});if(r.result?.result.value){ready=true;break;}await pause(250);}if(!ready)throw Error('fixture did not load');
-  for(const view of ['street','corner','prints','sewer','blackout','gallery','wind']){
+  for(const view of VIEWS){
    // Long enough for a far sheet's eye-catch gust (1.2 s) to land again.
    await send('Runtime.evaluate',{expression:`window.clueFixture.setView('${view}')`});await pause(1600);
    const seen=await send('Runtime.evaluate',{expression:'window.clueFixture.visible()',returnByValue:true});
@@ -114,7 +116,7 @@ try{
    report.captures.push({label,view,width,height,visible:seen.result.result.value,metrics:metrics.result?.result?.value,render:await (async()=>{const p=await send('Runtime.evaluate',{expression:'({samples:window.__paperPerf,render:window.__paperRenderer?.info.render,memory:window.__paperRenderer?.info.memory})',returnByValue:true});return p.result?.result?.value;})(),file:name});
   }
   // The prints in pale chalk beside the case-red ink, by light and in a Blackout.
-  if(!low){
+  if(!low&&!process.env.VIEWS){
    await send('Page.navigate',{url:origin+'/case-clues.html?agent=1&mute=1&ink=chalk'});
    for(let i=0;i<120;i++){const r=await send('Runtime.evaluate',{expression:"!!window.clueFixture",returnByValue:true});if(r.result?.result.value)break;await pause(250);}
    for(const view of ['prints','blackout']){
@@ -126,7 +128,7 @@ try{
    for(let i=0;i<120;i++){const r=await send('Runtime.evaluate',{expression:"!!window.clueFixture",returnByValue:true});if(r.result?.result.value)break;await pause(250);}
   }
   // Clips: the street walk (a sheet blows in, one blows away, a ball lands by them) and the wind over a still view.
-  for(const view of ['street','wind','eyecatch']){
+  for(const view of process.env.VIEWS?[]:['street','wind','eyecatch']){
    const clip=`physical-files-${view}.webm`;rmSync(join(proof,clip),{force:true});
    await send('Runtime.evaluate',{expression:`window.clueFixture.setView('${view}');document.getElementById('record').click()`});
    const traced=[];for(let i=0;i<180&&!existsSync(join(proof,clip));i++){await pause(250);if(i%2===0){const t=await send('Runtime.evaluate',{expression:'({sheets:window.clueFixture.trace(),prints:window.clueFixture.prints()})',returnByValue:true});traced.push(t.result?.result?.value);}}
@@ -135,6 +137,8 @@ try{
    report.captures.push({label,view,clip:`${label}-${view}-motion.webm`,caught:traced.at(-1)?.prints?.caught,trace:traced});
   }
  }
+ if(process.env.VIEWS){writeFileSync(join(proof,'capture.json'),JSON.stringify(report,null,2)+'\n');console.log(JSON.stringify(report.captures.map(c=>({file:c.file,metrics:c.metrics?.documents})),null,1));}
+ else{
  await send('Runtime.evaluate',{expression:"window.clueFixture.setView('street');window.clueFixture.close?.()"});
  const close=await send('Page.captureScreenshot',{format:'png'});writeFileSync(join(proof,'paper-close.png'),Buffer.from(close.result.data,'base64'));
  const atlas=await send('Runtime.evaluate',{expression:'window.clueFixture.atlas?.()',returnByValue:true});
@@ -144,4 +148,5 @@ try{
  for(let i=0;i<120&&!existsSync(join(proof,'physical-files-street.webm'));i++)await pause(250);
  if(!existsSync(join(proof,'physical-files-street.webm')))throw Error('clip not saved');report.clip='physical-files-street.webm';
  writeFileSync(join(proof,'capture.json'),JSON.stringify(report,null,2)+'\n');console.log(JSON.stringify(report,null,2));
+ }
 }finally{cdp?.socket.close();chrome.kill('SIGTERM');await pause(500);rmSync(profile,{recursive:true,force:true,maxRetries:3,retryDelay:100});await new Promise(r=>server.close(r));}

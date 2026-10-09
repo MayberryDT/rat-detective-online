@@ -22,6 +22,8 @@ import {createPlayer} from '../../src/worker/gameState';
 import {createStage} from '../../src/session/createStage';
 import {CityGenerator} from '../../src/world/CityGenerator';
 import {createRatMesh} from '../../src/utils/RatModel';
+import {frontPage} from '../../src/ui/eveningEdition';
+import {ASSIGNMENTS as CASES} from '../../src/shared/assignments';
 
 const params=new URLSearchParams(location.search);
 if(params.has('capture'))document.getElementById('ui-panel')!.classList.add('hidden');else document.getElementById('ui-panel')!.classList.add('docked');
@@ -140,7 +142,9 @@ const actions:Record<string,()=>void>={
     'Round end: results (Case File stamps)':()=>{
         assignment.result={winnerId:'rat-1',winnerName:'Detective Rind',at:0,method:'kills',posthumous:false};board.receive({type:'chaos',state});
         board.receive({type:'gameWon',winnerId:'rat-1',winnerName:'Detective Rind',kills:9,resetAt:0,assignment,report});
-        hud.setContinue({kind:'reading'});hud.showResults(true);board.setVisible(true);},
+        hud.setContinue({kind:'reading'});hud.showResults(true);board.setVisible(true);
+        // The Evening Edition: Exhibit A, a rat sent flying.
+        hud.frontPage(frontPage({lead:{id:'clip-a',kind:'sent-flying',actors:['rat-2','rat-3'],names:{'rat-2':'Mozzarella Mike','rat-3':'Whiskers'},p:{x:131,y:2,z:-18}},report,winnerName:'Detective Rind',roundId:assignment.roundId,assignment:CASES[assignment.id].title}));},
     'Round end: held while the next case runs':()=>hud.setContinue({kind:'held',until:Date.now()+180_000}),
     'Round end: full Case File (13 awards)':()=>{hud.showVictory('Lieutenant Gorgonzola',14,{assignment,awards:allAwards,report,localId:'me',winnerId:'rat-1'});
         assignment.result={winnerId:'rat-1',winnerName:'Lieutenant Gorgonzola',at:0,method:'kills',posthumous:false};board.receive({type:'chaos',state});

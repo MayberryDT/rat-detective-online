@@ -22,6 +22,9 @@ export class SessionMusic {
         } catch { /* A later user gesture can retry audio permission. */ }
     }
     start(): void { this.active = true; void this.unlock(); }
+    private lull = 0;
+    /** The lull (FeelDirector.lull, 0…1): the boogie drops back to half while the city breathes. */
+    setLull(level: number): void { const next = Math.round(level * 50) / 50; if (next === this.lull || !this.sound.buffer) return; this.lull = next; this.sound.setVolume(0.4 * (1 - 0.5 * next)); }
     private async play(): Promise<void> {
         if (this.disposed || !this.active || !this.sound.buffer || this.sound.isPlaying) return;
         if (this.listener.context.state !== 'running') return;

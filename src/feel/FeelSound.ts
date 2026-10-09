@@ -85,7 +85,9 @@ export class FeelSound {
 
     thunder():void {if(this.on)this.audio!.thunder(FEEL.sound.params.thunder);}
     /** Noir rain bed, `level` 0…1. */
-    rain(level:number):void {if(this.audio)this.audio.setRain(this.on?level:0,FEEL.sound.params.rain);}
+    rain(level:number,lull=0):void {if(this.audio)this.audio.setRain(this.on?level:0,FEEL.sound.params.rain*(1+.8*lull));}
+    /** A neon sign's hum in the lull, `level` 0…1 (lull × how near the sign). */
+    hum(level:number):void {if(this.audio)this.audio.setHum(this.on?level:0,FEEL.sound.params.hum);}
     squelch(at:Vec3Data|undefined,view:THREE.Camera):void {if(this.on)this.audio!.squelch(FEEL.sound.params.squelch,at?this.pan(at,view):0);}
     brass():void {if(this.on)this.audio!.brass(FEEL.sound.params.brass);}
     flashbulb():void {if(this.on)this.audio!.flashbulb(FEEL.sound.params.flashbulb);}

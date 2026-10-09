@@ -45,6 +45,9 @@ const CLAIM_DUST=new THREE.Color(3.2,.42,.26);
 /** Bad Ammunition: the word over your own ball, by its personality. */
 const BAD_WORDS:Record<BadRound,string>={corkscrew:'WHEEE!',snake:'WIGGLE!',superball:'BOING!',floater:'PFFFT.',hiccup:'HIC!'};
 
+/** The lull: how long nothing must happen near you, how slowly the city settles and how fast it wakes (seconds). */
+const LULL={quietMs:8000,inS:4,outS:.6} as const;
+
 /** One entry point from game events to presentation-only feel effects.
  * GameSession calls it at existing event sources; channels never parse
  * network messages themselves. */
@@ -70,6 +73,11 @@ export class FeelDirector {
     readonly screen:ScreenFeel;
     readonly sound:FeelSound;
     private incident?:IncidentId;
+    /** The lull (Tyler, 8 October): how far the city has settled, 0…1 (`LULL`). */
+    private lullLevel=0;
+    /** When you last fired, were hurt, killed, died, flew or had a ball whizz past (performance time). */
+    private lastAction=-Infinity;
+    private carryingNow=false;
     private readonly killTimes:number[]=[];
     private lastWordAt=-Infinity;
     private danger=0;
@@ -179,6 +187,7 @@ export class FeelDirector {
 
     /** Local rat motion each frame: landing dip, launch view, Hot Pursuit streaks. */
     motion(dt:number,grounded:boolean,verticalSpeed:number,horizontalSpeed:number,speedScale:number,carrying=false):void {
+        this.carryingNow=carrying;
         const on=this.state.on('movement'),p=FEEL.movement.params;this.screen.crosshairMotion(horizontalSpeed);
         let landed=0;
         if(!grounded){this.airVy=Math.min(this.airVy,verticalSpeed);if(verticalSpeed>30)this.flying=true;}
@@ -210,7 +219,7 @@ export class FeelDirector {
     }
     /** Near-miss whizz for other rats' balls. */
     /** Near-miss whizzes; true when a ball just passed your head. */
-    projectiles(shots:readonly ChaosShot[],myId:string,head:THREE.Vector3,view:THREE.Camera):boolean {return this.sound.projectiles(shots,myId,head,view);}
+    projectiles(shots:readonly ChaosShot[],myId:string,head:THREE.Vector3,view:THREE.Camera):boolean {const whizzed=this.sound.projectiles(shots,myId,head,view);if(whizzed)this.stir();return whizzed;}
     /** Case pickup, your delivery. Your own take of the case gets the K1 stamp instead of the plain callout. */
     sting(kind:Sting):void {
         this.sound.sting(kind);
@@ -326,8 +335,14 @@ export class FeelDirector {
     /** How far a Blackout has set in, 0…1: every rat's flashlight takes over from the city's lights. */
     get blackoutLevel():number {return this.blackout;}
 
+    /** The lull, 0…1: no incident, nothing near you for a while, not carrying. Music drops back, rain comes up, neon hums. */
+    get lull():number {return this.lullLevel;}
+    /** Something happened to you or by you: the lull breaks. */
+    private stir():void {this.lastAction=performance.now();}
+
     /** A local shot left the muzzle; a held special weapon has its own kick (a Mousetrap press has none). */
     shot(weapon?:WeaponKind):void {
+        this.stir();
         if(weapon==='mousetrap')return;
         this.screen.crosshairKick();
         if(weapon==='tommy-gun'||weapon==='laser'){
@@ -397,6 +412,7 @@ export class FeelDirector {
     }
     /** You took nonlethal damage. `from` is the attacker's live position when known. */
     hurt(damage:number,victim:THREE.Vector3,from:THREE.Vector3|undefined,view:THREE.Camera):void {
+        this.stir();
         if(this.state.on('damageDirection'))this.screen.damage(from,damage);
         this.sound.squelch(undefined,view);
         if(!this.state.on('hitJolt'))return;
@@ -410,6 +426,7 @@ export class FeelDirector {
 
     /** Your rat died: follow `target` (your corpse, looked up each frame), then iris out. */
     died(target:()=>THREE.Vector3|undefined):void {
+        this.stir();
         // Flight wind, launch view and speed streaks end with the rat.
         this.flying=false;this.airVy=0;this.pursuit=0;this.camera.hold(0);this.screen.speed(0);this.sound.localMotion(0,0,false,0);
         if(!this.state.on('deathCam'))return;
@@ -425,7 +442,7 @@ export class FeelDirector {
 
     /** You scored a kill on the rat at `victim`; `airborne` when you were in flight. */
     killed(victim:THREE.Vector3,airborne:boolean,view:THREE.Camera,now=performance.now(),victimCarried=false,headshot=false):void {
-        this.sound.brass();
+        this.sound.brass();this.stir();
         this.lifeKills++;
         // A headshot always gets its callout, regardless of the ordinary cooldown.
         if(headshot&&this.state.on('headshot')){this.lastCalloutAt=now;this.screen.callout('HEADSHOT');}
@@ -505,6 +522,7 @@ export class FeelDirector {
     }
     /** L5/L6: a rat was thrown (`local` for yours): it screams; yours also kicks the view. */
     launched(at:Vec3Data,local:boolean,boost:boolean,view:THREE.Camera):void {
+        if(local)this.stir();
         if(this.state.on('launchFlight'))this.sound.scream(local?undefined:at,view);
         if(!local||!this.state.on('launchMoment'))return;
         const p=FEEL.launchMoment.params,s=boost?1.4:1;
@@ -586,11 +604,17 @@ export class FeelDirector {
         this.city?.update(dt);
         this.noirCity?.update(this.perception(),this.mono(),FEEL.lowHealth.params.lift);
         this.noirDressing?.update(dt);
+        {
+            const calm=!this.incident&&!this.carryingNow&&performance.now()-this.lastAction>LULL.quietMs;
+            this.lullLevel=THREE.MathUtils.clamp(this.lullLevel+(calm?dt/LULL.inS:-dt/LULL.outS),0,1);
+            const near=self&&this.noirDressing&&spaceAt(self)==='open'?this.noirDressing.near(self):0;
+            this.sound.hum(this.lullLevel*near);
+        }
         this.lampAlarm?.update(dt);
         if(this.noirRain){
             const where=self?spaceAt(self):'open';
             this.noirRain.update(dt,view,where==='open');
-            this.sound.rain(this.noirRain.level);
+            this.sound.rain(this.noirRain.level,this.lullLevel);
         }
         if(this.noirAtmosphere){
             this.noirAtmosphere.update(dt,view,!self||spaceAt(self)==='open',this.perception(),this.mono(),this.dark);

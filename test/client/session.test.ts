@@ -37,6 +37,7 @@ const harness = vi.hoisted(() => {
         hideRespawn = vi.fn();
         setContinue = vi.fn();
         showResults = vi.fn();
+        frontPage = vi.fn();
         dispose = vi.fn();
         constructor(_doc: Document, public onRetry?: () => void) { harness.huds.push(this); }
     }
@@ -234,6 +235,7 @@ vi.mock('../../src/session/SessionMusic', () => ({
         start = vi.fn();
         unlock = vi.fn(async () => undefined);
         dispose = vi.fn();
+        setLull = vi.fn();
         constructor() { harness.music.push(this); }
     },
 }));

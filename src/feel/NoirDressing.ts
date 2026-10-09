@@ -74,6 +74,13 @@ export class NoirDressing {
         freezeStatic(this.root);scene.add(this.root);
     }
 
+    /** How near the nearest lit neon sign is to `p`, 0…1 (1 within 6 units across the ground, 0 past 26). */
+    near(p:THREE.Vector3):number {
+        if(!feelState().on('noirNeon'))return 0;
+        let best=Infinity;for(const sign of this.signs)best=Math.min(best,Math.hypot(sign.mesh.position.x-p.x,sign.mesh.position.z-p.z));
+        return THREE.MathUtils.clamp(1-(best-6)/20,0,1);
+    }
+
     private random():number {this.seed=(this.seed*1103515245+12345)&0x7fffffff;return this.seed/0x7fffffff;}
 
     update(dt:number):void {

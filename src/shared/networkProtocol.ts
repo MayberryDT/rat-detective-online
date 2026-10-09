@@ -22,8 +22,10 @@ import type { ExhibitMessage, HighlightMarker } from './highlights';
  * 37: paw prints beside the papers (`prints`, keyed runs leaving a group the way the trail goes on).
  * 38: a held join (`join` with `hold`): Enter City wakes the room while the browser loads; the welcome waits for the
  *     real join.
- * 39: movement carries each rat's look (`lookYaw`, `lookPitch`; a tuple row of 15) for replays. */
-export const PROTOCOL_VERSION = 39;
+ * 39: movement carries each rat's look (`lookYaw`, `lookPitch`; a tuple row of 15) for replays.
+ * 40: chaos leaves evidence: chalk outlines where bodies lay (`chalk`), dead witnesses' tips toward the carrier
+ *     (`tips`) and sewer muck (`muck`). */
+export const PROTOCOL_VERSION = 40;
 /** Body hits deal 1; a headshot is always lethal. */
 export const MAX_HP = 5;
 export const KILLS_TO_WIN = 20;
