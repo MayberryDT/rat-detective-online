@@ -34,7 +34,7 @@ export class LocalShotPresentation {
         for(const ball of balls){
             if(this.shots.has(ball.id)||this.retired.has(ball.id))continue;
             while(this.shots.size>=CHAOS_TUNING.maxShots)this.retire(this.shots.keys().next().value!);
-            this.shots.set(ball.id,{shot:{id:ball.id,owner,p:{...shot.origin},v:{...ball.velocity},age:0,...(ball.quirk?quirkBirth(ball.quirk,shot.direction):{})},
+            this.shots.set(ball.id,{shot:{id:ball.id,owner,p:{...shot.origin},v:{...ball.velocity},age:0,...(ball.quirk?quirkBirth(ball.quirk,shot.direction):ball.slug?{slug:true as const}:{})},
                 trigger:shot.shotId,fired:now,updated:now,first:true,hidden:false,hot:incident==='crossfire',...(weapon?{weapon}:{incident})});
         }
     }

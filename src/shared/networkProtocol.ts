@@ -24,8 +24,10 @@ import type { ExhibitMessage, HighlightMarker } from './highlights';
  *     real join.
  * 39: movement carries each rat's look (`lookYaw`, `lookPitch`; a tuple row of 15) for replays.
  * 40: chaos leaves evidence: chalk outlines where bodies lay (`chalk`), dead witnesses' tips toward the carrier
- *     (`tips`) and sewer muck (`muck`). */
-export const PROTOCOL_VERSION = 40;
+ *     (`tips`) and sewer muck (`muck`) (staging only).
+ * 41: tips out; hot wax along the carrier's path (`wax`), pigeons it flushes (`flocks`), the police scanner
+ *     (`scanner`); Code Violation removed; the Persuader (a weapon pickup; `slug` balls). */
+export const PROTOCOL_VERSION = 41;
 /** Body hits deal 1; a headshot is always lethal. */
 export const MAX_HP = 5;
 export const KILLS_TO_WIN = 20;
@@ -122,7 +124,7 @@ export interface Award { id: AwardId; title: string; playerId: string; playerNam
 /** The round report's race: at most this many rats, each with at most this many points. */
 export const RACE_LIMIT = { rats: 5, points: 64 } as const;
 /** What a kill was made with: the cheese gun, a special weapon, or a blast (an owned explosion). The Mousetrap holds, never kills. */
-export const KILL_WEAPONS = ['cheese', 'tommy-gun', 'laser', 'blast'] as const;
+export const KILL_WEAPONS = ['cheese', 'tommy-gun', 'laser', 'persuader', 'blast'] as const;
 export type KillWeapon = typeof KILL_WEAPONS[number];
 /** One present rat's round, server-counted (cosmetic; never scoring). */
 export interface ReportRat {

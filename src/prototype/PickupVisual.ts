@@ -5,7 +5,7 @@ import {disposeMeshResources} from '../utils/disposeMeshResources';
 import {batchRigidMeshes} from '../utils/RigidMeshBatch';
 import {PickupRespawnVisual} from './PickupRespawnVisual';
 import {TRAP_SCALE,TRAP_TALL,type PickupKind} from '../shared/pickups';
-import {PartKit,mousetrap,rayGun,tommyGun,weaponFinish,type WeaponFinish} from '../utils/WeaponModel';
+import {PartKit,mousetrap,rayGun,revolver,revolverCylinder,tommyGun,weaponFinish,type WeaponFinish} from '../utils/WeaponModel';
 import {kickDust} from '../feel/Dust';
 import {supplyCue} from '../feel/supplyCues';
 import {freezeStatic} from '../utils/freezeStatic';
@@ -17,7 +17,7 @@ const LAMP_HEAD=new THREE.Vector3(0,2.75,0);
 /** Malpractice hop duration (ms) and height. */
 const HOP_MS=380, HOP_HEIGHT=1.5;
 /** Each supply's own colour for the far beam and the outline that finds it from across the street. */
-const KIND_COLOR:Record<PickupKind,number>={ironclad:0xc9dcf0,hustle:0xff4a32,'quick-fix':0x5dff95,stakeout:0x6fe2f4,'tommy-gun':0xff8a24,laser:0xc8ff3a,mousetrap:0xf2e6c8};
+const KIND_COLOR:Record<PickupKind,number>={ironclad:0xc9dcf0,hustle:0xff4a32,'quick-fix':0x5dff95,stakeout:0x6fe2f4,'tommy-gun':0xff8a24,laser:0xc8ff3a,mousetrap:0xf2e6c8,persuader:0xffc94a};
 /** Claim pop and restock drop (seconds); beacon fades in with distance (units). */
 const POP=.32, DROP=.5, BEAM_HEIGHT=34;
 /** Part shapes built once and shared by every display: the welcome builds two dozen displays of up
@@ -41,9 +41,9 @@ function violinCase():THREE.Shape {
     s.quadraticCurveTo(-.79,-.36,-.42,-.37);s.quadraticCurveTo(-.2,-.37,-.12,-.22);s.quadraticCurveTo(-.06,-.28,.12,-.28);s.quadraticCurveTo(.3,-.27,.36,-.13);
     s.lineTo(.8,-.11);s.closePath();return s;
 }
-/** The three weapon displays, built on the shared weapon models: a Tommy Gun resting in an open violin case, a ray
- * gun on a brass cradle, and a set Mousetrap. Each starts with a polished part: the batch takes its reflection. */
-function weaponDisplay(kind:'tommy-gun'|'laser'|'mousetrap',kit:PartKit,f:WeaponFinish):void {
+/** The four weapon displays, built on the shared weapon models: a Tommy Gun resting in an open violin case, a ray
+ * gun on a brass cradle, the Persuader on an evidence box, and a set Mousetrap. Each starts with a polished part: the batch takes its reflection. */
+function weaponDisplay(kind:'tommy-gun'|'laser'|'mousetrap'|'persuader',kit:PartKit,f:WeaponFinish):void {
     const flat=(depth:number)=>new THREE.ExtrudeGeometry(violinCase(),{depth,bevelEnabled:true,bevelThickness:.02,bevelSize:.02,bevelSegments:2,curveSegments:10});
     if(kind==='tommy-gun'){
         // The gun rests in the case on its stock, barrel raised, in profile: drum, grips and finned barrel read at range.
@@ -68,6 +68,14 @@ function weaponDisplay(kind:'tommy-gun'|'laser'|'mousetrap',kit:PartKit,f:Weapon
         kit.cylinder(.03,.03,.44,0,.5,0,f.brass,8);
         for(const x of [-.26,.24]){kit.box(.04,.2,.18,x,.72,0,f.brass,.015);kit.box(.04,.04,.2,x,.63,0,f.brass,.015);}
         kit.box(.56,.04,.06,0,.62,0,f.brass,.015);
+    }else if(kind==='persuader'){
+        // The revolver, big, lying on an evidence box: walnut with a velvet top and brass trim, a tag hanging off it.
+        place(kit,0,.5,0,-.15,Math.PI/2,0,1.7);revolver(kit,f);revolverCylinder(kit,f);
+        kit.frame.identity();
+        kit.box(.95,.24,.62,0,.12,0,f.walnut,.04);
+        kit.box(.88,.03,.56,0,.255,0,f.velvet,.01);
+        for(const z of [-.31,.31])kit.box(.97,.05,.04,0,.25,z,f.brass,.012);
+        kit.box(.18,.12,.012,.42,.18,.33,f.pine,.008,0,0,.3);
     }else{
         kit.box(.3,.16,.02,.42,.24,.62,f.brass,.01,-.3,.5);
         // The set trap a little bigger and taller than it once was, in the placed trap's proportions.
@@ -216,8 +224,8 @@ export class PickupVisual {
                 const streak=box(lens,.05,.26,.02,-.19,1.37,face*.025,glint,.01);streak.rotation.z=.62;
                 box(lens,.05,.05,.02,-.06,1.47,face*.025,glint,.01);
             }
-        }else if(kind==='tommy-gun'||kind==='laser'||kind==='mousetrap'){
-            this.item.name={'tommy-gun':'tommy-gun-violin-case',laser:'ray-gun-cradle',mousetrap:'set-mousetrap'}[kind];
+        }else if(kind==='tommy-gun'||kind==='laser'||kind==='mousetrap'||kind==='persuader'){
+            this.item.name={'tommy-gun':'tommy-gun-violin-case',laser:'ray-gun-cradle',mousetrap:'set-mousetrap',persuader:'persuader-evidence-box'}[kind];
             const kit=new PartKit();weaponDisplay(kind,kit,weaponFinish());
             this.item.add(kit.build(this.item.name));
         }else{

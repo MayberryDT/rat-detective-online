@@ -3,7 +3,7 @@ import {PICKUP_TUNING,type PickupKind} from '../shared/pickups';
 import {disposeMeshResources} from '../utils/disposeMeshResources';
 
 /** Each supply's dial ring colour. */
-const ACCENT:Record<PickupKind,number>={ironclad:0xc4d2df,hustle:0xe16a59,'quick-fix':0x87d8a5,stakeout:0x7ad8e8,'tommy-gun':0xe8873e,laser:0xc6e64a,mousetrap:0xe6dcc4};
+const ACCENT:Record<PickupKind,number>={ironclad:0xc4d2df,hustle:0xe16a59,'quick-fix':0x87d8a5,stakeout:0x7ad8e8,'tommy-gun':0xe8873e,laser:0xc6e64a,mousetrap:0xe6dcc4,persuader:0xd9b25a};
 /** One icon texture per supply kind, drawn and uploaded once (the load's stand-in dial) and shared by
  * every dial after, so a site's first claim in play draws no canvas and uploads nothing. */
 const ICONS=new Map<PickupKind,THREE.CanvasTexture>();
@@ -46,6 +46,12 @@ function icon(kind:PickupKind):THREE.CanvasTexture {
         c.strokeStyle='#8eb83c';c.stroke(new Path2D('M74 40v16'));
         path('M82 59 87 61V71a2.5 2.5 0 1 1-5 0Z','#c9ad42','#15101b',3);
         path('M34 62h10l-2 20h-10Z','#3a2c26');
+    }else if(kind==='persuader'){
+        // A snub-nose revolver: walnut grip, steel frame and short barrel, a brass cylinder with its chambers.
+        path('M12 58 28 50 34 78 20 84Z','#8e5a34');
+        path('M26 36H66V54H26ZM66 40H86V50H66Z','#7d8594');
+        path('M46 31a14 14 0 1 0 .01 0Z','#c9a04a');
+        for(const [x,y] of [[46,38],[52,42],[52,49],[46,52],[40,49],[40,42]] as const)path(`M${x} ${y-3}a3 3 0 1 0 .01 0Z`,'#f2c94a');
     }else if(kind==='mousetrap'){
         path('M10 60 30 40H90L70 60Z','#c8a46a');
         path('M10 60H70L90 40V48L70 68H10Z','#8e6a40');

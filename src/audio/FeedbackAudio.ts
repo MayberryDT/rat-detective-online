@@ -3,7 +3,7 @@ import type {Vec3Data} from '../shared/networkProtocol';
 import {worldSoundGain} from './worldSoundGain';
 import {AudioVoicePool} from './AudioVoicePool';
 import {admitWorldVoice,duckWorld,endWorldVoice,type WorldVoice} from './PlayerAudioMix';
-export type FeedbackCue='pickup-ironclad'|'pickup-hustle'|'pickup-quick-fix'|'pickup-stakeout'|'pickup-tommy-gun'|'pickup-laser'|'pickup-mousetrap'|'pickup-slap'|'armor-clang'|'stakeout-shutter'|'pip-tick'|'case-pickup'|'case-lost'|'case-taken'|'case-drop'|'case-hit'|'case-grip-1'|'case-grip-2'|'laser-fire'|'laser-hit'|'trap-set'|'trap-snap'|'trap-splinter'|'trap-break'|'trap-refused'|'trap-ready'|'menu-open'|'menu-close'|'death'|'respawn'|'victory'|'dispatch'|'ready'|'tick'|'notice'|'case-point'|'verified'|'countdown'|'countdown-final';
+export type FeedbackCue='pickup-ironclad'|'pickup-hustle'|'pickup-quick-fix'|'pickup-stakeout'|'pickup-tommy-gun'|'pickup-laser'|'pickup-mousetrap'|'pickup-persuader'|'pickup-slap'|'armor-clang'|'stakeout-shutter'|'pip-tick'|'case-pickup'|'case-lost'|'case-taken'|'case-drop'|'case-hit'|'case-grip-1'|'case-grip-2'|'laser-fire'|'laser-hit'|'trap-set'|'trap-snap'|'trap-splinter'|'trap-break'|'trap-refused'|'trap-ready'|'menu-open'|'menu-close'|'death'|'respawn'|'victory'|'dispatch'|'ready'|'tick'|'notice'|'case-point'|'verified'|'countdown'|'countdown-final';
 /** Each cue's recording (`/sounds/feedback/<file>.wav`), level, minimum spacing (ms) and playback rate; exhibit replays play the world ones. */
 export const FEEDBACK_CUES:Record<FeedbackCue,{file:string;volume:number;cooldown:number;rate?:number}>={
     'pickup-ironclad':{file:'pickup-ironclad',volume:.7,cooldown:150},
@@ -15,6 +15,7 @@ export const FEEDBACK_CUES:Record<FeedbackCue,{file:string;volume:number;cooldow
     'pickup-tommy-gun':{file:'pickup-tommy-gun',volume:.65,cooldown:150},
     'pickup-laser':{file:'pickup-laser',volume:.65,cooldown:150},
     'pickup-mousetrap':{file:'pickup-mousetrap',volume:.65,cooldown:150},
+    'pickup-persuader':{file:'pickup-persuader',volume:.7,cooldown:150},
     'laser-fire':{file:'laser-fire',volume:.6,cooldown:50},
     'laser-hit':{file:'laser-hit',volume:.3,cooldown:50},
     'trap-set':{file:'trap-set',volume:.55,cooldown:120},

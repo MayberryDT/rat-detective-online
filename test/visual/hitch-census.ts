@@ -121,7 +121,7 @@ const me=createPlayer('me','Census',appearance,{x:-10,y:1,z:-27});
 const rivals:PlayerData[]=Array.from({length:8},(_,i)=>createPlayer(`rat-${i}`,`Rival ${i}`,{...appearance,hatColor:0x224466+i*0x101010,coatColor:0x553322+i*0x080808},{x:-4+i*1.6,y:1,z:-29+(i%3)*1.8}));
 const players=Object.fromEntries([me,...rivals].map(p=>[p.id,p]));
 transport.welcome={type:'welcome',id:me.id,player:me,players,round:{phase:'playing',assignment:{roundId:'census',id:'chain-of-custody',phase:'active',revealedAt:now(),liveAt:now(),deliverySerial:0,destinations:['records'],deliveries:{},caseKills:{},revision:1}},
-    world:{seed:341283204,version:GRAYBOX_VERSION},protocolVersion:PROTOCOL_VERSION,serverTime:now(),incidents:['improper-disposal','bad-ammunition','pressure-surge','crossfire','scattershot','blackout','code-violation','most-wanted','all-units']};
+    world:{seed:341283204,version:GRAYBOX_VERSION},protocolVersion:PROTOCOL_VERSION,serverTime:now(),incidents:['improper-disposal','bad-ammunition','pressure-surge','crossfire','scattershot','blackout','most-wanted','all-units']};
 const pose=(x:number,y:number,z:number)=>({p:{x,y,z},q:{x:0,y:0,z:0,w:1},v:{x:0,y:0,z:0},spin:{x:0,y:0,z:0}});
 const near:PickupState[]=[{id:'near-ironclad',kind:'ironclad',x:-6,y:.7,z:-25},{id:'near-hustle',kind:'hustle',x:-3,y:.7,z:-25},{id:'near-fix',kind:'quick-fix',x:0,y:.7,z:-25}];
 const state:ChaosState={time:now(),epoch:'census',tick:0,case:{...pose(CASE_HOME.x,CASE_HOME.y,CASE_HOME.z),owner:null,previousOwner:null,pickupAfter:0,returningUntil:0},
@@ -184,7 +184,7 @@ const script:[string,()=>void,number?][]=[
     ['pressure building',()=>{state.pressure={serial:1,levels:Object.fromEntries(LAUNCH_MACHINES.map(m=>[m.id,8])),launches:[]};},40],
     ['you launched',()=>{const m=LAUNCH_MACHINES[1]!;state.pressure={serial:2,levels:{},fired:{[m.id]:now()},launches:[{id:'launch-1',playerId:'me',at:now(),velocity:{x:0,y:60,z:0},machineId:m.id}]};},150],
     ['rival launched (boost)',()=>{const m=LAUNCH_MACHINES[1]!;state.pressure={serial:3,levels:{},fired:{[m.id]:now()},boosts:{[m.id]:now()},launches:[{id:'launch-2',playerId:'rat-5',at:now(),velocity:{x:5,y:70,z:0},machineId:m.id,boost:true}]};},150],
-    ...(['improper-disposal','bad-ammunition','crossfire','scattershot','all-units','code-violation','blackout'] as IncidentId[]).map((id):[string,()=>void,number]=>
+    ...(['improper-disposal','bad-ammunition','crossfire','scattershot','all-units','blackout'] as IncidentId[]).map((id):[string,()=>void,number]=>
         [`incident ${id}`,()=>{incident(id);shotPattern=volley('rat-1',id==='crossfire'?{wallBounced:true}:{});
             if(id==='improper-disposal')state.corpses=[corpse(1,true),corpse(3,true)];},120]),
     ['crossfire, your own bank shots',()=>{incident('crossfire');shotPattern=volley('me',{wallBounced:true});},60],
@@ -200,8 +200,10 @@ const script:[string,()=>void,number?][]=[
     ['you go underground',()=>{send({type:'playerCorrected',player:{id:'me',x:0,y:-5.7,z:4,qx:0,qy:0,qz:0,qw:1,meshQx:0,meshQy:0,meshQz:0,meshQw:1}});},90],
     ['back on the street',()=>{send({type:'playerCorrected',player:{id:'me',x:me.x,y:me.y,z:me.z,qx:0,qy:0,qz:0,qw:1,meshQx:0,meshQy:0,meshQz:0,meshQw:1}});},60],
     // Tyler's 9 October freeze: a Tommy Gun kill, a respawn inside the Icebox, out into the street.
-    ['chalk, a tip and muck',()=>{state.chalk=[{id:'k1',p:{x:-7,y:.014,z:-24},h:1,c:0x386caa,at:now()-2000}];state.tips=[{id:'t1',p:{x:-7,y:.016,z:-24},to:{x:-20,y:0,z:-40},carrier:'rat-5',seen:now()-4000,at:now()-1000}];
-        state.muck=[{id:'m1',at:now()-500,f:[-9,.012,-25,0,-8.7,.012,-24.4,0,-9,.012,-23.8,0,-8.7,.012,-23.2,0]}];},90],
+    ['chalk, muck, hot wax, pigeons and the scanner',()=>{state.chalk=[{id:'k1',p:{x:-7,y:.014,z:-24},h:1,c:0x386caa,at:now()-2000}];
+        state.muck=[{id:'m1',at:now()-500,f:[-9,.012,-25,0,-8.7,.012,-24.4,0,-9,.012,-23.8,0,-8.7,.012,-23.2,0]}];
+        state.wax=[{id:'w1',at:now()-300,c:'rat-5',f:[-6,.01,-26,0,-5,.01,-26.5,150]}];state.flocks=[{id:'f1',p:{x:-4,y:0,z:-34},at:now(),c:'rat-5'}];
+        state.scanner=[{id:'r1',at:now(),kind:'carrier',text:'ALL UNITS: SUSPECT WITH THE CASE SEEN DOWNTOWN, HEADING NORTH.',p:{x:-4,y:0,z:-34},seen:now()-4000,c:'rat-5'}];},120],
     ['a Tommy Gun kills you',()=>{send({type:'playerDamaged',id:'me',hp:0,attackerId:'rat-1'});send({type:'playerDied',victimId:'me',killerId:'rat-1',killerName:'Rival 1',victimName:'Census',respawnAt:now()+3000,killerStreak:2,weapon:'tommy-gun'});state.corpses=[{...corpse(0,true),victimId:'me'}];},200],
     ['you respawn inside the Icebox',()=>{send({type:'playerRespawn',id:'me',x:140,y:2,z:-44,hp:5});state.corpses=[];},120],
     ['out of the Icebox onto the street',()=>{send({type:'playerCorrected',player:{id:'me',x:116,y:.3,z:-16,qx:0,qy:0,qz:0,qw:1,meshQx:0,meshQy:0,meshQz:0,meshQw:1}});},120],

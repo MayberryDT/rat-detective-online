@@ -78,6 +78,7 @@ export class PartKit {
 /** Where a held gun's barrel ends, in the pistol's frame: the muzzle moves there while it is held. */
 export const WEAPON_MUZZLE:Readonly<Record<Exclude<WeaponKind,'mousetrap'>,THREE.Vector3>>={
     'tommy-gun':new THREE.Vector3(0,.106,.28+MUZZLE_REACH['tommy-gun']),laser:new THREE.Vector3(0,.106,.28+MUZZLE_REACH.laser),
+    persuader:new THREE.Vector3(0,.106,.28+MUZZLE_REACH.persuader),
 };
 /** Barrel axis height in the pistol's frame (the house pistol's bore). */
 const BORE=.106;
@@ -121,6 +122,39 @@ export function tommyGun(kit:PartKit,f:WeaponFinish):void {
     kit.box(.07,.25,.085,0,B-.16,.56,f.walnut,.03,-.1);
     for(let i=0;i<3;i++)kit.box(.074,.014,.088,0,B-.12-i*.06,.56+.012*(i+1),f.steel,.005,-.1);
     kit.box(.078,.035,.092,0,B-.288,.573,f.cheese,.01,-.1);
+}
+
+/** The Persuader in the pistol's frame: a snub-nose revolver, chunky and cartoonish. A steel frame, a short fat barrel
+ * with a cheese-wedge front sight, a brass cylinder whose six chambers each show a cheese slug's nose, the hammer
+ * cocked back, a walnut grip with cheese medallions, and the trigger guard. About .8 units long; the cylinder is its own
+ * part (`persuader-cylinder`) so it can turn a chamber each shot. */
+export function revolver(kit:PartKit,f:WeaponFinish):void {
+    const B=BORE;
+    // Frame and top strap over the cylinder window, the barrel and its under-lug.
+    kit.box(.09,.13,.3,0,B-.01,.16,f.steel,.025);
+    kit.box(.06,.03,.24,0,B+.075,.25,f.steel,.01);
+    kit.cylinder(.042,.042,.3,0,B,.53,f.steel,14,Math.PI/2);
+    kit.box(.055,.05,.22,0,B-.05,.55,f.steel,.015);
+    kit.cylinder(.05,.05,.03,0,B,.67,f.steel,14,Math.PI/2);
+    kit.cylinder(.04,.04,.03,0,B+.06,.62,f.cheese,3,-Math.PI/2,0,Math.PI/2);
+    // The hammer, cocked back over the frame, and the rear sight notch.
+    kit.box(.04,.1,.05,0,B+.07,-.03,f.steel,.012,-.6);
+    kit.box(.05,.025,.04,0,B+.12,-.07,f.steel,.008,-.6);
+    // Raked walnut grip with a brass butt and a cheese medallion each side; the trigger and its guard.
+    kit.box(.08,.26,.1,0,-.1,-.08,f.walnut,.035,.35);
+    kit.box(.086,.04,.105,0,-.23,-.13,f.brass,.012,.35);
+    for(const side of [-1,1])kit.cylinder(.026,.026,.006,side*.042,-.09,-.08,f.cheese,12,0,0,Math.PI/2);
+    kit.torus(.05,.011,0,B-.11,.08,f.steel,0,Math.PI/2);
+    kit.box(.016,.06,.016,0,B-.1,.08,f.steel,.004,.3);
+}
+export function revolverCylinder(kit:PartKit,f:WeaponFinish):void {
+    const B=BORE;
+    kit.cylinder(.1,.1,.15,0,B-.005,.24,f.brass,18,Math.PI/2);
+    for(let i=0;i<6;i++){
+        const a=i*Math.PI/3;
+        kit.cylinder(.026,.026,.02,Math.sin(a)*.062,B-.005+Math.cos(a)*.062,.32,f.cheese,10,Math.PI/2);
+        kit.box(.012,.04,.14,Math.sin(a+Math.PI/6)*.1,B-.005+Math.cos(a+Math.PI/6)*.1,.24,f.steel,.004,0,0,-(a+Math.PI/6));
+    }
 }
 
 /** A pulp ray gun in the pistol's frame: a bulbous chrome body with red fins, a molten-cheese dome and a coil of
@@ -225,7 +259,7 @@ export function heldWeaponModel(kind:WeaponKind):THREE.Group {
             kit.frame.makeScale(HELD_TRAP_SCALE*TRAP_SCALE,HELD_TRAP_SCALE*TRAP_TALL,HELD_TRAP_SCALE*TRAP_SCALE);mousetrap(()=>kit,f);
             template=kit.build('rat-weapon-mousetrap');template.position.set(0,1.02,.74);template.rotation.set(0,Math.PI/2,.35);
         }else{
-            if(kind==='tommy-gun')tommyGun(kit,f);else rayGun(kit,f);
+            if(kind==='tommy-gun')tommyGun(kit,f);else if(kind==='persuader')revolver(kit,f);else rayGun(kit,f);
             template=kit.build('rat-weapon-'+kind);
         }
         // Separate moving mechanisms. Draw-only animation leaves the canonical muzzle unchanged.
@@ -234,6 +268,7 @@ export function heldWeaponModel(kind:WeaponKind):THREE.Group {
             template.add(bolt.build('tommy-bolt'));
             const feed=new PartKit();feed.box(.10,.13,.16,-.10,BORE-.08,.16,f.cheese,.02);feed.cylinder(.055,.055,.06,-.15,BORE-.13,.18,f.brass,10,0,0,Math.PI/2);template.add(feed.build('tommy-feed'));
         }
+        if(kind==='persuader'){const cylinder=new PartKit();revolverCylinder(cylinder,f);template.add(cylinder.build('persuader-cylinder'));}
         if(kind==='laser'){
             for(let i=0;i<3;i++){
                 const cell=new PartKit(),angle=i*Math.PI*2/3;

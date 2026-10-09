@@ -10,7 +10,6 @@ const drawings: Record<IncidentId | 'dispatch', string> = {
     crossfire: '<path d="M50 11v42M7 49l34-22-14-8m14 8-9 13M38 13l3-10 5 10 11-6-3 12 8 4-11 4"/><circle class="incident-ink" cx="17" cy="42" r="6"/>',
     scattershot: '<path d="M4 40h12l3-4h4v10h-4l-3-3H4zM26 41l12-14M26 41h16M26 41l12 13"/><circle cx="41" cy="25" r="3"/><circle cx="45" cy="41" r="3"/><circle cx="41" cy="55" r="3"/><path class="incident-ink" d="m50 6 8 3-2 7-7 2-3-5zM47 12l-3 3m11 1 1 4M44 7l-2-3"/><path d="M36 13q4-7 10-8M30 18q2-4 6-6"/>',
     blackout: '<path d="M32 6v7M20 13h24l-4 14H24zM24 27l-6 12h28l-6-12M9 55 55 9"/><path class="incident-ink" d="M30 42h4v9h-4z"/><circle cx="15" cy="17" r="2"/><circle cx="50" cy="43" r="2"/>',
-    'code-violation': '<path d="M11 13h42v19H11zM20 13l12-8 12 8"/><path class="incident-ink" d="M23 17l18 11m0-11L23 28"/><path d="M32 36l-7 11h8l-4 12 13-17h-8l5-6zM12 44l-6-3m6 10-7 2M52 44l6-3m-6 10 7 2"/>',
     'most-wanted': '<path d="M10 6h44v52H10z"/><path class="incident-ink" d="M17 14h30"/><circle cx="32" cy="31" r="8"/><path d="M20 49q12-13 24 0M17 14h30M24 22l-3-4m19 4 3-4"/>',
     'all-units': '<path d="M26 44V24a6 6 0 0 1 12 0v20M20 44h24l3 10H17zM32 18V10M20 22l-6-5M44 22l6-5M12 32H5m54 0h-7"/><path class="incident-ink" d="M29 30h6v10h-6z"/>',
 };

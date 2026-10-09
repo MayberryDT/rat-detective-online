@@ -22,6 +22,8 @@ const ARRIVE_MS=1150,LEAVE_MS=1900,ARRIVING_WINDOW=2600,MAX_FLYING=12;
 /** The eye-catch (Tyler, 8 October): the first time a sheet lying `near`…`far` from the rat comes into the camera's
  * clear view, a gust lifts it and sets it back down where it lay (`ms`). At most one in `apart` units every `quietMs`,
  * none closer together than `gapMs` anywhere, and `rays` sight checks a frame. */
+/** Paper freshness: how long a sheet looks just laid, and when it has gone fully old and grimy (ms). */
+const FRESH={crispMs:15_000,oldMs:120_000} as const;
 const CATCH={near:9,far:45,ms:1300,lift:.8,roll:1.3,apart:5,quietMs:10000,gapMs:1500,rays:2,retryMs:400} as const;
 
 /** Rest shapes: two per family, none of them tents. (x, z) run 0…1 across the sheet's width and depth. */
@@ -85,6 +87,7 @@ export class CaseFiles {
     /** Continuity counters for E2E traces: sheets blown in and away, sheets dropped from view while still in range and
      * in the frustum (`evicted`: the budget), sheets that left without blowing away while on screen (`popped`), and
      * eye-catching gusts (`caught`). */
+    private readonly tint=new THREE.Color();
     readonly stats={arrivals:0,departures:0,evicted:0,popped:0,caught:0};
     /** The paw prints beside the papers, drawn with them. */
     readonly paws=new PawPrints();
@@ -134,19 +137,20 @@ export class CaseFiles {
                 const attribute=new THREE.InstancedBufferAttribute(new Float32Array(CLUES.visible*4),4);
                 attribute.setUsage(THREE.DynamicDrawUsage);mesh.geometry.setAttribute(name,attribute);
             }
+            mesh.setColorAt(0,new THREE.Color(1,1,1));
             this.batches.push(mesh);this.root.add(mesh);
         }
     }
     /** `now`: the authority's clock, so gusts and loose sheets agree across clients. `focus`: the local rat, which reads
      * papers out to `CLUES.range` like any rat; the orbiting camera must not move that edge. */
-    update(clues:readonly CaseClue[],now:number,camera:THREE.Camera,dt=1/60,focus?:THREE.Vector3,prints:readonly CasePrints[]=[],marks:Pick<ChaosState,'chalk'|'tips'|'muck'>={}):void {
+    update(clues:readonly CaseClue[],now:number,camera:THREE.Camera,dt=1/60,focus?:THREE.Vector3,prints:readonly CasePrints[]=[],marks:Pick<ChaosState,'chalk'|'muck'|'wax'|'flocks'>={}):void {
         if(clues.length)this.ensureArt();
         camera.updateMatrixWorld();this.time=now;
         this.frustum.setFromProjectionMatrix(this.matrix.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse));
         const motion=this.motion(),eye=focus??camera.position;
         this.sync(clues,now,motion,eye);
         this.paws.update(prints,now,eye,this.frustum,motion,this.still);
-        this.marks.update(marks,now,eye,this.frustum,motion,this.still);
+        this.marks.update(marks,now,eye,this.frustum,motion,this.still,camera);
         this.catchRays=0;camera.getWorldPosition(this.cameraAt);
         const candidates=this.candidates;candidates.length=0;
         for(const sheet of this.sheets.values()){
@@ -179,6 +183,7 @@ export class CaseFiles {
             mesh.count=counts[i]!;mesh.visible=mesh.count>0;mesh.instanceMatrix.needsUpdate=true;
             (mesh.geometry.getAttribute('paperTile') as THREE.InstancedBufferAttribute).needsUpdate=true;
             (mesh.geometry.getAttribute('paperBend') as THREE.InstancedBufferAttribute).needsUpdate=true;
+            if(mesh.instanceColor)mesh.instanceColor.needsUpdate=true;
         }
     }
     /** Rats brushing past (you and the others, this frame) lift the sheets they pass. */
@@ -344,6 +349,10 @@ export class CaseFiles {
         const phase=(now/1000*13*(1+(sheet.hash>>>10)%30/100)+sheet.hash%7)%TAU;
         (mesh.geometry.getAttribute('paperTile') as THREE.InstancedBufferAttribute).setXYZW(index,tile.u,tile.v,back.u,back.v);
         (mesh.geometry.getAttribute('paperBend') as THREE.InstancedBufferAttribute).setXYZW(index,local,lift,flutter,phase);
+        // The trail's age shows (Tyler, 9 October: the trail gets fresher as you close in): a sheet laid moments ago is
+        // crisp bright white, one that has lain a while yellows and dulls, an old one is grimy. Truth: its own age only.
+        const age=Math.max(0,now-sheet.c.at),fresh=1-Math.min(1,age/FRESH.crispMs),old=Math.min(1,age/FRESH.oldMs);
+        this.tint.setRGB(1.08+.22*fresh-.38*old,1.04+.2*fresh-.45*old,.98+.2*fresh-.6*old);mesh.setColorAt(index,this.tint);
     }
     /** Blowing in, blowing away, or a loose sheet carried between its spots: position, tumble and absolute yaw. */
     private flight(sheet:Sheet,now:number,motion:boolean,rest:Rest):Flight|undefined {

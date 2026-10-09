@@ -488,8 +488,14 @@ export class BotMotor {
             else if(this.destination&&distance(self,this.destination)<3)this.failGoal(now);
         }
         this.visible=visible;
-        // A dead witness's tip in sight says where it saw the carrier (mindVersion 17): read as a player reads its arrow.
-        for(const t of state?.tips??[])if(distance(self,t.p)<Math.min(sight,30)&&clear({x:t.p.x,y:t.p.y+.15,z:t.p.z}))this.carrierSight.tip('case',t.carrier,t.to,t.seen);
+        // The carrier's trail, read as a player reads it (mindVersion 18): the police radio (heard by all), pigeons rising
+        // over the roofs in sight, and the freshest hot wax drip in sight.
+        for(const l of state?.scanner??[])if(l.p&&l.c&&l.seen!==undefined)this.carrierSight.lead('case',l.c,l.p,l.seen);
+        for(const f of state?.flocks??[])if(distance(self,f.p)<150&&clear({x:f.p.x,y:f.p.y+20,z:f.p.z}))this.carrierSight.lead('case',f.c,f.p,f.at);
+        for(const r of state?.wax??[])for(let i=r.f.length-4;i>=0;i-=4){
+            const p={x:r.f[i]!,y:r.f[i+1]!,z:r.f[i+2]!};
+            if(distance(self,p)<Math.min(sight,25)&&clear({x:p.x,y:p.y+.15,z:p.z})){this.carrierSight.lead('case',r.c,p,r.at+r.f[i+3]!);break;}
+        }
         this.carrierSight.see(self,visible,living,time);
         // A rat seen dying (the kill feed) is not banked at.
         if(this.sighting&&!living.some(p=>p.id===this.sighting?.id))this.sighting=undefined;
@@ -791,7 +797,7 @@ export class BotMotor {
                 if(this.spray.pull(now,spray,!bank&&!mischief&&this.aim.error<.3,this.tactics.spray,tommy?WEAPON_TUNING.tommyIntervalMs:undefined))shoot=this.aim.point(eye,this.spray.range);
             }
             // Held, the Tommy Gun fires on the first tick no more than `HELD_SLACK_MS` short of its interval.
-            if(shoot&&!(dispatchReady&&bell&&!visibleTarget))this.shotAt=now+(tommy?WEAPON_TUNING.tommyIntervalMs-HELD_SLACK_MS:this.skill.fireGapMs);
+            if(shoot&&!(dispatchReady&&bell&&!visibleTarget))this.shotAt=now+(tommy?WEAPON_TUNING.tommyIntervalMs-HELD_SLACK_MS:this.weapon==='persuader'?Math.max(this.skill.fireGapMs,WEAPON_TUNING.persuaderIntervalMs):this.skill.fireGapMs);
         }
         if(shoot&&!trapping&&shotHitsIronclad(self,facing,shoot,this.protectedVisible,state))shoot=undefined;
         if(this.jumpTravel&&!grounded){

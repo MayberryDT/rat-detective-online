@@ -1,13 +1,16 @@
 """Original deterministic cartoon foley for pickup claims, the case, armor reflection and the claim payoffs.
 Standard library only; generates 48 kHz mono PCM WAVs. No borrowed case samples.
 """
-import math, random, struct, wave
+import math, os, random, struct, wave
 from pathlib import Path
 RATE=48000
 OUT=Path(__file__).resolve().parents[1]/'public/sounds/feedback'
 TAU=2*math.pi
 
+# ONLY=a,b renders just those (the rest are already on disk; every render is deterministic).
+ONLY=set(filter(None,os.environ.get('ONLY','').split(',')))
 def render(name,duration,fn,fade=0):
+    if ONLY and name not in ONLY:return
     rng=random.Random(1701)
     samples=[fn(i/RATE,rng.uniform(-1,1)) for i in range(int(RATE*duration))]
     for i in range(int(RATE*fade)):samples[-1-i]*=.5-.5*math.cos(math.pi*i/(RATE*fade))
@@ -220,6 +223,14 @@ def claim_mousetrap(t,n):
     creak=0 if t<.05 or t>.3 else math.tanh(3*math.sin(glide(t-.05,260,520,4)))*(1+math.sin(TAU*31*t))*.5*math.sin(math.pi*(t-.05)/.25)*.18
     return leather(t,1,.9)+creak+latch(t-.3,.9)+(bass(t-.38,61.7,.14)+bass(t-.52,58.3,.3))*.7
 
+def claim_persuader(t,n):
+    # The Persuader: the cylinder spun (a run of ratchet clicks slowing down), the hammer cocked, then a low bass note
+    # under a muted trombone, like a door closing on the case.
+    clicks=sum(latch(t-s,.55+.08*k) for k,s in enumerate((0,.034,.07,.11,.155,.207,.266)))*.55
+    cock=latch(t-.36,1.5)+thump(t-.36,120,58,.05)*.5
+    sting=bass(t-.5,55,.32)*.8+bone(t-.5,110,.3)*.45+bone(t-.5,164.8,.3)*.25
+    return clicks+cock+sting
+
 render('case-claim',.62,case_claim,.06)
 render('case-dropped',.95,case_dropped,.08)
 render('case-snatched',.62,case_snatched,.06)
@@ -239,3 +250,4 @@ render('laser-hit',.5,laser_hit,.08)
 render('pickup-tommy-gun',.85,claim_tommy,.06)
 render('pickup-laser',.95,claim_laser,.08)
 render('pickup-mousetrap',.9,claim_mousetrap,.08)
+render('pickup-persuader',1,claim_persuader,.08)

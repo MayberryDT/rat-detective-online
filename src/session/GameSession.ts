@@ -163,9 +163,11 @@ export class GameSession {
     private readonly beamAim = new THREE.Vector3();
     /** The Blackout level the nameplates were last shaded for (0: every plate lit). */
     private plateDark = 0;
+    /** When the Persuader's hammer is back (performance time). */
+    private persuaderReadyAt=0;
     private compiling?:Promise<unknown>;
     /** The background warm of the other sewer-lamp state (`compileOtherLampState`): programs counted after the last one. */
-    private lampWarm={programs:0,at:0,busy:false};
+    private lampWarm?:{programs:number;at:number;busy:boolean}={programs:0,at:0,busy:false};
     private compileTimer?:ReturnType<typeof setTimeout>;
     private readonly lineup?:PoliceLineup;
     private pendingLineup?:{entries:LineupEntry[];at:number};
@@ -349,6 +351,8 @@ export class GameSession {
         const now=performance.now(),weapon=this.weaponNow();
         // Short Circuit (a Code Violation dud): the gun is shorted out and only dry-clicks, as the room refuses it.
         if (shortedOut(this.lastChaos?.buffs, this.myId, Date.now() + this.serverOffset)) { this.feel.sound.jam(); return; }
+        // The Persuader's hammer: one slug every `persuaderIntervalMs`; a press before it is back does nothing (the room would refuse it).
+        if (weapon === 'persuader' && now < this.persuaderReadyAt) return;
         this.rat.updateView();
         // Aim through the current rendered view, including the existing feel offset.
         // Compose after fresh input, restore before adding this shot's impulse or sending movement.
@@ -378,6 +382,7 @@ export class GameSession {
             if(weapon==='tommy-gun'){this.tommyHeat=tommyHeat(this.tommyHeat,this.tommyAt,now);this.tommyAt=now;}
             this.chaos?.fire(shot,weapon&&{kind:weapon,heat:this.tommyHeat},weapon==='laser'?laserPath(shot.origin,shot.direction,this.gun.traceLaser):undefined);
             if(weapon==='mousetrap')this.rat.entity.setWeapon(undefined);
+            if(weapon==='persuader')this.persuaderReadyAt=now+WEAPON_TUNING.persuaderIntervalMs;
         }
     }
     private requestPointerLock(): void { if (!this.title.settings?.isOpen && !this.touch?.active) this.pointerLock.request(); }
@@ -456,7 +461,7 @@ export class GameSession {
             this.chaos.onCorpseJolt=p=>this.feel.corpseJolt(p,this.stage.camera);
             this.chaos.onSuperball=p=>this.feel.superballBounce(p);
             this.chaos.onCasePaper=(p,kind)=>this.feel.casePaper(p,kind);
-            this.chaos.onClaim=(kind,camera,lockMs)=>{this.feel.claimed(kind,this.rat?.entity,camera,lockMs);if(['laser','tommy-gun','mousetrap'].includes(kind)){this.feel.heavyPickup(kind);this.feel.heavyArsenal(kind==='laser'?'laser-pickup':kind==='tommy-gun'?'tommy-pickup':'trap-pickup');}};
+            this.chaos.onClaim=(kind,camera,lockMs)=>{this.feel.claimed(kind,this.rat?.entity,camera,lockMs);if(['laser','tommy-gun','mousetrap','persuader'].includes(kind)){this.feel.heavyPickup(kind);this.feel.heavyArsenal(kind==='laser'?'laser-pickup':kind==='tommy-gun'?'tommy-pickup':kind==='persuader'?'persuader-pickup':'trap-pickup');}};
             this.chaos.onTriggerHit=(_machine,at,busy,level)=>this.feel.triggerHit(at,busy,level,this.stage.camera);
             this.chaos.onDispatchShot=(_station,at)=>this.feel.dispatchShot(at,this.stage.camera);
             this.chaos.onVentErupted=vent=>{
@@ -503,7 +508,7 @@ export class GameSession {
      * compiled relinks them all at once: Tyler's 9 October 5 s freeze, 36 programs when a respawn passed a sewer
      * mouth. The links run off the main thread (KHR_parallel_shader_compile); nothing waits for them to draw. */
     private compileOtherLampState():Promise<unknown> {
-        const lamps=this.city instanceof Neighborhood?this.city.sewerLights:[];
+        const lamps=this.city instanceof Neighborhood?this.city.sewerLights??[]:[];
         if(!lamps.length)return Promise.resolve();
         const shown=lamps[0]!.visible;
         for(const lamp of lamps)lamp.visible=!shown;
@@ -512,7 +517,7 @@ export class GameSession {
     }
     /** Every 2 s of play: programs that appeared since (a new effect, a rat, a prop) get their other lamp state too. */
     private warmLampStates(now:number):void {
-        const warm=this.lampWarm,renderer=this.stage.renderer,count=renderer.info.programs?.length??0;
+        const warm=this.lampWarm??={programs:0,at:0,busy:false},renderer=this.stage.renderer,count=renderer.info?.programs?.length??0;
         if(warm.busy||this.compiling||now-warm.at<2000||count<=warm.programs)return;
         warm.busy=true;warm.at=now;
         this.compileOtherLampState().then(()=>checkPrograms(renderer)).catch(()=>undefined)
@@ -606,7 +611,7 @@ export class GameSession {
                         if(message.hp>0)this.hud.showHitMarker(entity.hp-message.hp);
                         const at=entity.mesh.position.clone().add(new THREE.Vector3(0,1,0)),normal=incoming.clone().negate();
                         this.feel.heavyImpact(at,normal,entity.mesh);
-                        if(message.weapon==='laser'||message.weapon==='tommy-gun'){this.feel.heavyArsenal(message.weapon==='laser'?'laser-hit':'tommy-hit');this.feel.heavyWeaponImpact(at,normal,message.weapon);}
+                        if(message.weapon==='laser'||message.weapon==='tommy-gun'||message.weapon==='persuader'){this.feel.heavyArsenal(message.weapon==='laser'?'laser-hit':message.weapon==='persuader'?'persuader-hit':'tommy-hit');this.feel.heavyWeaponImpact(at,normal,message.weapon);}
                         duckWorld(this.stage.listener.context,message.hp===0?1:.5);
                     }
                 }

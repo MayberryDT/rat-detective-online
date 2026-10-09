@@ -7,7 +7,6 @@ export const INCIDENTS = [
     {id:'crossfire',title:'Crossfire',description:'Off the first wall the cheese catches fire and doubles its speed.'},
     {id:'scattershot',title:'Scattershot',description:'Every shot is a five-ball fan, and every ball knocks rats flying.'},
     {id:'blackout',title:'Blackout',description:'The power is out. Every rat has a flashlight.'},
-    {id:'code-violation',title:'Code Violation',description:'Every machine is out of order and supplies come out faulty. Quick Fix still heals.'},
     {id:'most-wanted',title:'Most Wanted',description:'Whoever is winning is in the searchlight. Take them down for a supply.'},
     {id:'all-units',title:'All Units',description:'The fallen respawn as backup, right beside the action.'},
 ] as const;
@@ -17,7 +16,7 @@ export const isIncidentId = (value: unknown): value is IncidentId => INCIDENTS.s
 export const LEGACY_INCIDENTS = {
     'kickback':'scattershot','after-hours-collection':'crossfire','return-to-sender':'crossfire',
     // Retired 1 October (protocol 27): stored rooms may still hold them.
-    'delayed-reaction':'crossfire','clean-bill':'most-wanted','rat-race':'all-units','malpractice':'code-violation',
+    'delayed-reaction':'crossfire','clean-bill':'most-wanted','rat-race':'all-units','malpractice':'crossfire',
     'cheesequake':'crossfire','ricochet-racket':'scattershot','popcorn-panic':'scattershot',
     // Renamed after Tyler's playtest (1 October, "nothing about God"), then removed with Cheddar Shower and Big Cheese.
     'act-of-god':'crossfire',
@@ -27,6 +26,8 @@ export const LEGACY_INCIDENTS = {
     'cheddar-shower':'crossfire',
     // Removed after the three-human playtest (2 October, protocol 31): one shot a second for everyone slowed play.
     'big-cheese':'crossfire',
+    // Removed 9 October (protocol 41, Tyler: "I hate code violation ... everyone always complains about it").
+    'code-violation':'crossfire',
 } as const satisfies Record<string,IncidentId>;
 export type LegacyIncidentId = keyof typeof LEGACY_INCIDENTS;
 export const isLegacyIncidentId = (value: unknown): value is LegacyIncidentId => typeof value === 'string' && Object.prototype.hasOwnProperty.call(LEGACY_INCIDENTS, value);

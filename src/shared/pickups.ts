@@ -2,14 +2,14 @@ import type { Vec3Data } from './networkProtocol';
 import { DOCKS_JOBS } from './city/kit/parts/docks';
 import { PRECINCT_JOBS } from './city/kit/parts/precinct';
 
-/** The seven pickups: four supplies and three special weapons. Kept literal so snapshot validation can share it. */
-export const PICKUP_KINDS = ['ironclad', 'hustle', 'quick-fix', 'stakeout', 'tommy-gun', 'laser', 'mousetrap'] as const;
+/** The eight pickups: four supplies and four special weapons. Kept literal so snapshot validation can share it. */
+export const PICKUP_KINDS = ['ironclad', 'hustle', 'quick-fix', 'stakeout', 'tommy-gun', 'laser', 'mousetrap', 'persuader'] as const;
 export type PickupKind = typeof PICKUP_KINDS[number];
 export const isPickupKind = (value: unknown): value is PickupKind =>
     typeof value === 'string' && (PICKUP_KINDS as readonly string[]).includes(value);
 /** Special weapons. A rat holds at most one: a new claim replaces it, death and the round's reset clear it. While
  * held it replaces the incident's shot pattern (the Excessive Force carrier's damage multiplier still applies). */
-export const WEAPON_KINDS = ['tommy-gun', 'laser', 'mousetrap'] as const;
+export const WEAPON_KINDS = ['tommy-gun', 'laser', 'mousetrap', 'persuader'] as const;
 export type WeaponKind = typeof WEAPON_KINDS[number];
 export const isWeaponKind = (value: unknown): value is WeaponKind =>
     typeof value === 'string' && (WEAPON_KINDS as readonly string[]).includes(value);
@@ -38,6 +38,8 @@ export const PICKUP_TUNING = {
      * The Tommy Gun lasts 12 s (Tyler, 2 October, protocol 31). */
     tommyMs: 12_000,
     laserMs: 15_000,
+    /** The Persuader: on a timer like the others (no cylinder to count: every shot is rewarded). */
+    persuaderMs: 15_000,
 } as const;
 /** The special weapons' rules, the same for every rat, human or bot. */
 export const WEAPON_TUNING = {
@@ -58,6 +60,12 @@ export const WEAPON_TUNING = {
      * stepped clear. `trapHp` ball hits destroy it (a laser hit counts `laserTrapHits`) and free whoever it holds; a
      * broken trap stays in the snapshot `trapBrokenMs` so clients can play the break. One per rat; it outlives its
      * owner's death, not the round. Acquisition is immediately ready; `trapLockMs` remains zero for legacy presentation callers. */
+    /** The Persuader (Tyler, 9 October: a new noir gun as fun as the Tommy, never oppressive): a snub-nose revolver
+     * firing one big slow cheese slug a click, at most one every `persuaderIntervalMs` (the hammer). A slug flies at
+     * `persuaderSpeed` of a ball's speed (you can see it coming and dodge), `persuaderRadius` wide, deals
+     * `persuaderDamage` (headshots kill) and knocks the rat it hits flying (`persuaderShove` along the shot,
+     * `persuaderLift` up), into walls, off roofs, into the harbour. Ironclad reflects it like any ball. */
+    persuaderIntervalMs: 550, persuaderSpeed: .62, persuaderRadius: .34, persuaderDamage: 2, persuaderShove: 30, persuaderLift: 13,
     trapReach: 2.9, trapRadius: 1.5, trapFoot: .35, trapHeight: 1.2, trapHp: 8, laserTrapHits: 3, trapHoldMs: 3000, trapRearmMs: 900, trapBrokenMs: 700, trapLockMs: 0,
 } as const;
 /** The placed Mousetrap's size: the model's board (1.5 wide, 2.5 long) scaled so its half-length is `trapRadius`, and
@@ -71,7 +79,7 @@ export const BUFF_MS: Record<TimedPickup, number> = { ironclad: PICKUP_TUNING.ir
 export const BUFF_FIELDS: readonly (keyof PlayerBuffs)[] = TIMED_PICKUPS.map(kind => BUFF_FIELD[kind]);
 export const isTimedPickup = (kind: PickupKind): kind is TimedPickup => (TIMED_PICKUPS as readonly string[]).includes(kind);
 /** A weapon's timer; the Mousetrap has none. */
-export const WEAPON_MS: Readonly<Partial<Record<WeaponKind, number>>> = { 'tommy-gun': PICKUP_TUNING.tommyMs, laser: PICKUP_TUNING.laserMs };
+export const WEAPON_MS: Readonly<Partial<Record<WeaponKind, number>>> = { 'tommy-gun': PICKUP_TUNING.tommyMs, laser: PICKUP_TUNING.laserMs, persuader: PICKUP_TUNING.persuaderMs };
 
 export interface PickupCopy { title: string; effect: string; flavor: string }
 export const PICKUP_COPY: Record<PickupKind, PickupCopy> = {
@@ -81,6 +89,7 @@ export const PICKUP_COPY: Record<PickupKind, PickupCopy> = {
     stakeout: { title: 'STAKEOUT', effect: 'See every rat in the city through walls', flavor: 'Eyes on the whole town.' },
     'tommy-gun': { title: 'TOMMY GUN', effect: 'Hold fire to spray cheese', flavor: 'The Chicago typewriter.' },
     laser: { title: 'LASER', effect: 'Instant beam · bounces off walls', flavor: 'Science, detective.' },
+    persuader: { title: 'THE PERSUADER', effect: 'Big slow slugs · every hit sends a rat flying', flavor: 'Ask nicely. Then ask again.' },
     mousetrap: { title: 'MOUSETRAP', effect: 'Fire to lob it a short distance · it holds any rat that steps on it', flavor: 'Bait not included.' },
 };
 

@@ -59,7 +59,7 @@ const EYE = 1.5, CHEST = 1.3, HEAD = 1.9;
  * gone past it once this far away or this far above or below. */
 const PASS_REACH = 12, PASS_LEAVE = 16, PASS_FLOOR = 3, PASS_OFF_FLOOR = 6;
 const PASSED: Record<PickupKind, string> = { ironclad: 'passed:ironclad', hustle: 'passed:hustle', 'quick-fix': 'passed:quick-fix', stakeout: 'passed:stakeout',
-  'tommy-gun': 'passed:tommy-gun', laser: 'passed:laser', mousetrap: 'passed:mousetrap' };
+  'tommy-gun': 'passed:tommy-gun', laser: 'passed:laser', mousetrap: 'passed:mousetrap', persuader: 'passed:persuader' };
 
 export interface RecorderDeps {
   room: string;

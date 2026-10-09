@@ -59,9 +59,10 @@ export class CarrierSight {
         if(list.length>1)list.sort((a,b)=>Math.hypot(a.p.x-self.x,a.p.y-self.y,a.p.z-self.z)-Math.hypot(b.p.x-self.x,b.p.y-self.y,b.p.z-self.z));
     }
 
-    /** A dead witness's tip (`cityMarks`) read where it lies: it saw `carrier` at `p` at `at`. Taken only while that rat
-     * still carries this case and the tip is newer than this rat's own fix, as a player follows the chalk arrow. */
-    tip(key:string,carrier:string,p:Vec3Data,at:number):void {
+    /** Evidence read the way a player reads it (mindVersion 18): hot wax in sight, pigeons over the roofs, a police
+     * radio call. Each says `carrier` was at `p` at `at`; taken only while that rat still carries this case and the lead
+     * is newer than this rat's own fix. */
+    lead(key:string,carrier:string,p:Vec3Data,at:number):void {
         const fix=this.fixes.get(key);
         if(!fix||fix.id!==carrier||fix.known&&fix.at>=at)return;
         fix.point.x=p.x;fix.point.y=p.y;fix.point.z=p.z;fix.at=at;fix.known=true;

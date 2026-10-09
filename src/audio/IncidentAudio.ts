@@ -44,9 +44,29 @@ const SYNTH = {
         let buzz = 0; for (let k = 1; k <= 6; k++) buzz += Math.sin(k * phase) / k;
         return buzz * (.85 + .15 * Math.sin(2 * Math.PI * 6 * t)) * Math.min(1, t * 30) * Math.min(1, (.9 - t) * 12);
     }},
-    // Code Violation: a faulty fitting arcing, a crackle over a mains buzz.
-    zap: {seconds: .35, peak: .3, sample: (t: number, n: () => number) =>
-        (n() * (Math.sin(2 * Math.PI * 120 * t) > .3 ? 1 : .2) + .3 * Math.sign(Math.sin(2 * Math.PI * 100 * t))) * Math.exp(-t * 7)},
+    // Pigeons flushed by the hot case: a clatter of wings, quick flaps of rustling noise thinning out as the flock climbs.
+    flutter: (() => {
+        let low = 0;
+        return {seconds: 1.5, peak: .32, sample: (t: number, n: () => number) => {
+            if (t === 0) low = 0;
+            low += (n() - low) * .35;
+            const flap = Math.abs(Math.sin(2 * Math.PI * (13 + 4 * Math.sin(7 * t)) * t)) ** 3;
+            return (n() - low) * flap * Math.min(1, t * 60) * Math.exp(-t * 1.9);
+        }};
+    })(),
+    // A fresh drop of hot wax hitting the street: a short hiss with a crackle in it.
+    sizzle: (() => {
+        let last = 0;
+        return {seconds: .45, peak: .22, sample: (t: number, n: () => number) => {
+            if (t === 0) last = 0;
+            const value = n(), high = value - last; last = value;
+            return high * (.7 + .3 * (n() > .85 ? 1 : 0)) * Math.min(1, t * 200) * Math.exp(-t * 7);
+        }};
+    })(),
+    // The police scanner keying up: a burst of squelch, two chirps and a breath of static.
+    radio: {seconds: .42, peak: .24, sample: (t: number, n: () => number) =>
+        n() * (Math.exp(-t * 28) * .9 + .12) * Math.min(1, (.42 - t) * 40)
+        + (t > .06 && t < .12 ? Math.sin(2 * Math.PI * 1250 * t) * .55 : 0) + (t > .15 && t < .2 ? Math.sin(2 * Math.PI * 1650 * t) * .45 : 0)},
     // Crossfire: a bright ricochet "pyew", a whine gliding down from 2.6 kHz with a ringing metal partial and a click of
     // contact. Each bounce of a ball plays it higher.
     ricochet: {seconds: .3, peak: .34, sample: (t: number, n: () => number) => {

@@ -111,7 +111,7 @@ export class RoundAwards {
         const stats=this.of(killer.id);
         this.kills++;
         if(how.headshot)stats.headshots++;
-        bump(stats.weapons,how.explosive?'blast':how.weapon==='tommy-gun'||how.weapon==='laser'?how.weapon:'cheese');
+        bump(stats.weapons,how.explosive?'blast':how.weapon==='tommy-gun'||how.weapon==='laser'||how.weapon==='persuader'?how.weapon:'cheese');
         stats.streak=Math.max(stats.streak,killer.streak??0);
         stats.longest=Math.max(stats.longest,Math.hypot(killer.x-victim.x,killer.y-victim.y,killer.z-victim.z));
     }

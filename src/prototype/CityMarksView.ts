@@ -1,46 +1,48 @@
 import * as THREE from 'three';
 import {mergeGeometries} from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import {MARKS,type CaseTip,type ChalkMark,type MuckRun} from '../shared/cityMarks';
+import {MARKS,type ChalkMark,type Flock,type MuckRun,type WaxRun} from '../shared/cityMarks';
+import {PigeonFlocks} from './PigeonFlocks';
 import {PawPrints} from './PawPrints';
-import {CASE_RED} from './caseRed';
 
 /** Muck off a sewer floor: wet olive slime, light enough to read on the dark street. */
 export const MUCK_INK=0x6f7a3a;
 /** The outline's square on the ground (a sprawled rat with room for its tail), and how rain wears it: from full to
  * `worn` over `wearMs`. A new outline is drawn in over `drawMs` as the body goes. */
 const CHALK={size:3.4,worn:.4,wearMs:180_000,drawMs:900} as const;
-/** The tip: its note, and the chalk arrow toward where the witness saw the carrier (`min`…`max` long, longer the
- * farther away). */
-const TIP={note:{w:.62,d:.78},arrow:{w:.9,min:2.2,max:5.5,per:.12},drawMs:700} as const;
+/** Hot wax: a drop's size, how long it glows, how long it takes to cool dark, and how near it is drawn. */
+const WAX={size:.95,glowMs:3_500,coolMs:20_000,range:70} as const;
 const UP=new THREE.Vector3(0,1,0);
 
-interface Marks {chalk?:readonly ChalkMark[];tips?:readonly CaseTip[];muck?:readonly MuckRun[]}
+interface Marks {chalk?:readonly ChalkMark[];muck?:readonly MuckRun[];wax?:readonly WaxRun[];flocks?:readonly Flock[]}
 
 /** What the chaos leaves (`cityMarks.ts`), presentation of the authority's marks: chalk outlines with each dead rat's
- * dropped fedora, a witness's tip (a red-edged note and a chalk arrow) and sewer muck prints. Instanced batches, lit
- * as evidence with the case files; GPU depth owns occlusion. Matte chalk, never glowing. */
+ * dropped fedora, sewer muck prints, the hot case's wax (bright orange as it lands, cooling to a dark red bead) and
+ * the pigeons it spooks. Instanced batches, lit as evidence with the case files; GPU depth owns occlusion. */
 export class CityMarksView {
     readonly root=new THREE.Group();
     readonly muck=new PawPrints(MUCK_INK,{afterMs:0,name:'sewer-muck-prints'});
     private readonly chalk:Decals;
-    private readonly notes:Decals;
-    private readonly arrows:Decals;
+    private readonly wax:THREE.InstancedMesh;
+    readonly pigeons=new PigeonFlocks();
     private readonly hats:THREE.InstancedMesh;
     private readonly pose=new THREE.Object3D();
     private readonly color=new THREE.Color();
     constructor(){
         this.root.name='city-marks';
         this.chalk=new Decals('chalk-outlines',CHALK.size,CHALK.size,MARKS.chalk,0xe8e2d2,chalkOutlineTexture);
-        this.notes=new Decals('witness-tips',TIP.note.w,TIP.note.d,MARKS.tips,0xffffff,tipNoteTexture);
-        this.arrows=new Decals('witness-arrows',TIP.arrow.w,1,MARKS.tips,0xe8e2d2,chalkArrowTexture);
+        const drop=new THREE.PlaneGeometry(WAX.size,WAX.size);drop.rotateX(-Math.PI/2);
+        this.wax=new THREE.InstancedMesh(drop,new THREE.MeshBasicMaterial({transparent:true,depthWrite:false,toneMapped:false,
+            polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-8}),MARKS.wax*MARKS.waxRun);
+        this.wax.name='hot-wax';this.wax.count=0;this.wax.frustumCulled=false;this.wax.raycast=()=>{};this.wax.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        this.wax.setColorAt(0,new THREE.Color());
         this.hats=new THREE.InstancedMesh(hatGeometry(),new THREE.MeshStandardMaterial({roughness:.85,metalness:0}),MARKS.chalk);
         this.hats.name='dropped-fedoras';this.hats.count=0;this.hats.frustumCulled=false;this.hats.castShadow=false;this.hats.receiveShadow=true;
         this.hats.instanceMatrix.setUsage(THREE.DynamicDrawUsage);this.hats.raycast=()=>{};
-        this.root.add(this.chalk.mesh,this.notes.mesh,this.arrows.mesh,this.hats,this.muck.mesh);
+        this.root.add(this.chalk.mesh,this.hats,this.muck.mesh,this.wax,this.pigeons.root);
     }
     /** `now`: the authority's clock. `still`: a replay (everything as it lies). */
-    update(marks:Marks,now:number,eye:THREE.Vector3,frustum:THREE.Frustum,motion:boolean,still:boolean):void {
-        const chalk=marks.chalk??[],tips=marks.tips??[];
+    update(marks:Marks,now:number,eye:THREE.Vector3,frustum:THREE.Frustum,motion:boolean,still:boolean,view:THREE.Camera):void {
+        const chalk=marks.chalk??[];
         this.chalk.begin();this.hats.count=0;
         for(const m of chalk){
             const age=Math.max(0,now-m.at),drawn=still?1:Math.min(1,age/CHALK.drawMs);
@@ -55,21 +57,31 @@ export class CityMarksView {
         }
         this.chalk.end();
         this.hats.visible=this.hats.count>0;this.hats.instanceMatrix.needsUpdate=true;if(this.hats.instanceColor)this.hats.instanceColor.needsUpdate=true;
-        this.notes.begin();this.arrows.begin();
-        for(const t of tips){
-            const age=Math.max(0,now-t.at),drawn=still?1:Math.min(1,age/TIP.drawMs);
-            const dx=t.to.x-t.p.x,dz=t.to.z-t.p.z,h=Math.atan2(dx,dz),d=Math.hypot(dx,dz);
-            this.notes.add(t.p,h+.35,1,Math.min(1,drawn*2));
-            // The arrow starts past the note, drawn out toward where the carrier was seen.
-            const length=THREE.MathUtils.clamp(d*TIP.arrow.per+TIP.arrow.min,TIP.arrow.min,TIP.arrow.max)*drawn;
-            if(length>.2)this.arrows.add({x:t.p.x+Math.sin(h)*(.55+length/2),y:t.p.y+.003,z:t.p.z+Math.cos(h)*(.55+length/2)},h,length,1);
-        }
-        this.notes.end();this.arrows.end();
+        this.updateWax(marks.wax??[],now,eye,still);
+        this.pigeons.update(marks.flocks??[],now,still,view);
         this.muck.update(marks.muck??[],now,eye,frustum,motion,still);
     }
-    warm():void {for(const d of [this.chalk,this.notes,this.arrows])d.warm();this.muck.warm();this.hats.count=1;this.hats.visible=true;this.hats.setMatrixAt(0,new THREE.Matrix4());this.hats.setColorAt(0,this.color.setHex(0));}
-    clear():void {for(const d of [this.chalk,this.notes,this.arrows])d.clear();this.hats.count=0;this.hats.visible=false;this.muck.clear();}
-    dispose():void {this.clear();for(const d of [this.chalk,this.notes,this.arrows])d.dispose();this.hats.geometry.dispose();(this.hats.material as THREE.Material).dispose();this.hats.dispose();this.muck.dispose();}
+    /** Each drop glows bright as it lands, then cools to a dark bead (a fresh one says the carrier passed moments ago). */
+    private updateWax(runs:readonly WaxRun[],now:number,eye:THREE.Vector3,still:boolean):void {
+        let n=0;const pose=this.pose,color=this.color;
+        if(runs.length)this.ensureWaxArt();
+        for(const r of runs)for(let i=0;i+3<r.f.length;i+=4){
+            const x=r.f[i]!,y=r.f[i+1]!,z=r.f[i+2]!;
+            if(Math.hypot(x-eye.x,z-eye.z)>WAX.range)continue;
+            const age=still?WAX.glowMs:Math.max(0,now-(r.at+r.f[i+3]!));
+            const hot=1-Math.min(1,age/WAX.glowMs),cool=Math.min(1,age/WAX.coolMs),fade=1-Math.max(0,(age-(MARKS.waxMs-3000))/3000);
+            // White-orange as it lands, the case's red as it sets, a dark bead at the end.
+            color.setRGB((.55+.6*(1-cool)+1.8*hot)*fade,(.05+.16*(1-cool)+.9*hot)*fade,(.04+.06*(1-cool)+.35*hot)*fade);
+            pose.position.set(x,y,z);pose.rotation.set(0,(i*1.7+r.at)%6.28,0);pose.scale.setScalar(.75+.6*hot+.25*((i>>2)%3)/2);pose.updateMatrix();
+            this.wax.setMatrixAt(n,pose.matrix);this.wax.setColorAt(n,color);n++;
+        }
+        this.wax.count=n;this.wax.visible=n>0;this.wax.instanceMatrix.needsUpdate=true;if(this.wax.instanceColor)this.wax.instanceColor.needsUpdate=true;
+    }
+    /** The wax art is drawn on first use, as the warm-up does. */
+    private ensureWaxArt():void {const material=this.wax.material as THREE.MeshBasicMaterial;if(!material.map){material.map=waxTexture();material.needsUpdate=true;}}
+    warm():void {this.ensureWaxArt();this.chalk.warm();this.muck.warm();this.pigeons.warm();this.wax.count=1;this.wax.visible=true;this.wax.setMatrixAt(0,new THREE.Matrix4());this.hats.count=1;this.hats.visible=true;this.hats.setMatrixAt(0,new THREE.Matrix4());this.hats.setColorAt(0,this.color.setHex(0));}
+    clear():void {this.chalk.clear();this.hats.count=0;this.hats.visible=false;this.wax.count=0;this.wax.visible=false;this.muck.clear();this.pigeons.clear();}
+    dispose():void {this.clear();this.chalk.dispose();this.hats.geometry.dispose();(this.hats.material as THREE.Material).dispose();this.hats.dispose();this.wax.geometry.dispose();(this.wax.material as THREE.Material).dispose();this.wax.dispose();this.muck.dispose();this.pigeons.dispose();}
 }
 
 /** Flat instanced decals with a per-instance ink (alpha) and a length scale along their heading. */
@@ -163,32 +175,17 @@ function chalkOutlineTexture():THREE.CanvasTexture {
     return outline;
 }
 
-let arrow:THREE.CanvasTexture|undefined;
-/** A chalk arrow along the canvas toward its foot (+z): a shaft and an open head. */
-function chalkArrowTexture():THREE.CanvasTexture {
-    if(arrow)return arrow;
-    const canvas=document.createElement('canvas');canvas.width=64;canvas.height=256;
-    const g=canvas.getContext('2d')!;g.strokeStyle='#fff';g.lineCap=g.lineJoin='round';
-    const pen=chalkPen(g,1941);
-    pen.stroke([[32,10],[31,120],[33,236]],7);pen.stroke([[10,206],[32,244],[54,206]],7);
-    pen.dust(60,64,256);
-    arrow=new THREE.CanvasTexture(canvas);arrow.colorSpace=THREE.SRGBColorSpace;
-    return arrow;
-}
-
-let note:THREE.CanvasTexture|undefined;
-/** The witness's note: crumpled cream paper, a case-red edge and a hurried scrawl. */
-function tipNoteTexture():THREE.CanvasTexture {
-    if(note)return note;
-    const canvas=document.createElement('canvas');canvas.width=160;canvas.height=200;
-    const g=canvas.getContext('2d')!;
-    g.fillStyle='#e9e1cb';g.beginPath();g.moveTo(8,6);g.lineTo(150,12);g.lineTo(154,190);g.lineTo(6,194);g.closePath();g.fill();
-    g.strokeStyle=`#${CASE_RED.toString(16).padStart(6,'0')}`;g.lineWidth=6;g.stroke();
-    // Crumple creases.
-    g.strokeStyle='rgba(90,70,40,.35)';g.lineWidth=1.5;
-    for(const [a,b,c,d] of [[10,60,150,90],[30,190,120,10],[8,140,154,120]] as const){g.beginPath();g.moveTo(a,b);g.lineTo(c,d);g.stroke();}
-    g.fillStyle='#2a2218';g.font='bold 30px "Courier New", monospace';g.textAlign='center';
-    g.save();g.translate(80,100);g.rotate(Math.PI);g.fillText('SAW',0,-26);g.fillText("'EM",0,8);g.font='bold 40px sans-serif';g.fillText('↑',0,52);g.restore();
-    note=new THREE.CanvasTexture(canvas);note.colorSpace=THREE.SRGBColorSpace;note.anisotropy=4;
-    return note;
+let drop:THREE.CanvasTexture|undefined;
+/** A splash of wax, white on clear (instance colour tints it): a round bead with a few splatter droplets. */
+function waxTexture():THREE.CanvasTexture {
+    if(drop)return drop;
+    const canvas=document.createElement('canvas');canvas.width=canvas.height=64;
+    const g=canvas.getContext('2d')!;g.fillStyle='#fff';
+    const bead=(x:number,y:number,r:number)=>{g.beginPath();g.arc(x,y,r,0,Math.PI*2);g.fill();};
+    // A soft halo (the glow while hot, a stain once cool) under the bead and its splatter.
+    const halo=g.createRadialGradient(32,32,4,32,32,31);halo.addColorStop(0,'rgba(255,255,255,.55)');halo.addColorStop(1,'rgba(255,255,255,0)');
+    g.fillStyle=halo;g.fillRect(0,0,64,64);g.fillStyle='#fff';
+    bead(32,32,11);bead(43,25,4.5);bead(21,40,3.5);bead(40,44,3);bead(23,22,2.5);bead(49,37,2);
+    drop=new THREE.CanvasTexture(canvas);drop.colorSpace=THREE.SRGBColorSpace;
+    return drop;
 }

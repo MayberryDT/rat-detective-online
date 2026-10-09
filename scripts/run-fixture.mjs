@@ -1,9 +1,10 @@
 // Opens a built visual fixture page in headless Chrome on this machine's GPU, waits for `window[<result>]` and prints it.
-// npm run visual:build && node scripts/run-fixture.mjs --page=lamp-cost.html --result=lampCost [--dist=dist-visual]
+// npm run visual:build && node scripts/run-fixture.mjs --page=lamp-cost.html --result=lampCost [--dist=dist-visual] [--query=&view=x]
+//   [--expression=<js returning a value once ready, undefined/null while not>]
 import {createReadStream,existsSync,mkdtempSync,rmSync} from 'node:fs';
 import {createServer} from 'node:http';import {spawn} from 'node:child_process';
 import {extname,join,resolve} from 'node:path';import {tmpdir} from 'node:os';import {parseArgs} from 'node:util';
-const {values}=parseArgs({options:{dist:{type:'string',default:'dist-visual'},page:{type:'string'},result:{type:'string'},timeout:{type:'string',default:'300'}}});
+const {values}=parseArgs({options:{dist:{type:'string',default:'dist-visual'},page:{type:'string'},result:{type:'string'},timeout:{type:'string',default:'300'},query:{type:'string',default:''},expression:{type:'string'}}});
 if(!values.page||!values.result)throw Error('--page and --result are required');
 const dist=resolve(values.dist),MIME={'.html':'text/html','.js':'text/javascript','.css':'text/css','.png':'image/png','.json':'application/json'};
 const server=createServer((q,r)=>{const path=resolve(dist,'.'+decodeURIComponent(new URL(q.url,'http://x').pathname));
@@ -17,7 +18,7 @@ try{
     const ws=new WebSocket(tab.webSocketDebuggerUrl);await new Promise(r=>ws.addEventListener('open',r,{once:true}));
     let id=0;const pending=new Map();ws.addEventListener('message',e=>{const m=JSON.parse(e.data);pending.get(m.id)?.(m);pending.delete(m.id);});
     const send=(method,params={})=>new Promise(r=>{const n=++id;pending.set(n,r);ws.send(JSON.stringify({id:n,method,params}));});
-    await send('Page.navigate',{url:`http://127.0.0.1:${server.address().port}/${values.page}?agent=1&mute=1`});
-    let value;for(let i=0;i<Number(values.timeout)*2&&value===undefined;i++){await pause(500);value=(await send('Runtime.evaluate',{expression:`JSON.parse(JSON.stringify(window[${JSON.stringify(values.result)}]??null))`,returnByValue:true})).result?.result?.value??undefined;}
+    await send('Page.navigate',{url:`http://127.0.0.1:${server.address().port}/${values.page}?agent=1&mute=1${values.query}`});
+    let value;for(let i=0;i<Number(values.timeout)*2&&value===undefined;i++){await pause(500);value=(await send('Runtime.evaluate',{expression:values.expression??`JSON.parse(JSON.stringify(window[${JSON.stringify(values.result)}]??null))`,returnByValue:true})).result?.result?.value??undefined;}
     console.log(JSON.stringify(value??'timed out'));ws.close();
 }finally{chrome.kill('SIGTERM');await pause(500);rmSync(profile,{recursive:true,force:true});server.close();}

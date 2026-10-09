@@ -142,7 +142,7 @@ describe('GameRoom websockets', () => {
     const random=vi.spyOn(Math,'random').mockReturnValue(.3);
     try{
       await runInDurableObject(env.GAME_ROOM.getByName(room),async(instance:GameRoom)=>{
-        const game=instance as unknown as {players:Map<string,PlayerData>;startChaos():void;chaos:{snapshot(full:boolean):{buffs?:Record<string,{hustleUntil?:number}>}};handleHit(id:string,message:ClientMessage):Promise<void>};
+        const game=instance as unknown as {players:Map<string,PlayerData>;startChaos():void;chaos:{snapshot(full:boolean):{buffs?:Record<string,{hustleUntil?:number;stakeoutUntil?:number}>}};handleHit(id:string,message:ClientMessage):Promise<void>};
         game.startChaos();
         const shooter=game.players.get(aw.id)!,healed:number[]=[];
         for(let kill=1;kill<=7;kill++){
@@ -153,12 +153,12 @@ describe('GameRoom websockets', () => {
         }
         expect(healed).toEqual([3,5]);
         shooter.hp=MAX_HP;
-        expect(game.chaos.snapshot(false).buffs?.[aw.id]?.hustleUntil).toBeUndefined();
-        // Unhurt, Quick Fix leaves the draw: the same roll is Hot Pursuit.
+        expect(game.chaos.snapshot(false).buffs?.[aw.id]?.stakeoutUntil).toBeUndefined();
+        // Unhurt, Quick Fix leaves the draw: the same roll is Stakeout (third of the seven others).
         game.players.get(bw.id)!.hp=MAX_HP;
         await game.handleHit(aw.id,{type:'hit',victimId:bw.id,damage:MAX_HP});
         expect(shooter.streak).toBe(8);
-        expect(game.chaos.snapshot(false).buffs?.[aw.id]?.hustleUntil).toBeGreaterThan(0);
+        expect(game.chaos.snapshot(false).buffs?.[aw.id]?.stakeoutUntil).toBeGreaterThan(0);
       });
     }finally{random.mockRestore();}
     const heal=await b.inbox.waitFor('playerHealed');

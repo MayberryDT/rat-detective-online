@@ -5,7 +5,7 @@ import type {WeaponKind} from '../shared/pickups';
 /** The death screen's recap: who got you and with what. */
 export interface DeathRecap {killer:string;how:string}
 
-const WEAPONS:Record<WeaponKind,string>={'tommy-gun':'TOMMY GUN',laser:'LASER',mousetrap:'MOUSETRAP'};
+const WEAPONS:Record<WeaponKind,string>={'tommy-gun':'TOMMY GUN',laser:'LASER',mousetrap:'MOUSETRAP',persuader:'THE PERSUADER'};
 const CITY:Record<EnvironmentCause,string>={drowned:'DROWNED IN THE HARBOUR','evidence-tampering':'A RUNAWAY CASE'};
 /** Incidents that change the cheese gun's ball; a special weapon replaces them. */
 const SHOT_PATTERNS:Partial<Record<IncidentId,string>>={scattershot:'SCATTERSHOT',crossfire:'RED-HOT RICOCHET','bad-ammunition':'BAD AMMUNITION'};

@@ -235,7 +235,7 @@ class Playback {
                 if(owner){
                     // The Laser's zap comes with its beam; a Mousetrap is silent.
                     const incident=s?.dispatch.phase==='active'?incidentInfo(s.dispatch.incident).id:undefined;
-                    const cue:GunshotCue|undefined=weapon?weapon==='tommy-gun'?'tommy':undefined:incident==='bad-ammunition'?'malfunction':incident==='scattershot'?'shotgun':'normal';
+                    const cue:GunshotCue|undefined=weapon?weapon==='tommy-gun'?'tommy':weapon==='persuader'?'shotgun':undefined:incident==='bad-ammunition'?'malfunction':incident==='scattershot'?'shotgun':'normal';
                     if(cue)this.audio.gunshot(event.origin,cue);
                     owner.playShootAnimation(new THREE.Vector3(event.origin.x,event.origin.y,event.origin.z).addScaledVector(new THREE.Vector3(event.direction.x,event.direction.y,event.direction.z),30));
                 }

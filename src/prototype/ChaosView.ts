@@ -20,6 +20,7 @@ import { CheeseImpactEffects } from '../weapons/CheeseImpactEffects';
 import { bindIncidentAudio, disposeIncidentAudio, playSynth, startCaseBuzz } from '../audio/IncidentAudio';
 import type { RatEntity } from '../entities/RatEntity';
 import { incidentInfo } from '../shared/incidentCatalog';
+import {PoliceScannerFeed} from '../ui/PoliceScannerFeed';
 import { DispatchHud } from './DispatchHud';
 import { AssignmentDestinations } from './AssignmentDestinations';
 import { ASSIGNMENT_DESTINATIONS, activeDestination } from '../shared/assignments';
@@ -41,12 +42,11 @@ import {CrossfireVisual,heatPalette} from './CrossfireVisual';
 import {heatStreak} from './CrossfireFlames';
 import {badRound} from '../shared/shotPattern';
 import {BAD_AMMO} from '../shared/shotBallistics';
-import {LAUNCH_MACHINES} from '../shared/chaosState';
 import { ChaosPresentation, copyPresentationPose, type PresentationPose } from '../shared/ChaosPresentation';
 import { PickupVisual } from './PickupVisual';
 import {faultyCard, heldCard, hotCaseCard, pickupArtwork, powerupCard} from './pickupArtwork';
 import {CASE_RED} from './caseRed';
-import { BUFF_FIELD, BUFF_MS, FAULTY_MS, PICKUP_TUNING, TIMED_PICKUPS, WEAPON_KINDS, WEAPON_MS, WEAPON_TUNING, activeBuffs, entryFaulty, entryWeapon, heldWeapon, isTimedPickup, type BuffMap, type FaultyKind, type PickupKind, type TimedPickup, type WeaponKind } from '../shared/pickups';
+import { BUFF_FIELD, BUFF_MS, FAULTY_MS, PICKUP_TUNING, TIMED_PICKUPS, WEAPON_KINDS, WEAPON_MS, WEAPON_TUNING, activeBuffs, entryWeapon, heldWeapon, isTimedPickup, type BuffMap, type FaultyKind, type PickupKind, type TimedPickup, type WeaponKind } from '../shared/pickups';
 import {TrapField,type TrapEvent} from './TrapVisual';
 import {closestPointOnSegment} from '../shared/netplay';
 
@@ -169,9 +169,10 @@ export class ChaosView {
     private buffsSeen=false;
     /** Your special weapon and its deadline as last seen, so a new claim (or a refresh) is announced once. */
     private localWeapon?:WeaponKind;
+    /** The police scanner's calls on screen (not in replays). */
+    private scanner?:PoliceScannerFeed;
     private localWeaponUntil=0;
     /** Your Code Violation dud's deadline as last seen (so a new one is announced once), and its card. */
-    private localDudUntil=0;
     private dud?:{kind:FaultyKind;card:HTMLElement};
     /** HELD: another rat's Mousetrap has you, until it lets go. */
     private held?:HTMLElement;
@@ -244,7 +245,6 @@ export class ChaosView {
     /** W2: every rat's laser beams, scorches and their zap/crack (yours drawn on the press). */
     private readonly beams:LaserBeamVisual;
     /** Code Violation: when the next malfunction spark (and its zap) may fly. */
-    private sparkAt=0;
     private readonly presented:PresentationPose={p:{x:0,y:0,z:0},q:{x:0,y:0,z:0,w:1}};
     private readonly p=new THREE.Vector3();
     private readonly impactPoint=new THREE.Vector3();
@@ -279,6 +279,8 @@ export class ChaosView {
     constructor(private readonly scene:THREE.Scene,private resolveRat:(id:string)=>RatEntity|undefined,private audio?:AudioContext,private extrapolate=true,private feedback?:(cue:FeedbackCue,origin?:Vec3Data)=>void,private foley?:FoleyWorld,traceShot?:ShotTrace,private readonly replay?:ChaosReplay){
         scene.add(this.caseFiles.root);
         this.clock=replay?.clock??(()=>performance.now());this.synth=replay?.synth??playSynth;
+        // The hot case spooks pigeons: their clatter where they burst up (heard far off, in the ranked world mix).
+        this.caseFiles.marks.pigeons.onFlush=p=>this.synth('flutter',p,.95+Math.random()*.1,1.6);
         this.reactions=new RatReactionEvents(resolveRat);
         this.localShots=new LocalShotPresentation(traceShot);
         this.root.add(this.draws.root);
@@ -294,6 +296,7 @@ export class ChaosView {
         this.jurisdictionZones=new JurisdictionZones(scene);
         if(!replay){
             this.hud=new DispatchHud(frequency=>this.feedback?this.feedback('tick'):this.bell(frequency),this.feedback);
+            this.scanner=new PoliceScannerFeed(document,()=>this.synth('radio',undefined,.97+Math.random()*.06,.7));
             this.assignmentDestinations=new AssignmentDestinations();
             const bar=this.buffBar=document.createElement('div');
             bar.className='pickup-buffs';bar.style.display='none';
@@ -340,7 +343,7 @@ export class ChaosView {
         this.onClaim?.(kind,camera,0);
     }
     private clearPickupCards():void {
-        this.healingUntil=0;this.claimed=undefined;for(const kind of TIMED_PICKUPS)this.localBuffs[kind]=0;this.localWeapon=undefined;this.localWeaponUntil=0;this.localDudUntil=0;
+        this.healingUntil=0;this.claimed=undefined;for(const kind of TIMED_PICKUPS)this.localBuffs[kind]=0;this.localWeapon=undefined;this.localWeaponUntil=0;
         for(const card of this.buffCards.values())leave(card,'paperSlide',CARD_EXIT);
         if(this.dud){leave(this.dud.card,'paperSlide',CARD_EXIT);this.dud=undefined;}
         if(this.held){leave(this.held,'paperSlide',CARD_EXIT);this.held=undefined;}
@@ -369,7 +372,7 @@ export class ChaosView {
         // keeping their built props (rebuilding every site's was a quarter of each loop's restart).
         for(const visual of this.pickups.values())visual.restart();
         this.traps.clear();this.impacts.clear();this.crossfire.clear();
-        this.gripSwing=0;this.gripHitAt=-Infinity;this.sparkAt=0;
+        this.gripSwing=0;this.gripHitAt=-Infinity;
     }
     get trapPending():boolean{return this.traps.pending;}
     /** Your trigger: `weapon` is the held special weapon (with the Tommy's heat); `beam` your Laser's predicted path. */
@@ -571,7 +574,6 @@ export class ChaosView {
             if(visual&&visual.kind!==pickup.kind&&visual.settled){visual.dispose();this.pickups.delete(pickup.id);visual=undefined;}
             if(!visual){visual=new PickupVisual(this.scene,pickup.kind);visual.setXray(this.fixXray);this.pickups.set(pickup.id,visual);}
             visual.setPosition(pickup.x,pickup.y,pickup.z);
-            visual.setNervous(state.dispatch.phase==='active'&&incidentInfo(state.dispatch.incident).id==='code-violation');
             visual.setAvailableAt(pickup.availableAt??0);
             const accepted=this.acceptedPickups.get(pickup.id);
             if(accepted&&state.epoch===accepted.epoch&&(state.tick??0)>=accepted.tick&&(pickup.availableAt??0)!==accepted.generation)
@@ -602,14 +604,6 @@ export class ChaosView {
         if(seen&&weapon&&(weapon!==this.localWeapon||until!==this.localWeaponUntil)){this.pickupFeedback(weapon);}
         // W3: the trap is up in your paws: the next press launches it.
         this.localWeapon=weapon;this.localWeaponUntil=until;
-        // A Code Violation dud: the slap of a claim, then the faulty fitting's zap.
-        const dud=entryFaulty(mine,state.time),dudUntil=dud?mine!.faultyUntil!:0;
-        if(seen&&dud&&dudUntil!==this.localDudUntil){
-            this.feedback?.('pickup-slap');
-            const me=this.resolveRat(this.myId)?.mesh.position;
-            if(me&&feelState().on('codeViolation'))this.synth('zap',me,.8,FEEL.codeViolation.params.zap*1.4);
-        }
-        this.localDudUntil=dudUntil;
     }
     private updateBuffs(buffs:BuffMap|undefined,now:number):void{
         if(this.resolveRat(this.myId)?.dead){this.clearPickupCards();return;}
@@ -735,7 +729,6 @@ export class ChaosView {
         if(this.fixXray)this.updateFixBeacons(camera,now);
         this.bullets.count=0;this.chargedBullets.count=0;this.chargedGlow.count=0;this.missileTrail.count=0;this.dangerGlow.count=0;this.dangerTrails.count=0;
         const active=s.dispatch.phase==='active'?incidentInfo(s.dispatch.incident).id:undefined,crossfire=active==='crossfire';
-        if(active==='code-violation'&&feelState().on('codeViolation'))this.malfunction(wall,camera);
         // Bad Ammunition: each ball's personality shows in its look as well as its path (the path itself is real): a
         // superball is big and bouncy, a floater a fat lazy bubble, a hiccup quivers while it hangs, a corkscrew spins
         // hard, a snake waggles; each trails a pale streak so its path reads. Your own carry their personality; other
@@ -756,6 +749,8 @@ export class ChaosView {
             // and streak (K3; a Crossfire ball keeps its heat colours).
             const carried=heavy&&shot.owner===s.case.owner;
             let look=carried?1.35:1,spin=1;
+            // The Persuader's slug: a fat ball of cheese, its size the size it hits with, turning slowly.
+            if(shot.slug){look*=WEAPON_TUNING.persuaderRadius/BALL_RADIUS;spin=.4;}
             if(quirk==='superball'){look=1.4+.12*Math.sin(now*.05+i);spin=3;}
             else if(quirk==='floater'){look=1.7+.12*Math.sin(now*.008+i);spin=.3;}
             else if(quirk==='hiccup'){const hang=shot.age>=BAD_AMMO.hiccup.stopAt&&shot.age<BAD_AMMO.hiccup.goAt;look=hang?1.3+.3*Math.sin(now*.07):1.15;}
@@ -826,11 +821,11 @@ export class ChaosView {
         const hudCase=localCase??s.case,hudOwner=hudCase.owner?this.resolveRat(hudCase.owner):undefined;
         const caller=d.caller?this.resolveRat(d.caller):undefined;
         this.hud?.update(hudCase===s.case?s:{...s,case:hudCase},now,hudOwner?.name,!!hudOwner?.isPlayer,caller?.isPlayer?'you':caller?.name);
+        this.scanner?.update(s.scanner??[],now);
         if(this.lastHitPoint)this.assignmentDestinations?.clear();else this.assignmentDestinations?.updateCue(s.assignment,camera,this.resolveRat(this.myId)?.mesh.position);this.jurisdictionZones.update(s.assignment);
         this.cameraForTriggers=camera;
-        const haywire=active==='code-violation';
-        this.pressureMachine.update(s.pressure,now,camera,active==='pressure-surge',haywire);
-        this.pillars.update(d,now,camera,haywire);
+        this.pressureMachine.update(s.pressure,now,camera,active==='pressure-surge',false);
+        this.pillars.update(d,now,camera,false);
     }
     /** Polish 11: a fresh body pops its fedora on its first pose; `now` the body's clock (server ms), `v` its velocity. */
     private popCorpseHat(c:CorpseModel,now:number,v:Vec3Data):void {
@@ -891,18 +886,6 @@ export class ChaosView {
         if(d2>THREAT.range*THREAT.range)return false;
         const along=rx*v.x+ry*v.y+rz*v.z,speed2=v.x*v.x+v.y*v.y+v.z*v.z;
         return along>0&&speed2>0&&d2-along*along/speed2<THREAT.miss*THREAT.miss;
-    }
-    /** Code Violation: now and then a stocked supply or a launch machine spits sparks, with a zap when close. */
-    private malfunction(wall:number,camera:THREE.Camera):void {
-        if(wall<this.sparkAt)return;
-        this.sparkAt=wall+90+Math.random()*160;
-        const pick=Math.floor(Math.random()*(this.pickups.size+LAUNCH_MACHINES.length));
-        if(pick<this.pickups.size){
-            let i=0;
-            for(const visual of this.pickups.values())if(i++===pick){this.impactPoint.copy(visual.root.position);this.impactPoint.y+=1.2;break;}
-        }else{const m=LAUNCH_MACHINES[pick-this.pickups.size]!;this.impactPoint.set(m.box.x,m.box.y+m.box.h/2,m.box.z);}
-        this.impacts.spark(this.impactPoint,this.impactNormal.set(Math.random()-.5,1,Math.random()-.5).normalize());
-        if(this.impactPoint.distanceToSquared(camera.position)<30*30)this.synth('zap',this.impactPoint,.85+Math.random()*.3,FEEL.codeViolation.params.zap);
     }
     private updateFixBeacons(camera:THREE.Camera,now:number){
         // The three nearest ready kits, kept sorted by insertion; equal distances keep pickup order.
@@ -965,7 +948,7 @@ export class ChaosView {
         // Supply sites live at the scene root: a reconnect's new view would otherwise draw over stale ones.
         for(const visual of this.pickups.values())visual.dispose();this.pickups.clear();
         this.traps.dispose();for(const id of this.armed)this.resolveRat(id)?.setWeapon(undefined);this.armed.clear();
-        this.pressureMachine.dispose();this.carrierFlash.dispose();this.setCarrier(null);this.hotLook.dispose();this.hud?.dispose();this.root.removeFromParent();this.caseRoot.removeFromParent();
+        this.pressureMachine.dispose();this.carrierFlash.dispose();this.setCarrier(null);this.hotLook.dispose();this.hud?.dispose();this.scanner?.dispose();this.root.removeFromParent();this.caseRoot.removeFromParent();
         const contacts=contactShadowsOf(this.scene);contacts?.remove(this.caseRoot);for(const c of this.corpses.values())contacts?.remove(c.mesh);
         disposeMeshResources(this.caseRoot);
         // The incident sounds are the live view's (module-wide); a replay's own voices end with its bus.

@@ -145,6 +145,8 @@ export interface CorpseState extends PhysicalPose {
     id: string; victimId: string; owner?: string | null; appearance: RatAppearance; born: number; expires: number;
 }
 export interface ChaosShot { id: string; owner: string | null; p: Vec3Data; v: Vec3Data; age: number; wallBounced?: boolean;
+    /** The Persuader's slug: big, slow, two damage, knocks its rat flying (`WEAPON_TUNING.persuader*`). */
+    slug?: true;
     /** Seconds this ball lives when Crossfire or Bad Ammunition extended it; absent is the ordinary lifetime. */
     life?: number;
     /** Crossfire: how hot its world bounces made this ball (1 to `CROSSFIRE.maxHeat`); absent while cold. */
@@ -188,10 +190,14 @@ export interface ChaosState {
     prints?: import('./caseClues').CasePrints[];
     /** Chalk outlines where bodies lay this round (`cityMarks.ts`); absent before protocol 40. */
     chalk?: import('./cityMarks').ChalkMark[];
-    /** Dead witnesses' tips toward the carrier they saw; absent before protocol 40. */
-    tips?: import('./cityMarks').CaseTip[];
     /** Sewer muck tracked onto the ground by rats climbing out; absent before protocol 40. */
     muck?: import('./cityMarks').MuckRun[];
+    /** Hot wax dripped along the carrier's path; absent before protocol 41. */
+    wax?: import('./cityMarks').WaxRun[];
+    /** Pigeons the carrier flushed; absent before protocol 41. */
+    flocks?: import('./cityMarks').Flock[];
+    /** The police radio's latest calls; absent before protocol 41. */
+    scanner?: import('./policeScanner').ScannerLine[];
     time: number;
     /** Monotonic simulation identity for time-aligned interactions. Optional only
      * while restoring pre-protocol-15 checkpoints and older test fixtures. */

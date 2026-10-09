@@ -106,7 +106,7 @@ body:has(.dispatch-hud) #kill-feed{top:280px}
 .powerup-tommy-gun{--powerup:#e8873e;rotate:-1.5deg}
 .powerup-laser{--powerup:#cde84a;rotate:1.5deg}
 /* The Mousetrap is held until set down: no clock, only how to set it down (touch says FIRE). */
-.powerup-mousetrap{--powerup:#e6dcc4;rotate:-.5deg}
+.powerup-persuader{--powerup:#e0b04a}.powerup-mousetrap{--powerup:#e6dcc4;rotate:-.5deg}
 .powerup-mousetrap .powerup-copy{padding-right:0}
 .powerup-touch-hint,.touch-mode .powerup-desktop-hint{display:none}
 .touch-mode .powerup-touch-hint{display:inline}

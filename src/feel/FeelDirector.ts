@@ -39,7 +39,7 @@ import {CarrierFeel} from './CarrierFeel';
 import type {CaseState} from '../shared/chaosState';
 /** C1: each supply's claim flash colour: silver Ironclad, red Hot Pursuit, green Quick Fix, cold lens cyan Stakeout; the
  * arsenal's orange Tommy Gun, the Laser's greasy cheesy yellow-green and the Mousetrap's pale pine. */
-const CLAIM_INK:Record<PickupKind,string>={ironclad:'#c9d3de',hustle:'#d9473a','quick-fix':'#5fc884',stakeout:'#7ad8e8','tommy-gun':'#e8873e',laser:'#c8f040',mousetrap:'#e6dcc4'};
+const CLAIM_INK:Record<PickupKind,string>={ironclad:'#c9d3de',hustle:'#d9473a','quick-fix':'#5fc884',stakeout:'#7ad8e8','tommy-gun':'#e8873e',laser:'#c8f040',mousetrap:'#e6dcc4',persuader:'#d9b25a'};
 /** C4: Hot Pursuit claim dust, a multiplier on the grey dust colour. */
 const CLAIM_DUST=new THREE.Color(3.2,.42,.26);
 /** Bad Ammunition: the word over your own ball, by its personality. */
@@ -58,7 +58,7 @@ export class FeelDirector {
     /** Range W1 only: no city dust, lights or unrelated scene systems. */
     attachTommy(scene:THREE.Scene):void {this.tommy?.dispose();this.tommy=new TommyJuice(scene);}
     get heavyActive():boolean{return !!this.heavy&&this.state.on('heavyCheese');}
-    heavyArsenal(kind:'laser'|'tommy-gun'|'mousetrap'|'pickup'|'trap-snap'|'trap-launch'|'trap-release'|'laser-hit'|'tommy-hit'|'laser-pickup'|'tommy-pickup'|'trap-pickup'):boolean {if(!this.heavyActive)return false;this.sound.arsenal(kind);return true;}
+    heavyArsenal(kind:'laser'|'tommy-gun'|'persuader'|'mousetrap'|'pickup'|'trap-snap'|'trap-launch'|'trap-release'|'laser-hit'|'tommy-hit'|'laser-pickup'|'tommy-pickup'|'trap-pickup'|'persuader-hit'|'persuader-pickup'):boolean {if(!this.heavyActive)return false;this.sound.arsenal(kind);return true;}
     /** Real catch only: projected punctuation, without moving the aiming view. */
     heavyTrapCaught(at:THREE.Vector3,view:THREE.Camera):void {if(this.heavy&&this.state.on('heavyCheese'))this.word('SNAP!',at,view,performance.now(),true);}
     heavyPickup(kind:string):void {if(this.state.on('heavyCheese'))this.heavy?.pickup(kind);}
@@ -355,6 +355,8 @@ export class FeelDirector {
         }
         if(!this.state.on('shotKick'))return;
         const p=FEEL.shotKick.params;
+        // The Persuader: a revolver's heavy kick, the view thrown up and back.
+        if(weapon==='persuader'){this.camera.kick(p.pitch*3.4,(Math.random()*2-1)*p.yawJitter*p.pitch*2);this.camera.push(this.impulse.set(0,0,p.push*2.6));return;}
         const blast=this.incident==='scattershot',scale=blast?p.scattershot:1;
         this.camera.kick(p.pitch*scale,(Math.random()*2-1)*p.yawJitter*p.pitch*scale);
         this.camera.push(this.impulse.set(0,0,p.push*scale));

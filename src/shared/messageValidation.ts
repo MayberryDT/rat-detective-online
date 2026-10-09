@@ -1,5 +1,6 @@
 import {validClues,validPrints} from './caseClues';
-import {validChalk,validTips,validMuck} from './cityMarks';
+import {validChalk,validMuck,validWax,validFlocks} from './cityMarks';
+import {validScanner} from './policeScanner';
 import { isResumeToken } from './reconnect';
 import {expandMovement} from './movementWire';
 import {BALL_SPEED} from './ballTuning';
@@ -573,7 +574,8 @@ function parseChaos(value:unknown):ChaosState|null{
     (c.grip===undefined||integer(c.grip)!==null&&Number(c.grip)>=1&&Number(c.grip)<CHAOS_TUNING.caseGripHits)&&
     (c.ping===undefined||c.owner!==null&&isRecord(c.ping)&&finiteNumber(c.ping.at)!==null&&isVec3(c.ping.p));
   if(!validCase(c)||value.clues!==undefined&&!validClues(value.clues)||value.prints!==undefined&&!validPrints(value.prints))return null;
-  if(value.chalk!==undefined&&!validChalk(value.chalk)||value.tips!==undefined&&!validTips(value.tips)||value.muck!==undefined&&!validMuck(value.muck))return null;
+  if(value.chalk!==undefined&&!validChalk(value.chalk)||value.muck!==undefined&&!validMuck(value.muck)||value.wax!==undefined&&!validWax(value.wax)||
+    value.flocks!==undefined&&!validFlocks(value.flocks)||value.scanner!==undefined&&!validScanner(value.scanner))return null;
   if(value.extraCases!==undefined){
     if(!Array.isArray(value.extraCases)||value.extraCases.length>EXTRA_CASE_IDS.length||
       !value.extraCases.every(c=>isRecord(c)&&EXTRA_CASE_IDS.some(id=>id===c.id)&&validCase(c)))return null;
@@ -610,7 +612,7 @@ function parseChaos(value:unknown):ChaosState|null{
   if(Object.keys(value.possession).length>64||Object.values(value.possession).some(v=>finiteNumber(v)===null))return null;
   if(integer(value.notice.serial)===null||typeof value.notice.text!=='string'||value.notice.text.length>256)return null;
   if(!Array.isArray(value.corpses)||value.corpses.length>16||!value.corpses.every(c=>pose(c)&&isRecord(c)&&nonEmptyString(c.id,64)&&nonEmptyString(c.victimId,64)&&(c.owner===undefined||c.owner===null||!!nonEmptyString(c.owner,64))&&parseAppearance(c.appearance)&&finiteNumber(c.born)!==null&&finiteNumber(c.expires)!==null))return null;
-  if(!Array.isArray(value.shots)||value.shots.length>CHAOS_TUNING.maxShots||!value.shots.every(s=>isRecord(s)&&nonEmptyString(s.id,64)&&(s.owner===null||nonEmptyString(s.owner,64))&&isVec3(s.p)&&isVec3(s.v)&&finiteNumber(s.age)!==null&&(s.wallBounced===undefined||typeof s.wallBounced==='boolean')&&(s.explosive===undefined||s.explosive===true)&&(s.life===undefined||finiteNumber(s.life)!==null)&&(s.heat===undefined||boundedInteger(s.heat,1,CROSSFIRE.maxHeat)!==null)))return null;
+  if(!Array.isArray(value.shots)||value.shots.length>CHAOS_TUNING.maxShots||!value.shots.every(s=>isRecord(s)&&nonEmptyString(s.id,64)&&(s.owner===null||nonEmptyString(s.owner,64))&&isVec3(s.p)&&isVec3(s.v)&&finiteNumber(s.age)!==null&&(s.wallBounced===undefined||typeof s.wallBounced==='boolean')&&(s.slug===undefined||s.slug===true)&&(s.explosive===undefined||s.explosive===true)&&(s.life===undefined||finiteNumber(s.life)!==null)&&(s.heat===undefined||boundedInteger(s.heat,1,CROSSFIRE.maxHeat)!==null)))return null;
   if(!Array.isArray(value.impacts)||value.impacts.length>64||!value.impacts.every(i=>isRecord(i)&&isVec3(i.p)&&isVec3(i.n)&&typeof i.surface==='boolean'&&(i.scale===undefined||finiteNumber(i.scale)!==null)&&(i.cue===undefined||i.cue==='thud'||i.cue==='buzz'||i.cue==='case-hit'||i.cue==='armor-clang')&&(i.foley===undefined||isWorldFoleyCue(i.foley))&&(i.energy===undefined||(typeof i.energy==='number'&&Number.isFinite(i.energy)&&i.energy>=0&&i.energy<=300))&&(i.audioOnly===undefined||typeof i.audioOnly==='boolean')&&(i.bounces===undefined||boundedInteger(i.bounces,1,CROSSFIRE.maxBounces)!==null)))return null;
   if(value.pressure!==undefined){
     const p=value.pressure;

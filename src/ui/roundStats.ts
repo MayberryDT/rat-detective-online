@@ -14,7 +14,7 @@ export const objectiveUnit = (mode: AssignmentId) => mode === 'jurisdiction' ? '
 export function objectivePoints(assignment: AssignmentState, id: string): number {
     return assignment.id === 'jurisdiction' ? (assignment.jurisdiction?.heldMs[id] ?? 0) / 1000 : assignment.id === 'chain-of-custody' ? assignment.deliveries[id] ?? 0 : assignment.caseKills[id] ?? 0;
 }
-const WEAPON_LABELS: Record<KillWeapon, string> = {cheese: 'CHEESE GUN', 'tommy-gun': 'TOMMY GUN', laser: 'LASER', blast: 'BLASTS'};
+const WEAPON_LABELS: Record<KillWeapon, string> = {cheese: 'CHEESE GUN', 'tommy-gun': 'TOMMY GUN', laser: 'LASER', persuader: 'THE PERSUADER', blast: 'BLASTS'};
 const DEATH_LABELS: Record<DeathCause, string> = {shot: 'SHOT', headshot: 'HEADSHOT', blast: 'BLAST', 'evidence-tampering': 'EVIDENCE TAMPERING', drowned: 'DROWNED'};
 /** Kills per minute alive; a rat alive under half a minute has no pace yet. */
 export const killsPerMinute = (rat: ReportRat) => rat.alive >= 30 ? (rat.kills / (rat.alive / 60)).toFixed(2) : '—';

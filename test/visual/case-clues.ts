@@ -13,7 +13,7 @@ import {FLASHLIGHT,FLASHLIGHT_REACH} from '../../src/shared/rat/ratBody';
 import {FEEL} from '../../src/feel/feelTuning';
 import {gustAt,looseLifts} from '../../src/shared/paperWind';
 import {PRINTS,type CaseClue,type CasePrints} from '../../src/shared/caseClues';
-import type {CaseTip,ChalkMark,MuckRun} from '../../src/shared/cityMarks';
+import type {ChalkMark,Flock,MuckRun,WaxRun} from '../../src/shared/cityMarks';
 // Static art and motion fixture (P4): fixed sheets in the real city materials and camera, scripted wind time,
 // sheets that blow in and away, a rat brushing past and a ball striking nearby. Not gameplay, not human acceptance.
 const stage=createStage(new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true}));
@@ -34,7 +34,7 @@ const params=new URLSearchParams(location.search);
 files.paws.setInk(PAW_INK[(params.get('ink')??'red') as keyof typeof PAW_INK]??PAW_INK.red);
 // Fixed wind time: the first strong gust at the street origin a few seconds in, found the same way on every run.
 let base=100000;while(gustAt(-10,-35,base+3500)<.85&&base<2e6)base+=250;
-type Marks={chalk?:ChalkMark[];tips?:CaseTip[];muck?:MuckRun[]};
+type Marks={chalk?:ChalkMark[];muck?:MuckRun[];wax?:WaxRun[];flocks?:Flock[]};
 let marks:Marks={};
 let closeView=false,walk=false,time=0,view='street',clues:CaseClue[]=[],prints:CasePrints[]=[],script:{at:number;add?:CaseClue;drop?:string;hit?:THREE.Vector3;addPrints?:CasePrints}[]=[];
 const origin=new THREE.Vector3(-10,0,-27);
@@ -61,8 +61,12 @@ function looseSheet(id:string,x:number,z:number,s:number,q:[number,number]):Case
 const views:Record<string,{p:number[];build:()=>CaseClue[];prints?:()=>CasePrints[];marks?:()=>Marks;script?:()=>typeof script;turn?:true}>={
  // What the chaos leaves (cityMarks): chalk outlines and their fedoras, fresh (drawn in), an older one and a rain-worn one.
  chalk:{p:[-10,0,-27],build:()=>[],marks:()=>({chalk:[{id:'k1',p:{x:-9.6,y:.014,z:-32.4},h:2.4,c:0x2b2b2b,at:base-500},{id:'k2',p:{x:-12.4,y:.014,z:-36.8},h:-.8,c:0x7a3b2a,at:base-60000},{id:'k3',p:{x:-8.2,y:.014,z:-41},h:.4,c:0x1d2a4a,at:base-170000}]})},
- // A dead witness's tip beside its outline: the note and the chalk arrow to where it saw the carrier.
- tip:{p:[-10,0,-27],build:()=>[],marks:()=>({chalk:[{id:'k4',p:{x:-10.4,y:.014,z:-33},h:1.9,c:0x3a2f2f,at:base-20000}],tips:[{id:'t1',p:{x:-10.4,y:.016,z:-33},to:{x:-24,y:0,z:-46},carrier:'x',seen:base-8000,at:base+800}]})},
+ // Hot wax along a carrier's path toward the camera: the nearest drops just landed (bright), the far ones cooling dark.
+ wax:{p:[-10,0,-27],build:()=>[],marks:()=>({wax:[{id:'w1',at:base-18000,c:'x',f:Array.from({length:8},(_,i)=>[-10.4+Math.sin(i)*.25,.01,-44+i*1.6,i*400]).flat()},
+  {id:'w2',at:base-1200,c:'x',f:Array.from({length:6},(_,i)=>[-10.2+Math.sin(i+2)*.25,.01,-31.2+i*.9,i*200]).flat()}]})},
+ // Pigeons the carrier just flushed down the street: the burst, the climb and the circle over the roofs.
+ pigeons:{p:[-10,0,-27],build:()=>[],marks:()=>({flocks:[{id:'f1',p:{x:-11,y:0,z:-38},at:base-1000,c:'x'}]})},
+ pigeons2:{p:[-10,0,-27],build:()=>[],marks:()=>({flocks:[{id:'f2',p:{x:-11,y:0,z:-38},at:base-3500,c:'x'}]})},
  // Sewer muck: a run of dark prints out toward the camera, as a rat leaves the sewer.
  muck:{p:[-10,0,-27],build:()=>[],marks:()=>({muck:[{id:'m1',at:base-3000,f:run('m1','',-10.6,-40,0,6).f},{id:'m2',at:base-3000,f:run('m2','',-10.6+Math.sin(0)*3.7,-36.3,0,6).f}]})},
  street:{p:[-10,0,-27],build:()=>[sheet('st-0',-9.6,0,-31.5,0),sheet('st-1',-10.9,0,-33.2,5+16),sheet('st-2',-9.2,0,-41,2),sheet('st-3',-10.8,0,-42.8,7+16)],
@@ -122,7 +126,8 @@ document.getElementById('record')!.onclick=()=>{
 };
 setView(params.get('view')??'street');
 let last=performance.now();
-stage.renderer.setAnimationLoop(at=>{const dt=Math.min(.1,(at-last)/1000);time+=dt;last=at;render(dt);});
+// performance.now, not the frame's timestamp: headless Chrome's frame times can lag the clock by seconds.
+stage.renderer.setAnimationLoop(()=>{const at=performance.now(),dt=Math.max(0,Math.min(.1,(at-last)/1000));time+=dt;last=at;render(dt);});
 Object.assign(window,{clueFixture:{files,setView,visible:()=>files.visibleIds,trace:()=>files.trace(),prints:()=>({runs:files.paws.trace(),stats:files.paws.stats,caught:files.stats.caught}),render:()=>render(0),
  metrics:()=>({calls:stage.renderer.info.render.calls,triangles:stage.renderer.info.render.triangles,
  textures:stage.renderer.info.memory.textures,geometries:stage.renderer.info.memory.geometries,

@@ -47,11 +47,13 @@ const PICKUPS:Record<PickupKind,string>={
     'tommy-gun':'a Tommy Gun (hold the trigger to spray cheese for a while)',
     laser:'a Laser (an instant beam that bounces off walls, fired as fast as I click, for a while)',
     mousetrap:'a Mousetrap (set it down; any other rat that steps on it is held in place for a few seconds)',
+    persuader:'the Persuader (a revolver: big slow slugs, two damage, each hit knocks a rat flying, for a while)',
 };
 const WEAPONS:Record<WeaponKind,string>={
     'tommy-gun':'I hold a Tommy Gun: holding the trigger sprays cheese, for a while.',
     laser:'I hold a laser: an instant beam that bounces off walls, fired as fast as I click, for a while.',
     mousetrap:'I carry a mousetrap to set down: my next shot puts it on the floor just ahead, and any other rat that steps on it is held in place for a few seconds (it can still turn and shoot). It cannot catch me.',
+    persuader:'I hold the Persuader: a revolver firing one big slow slug a click (about two a second), two damage, and every hit knocks the rat flying, for a while.',
 };
 /** My own Code Violation dud (`FAULTY_KINDS`), in my words. */
 const MY_DUD:Record<FaultyKind,string>={
@@ -238,8 +240,7 @@ export function perceive(ctx:GoalContext,memory:RatMemory):RatView {
         incident=`${info.title}: ${info.description}`+(info.id==='most-wanted'&&dispatch.wanted
             ?dispatch.wanted===self.id?' I am the wanted rat.':` The wanted rat is ${alias(dispatch.wanted)}.`
             :info.id==='blackout'?' I see rats only as far as my flashlight reaches.'
-            :info.id==='bad-ammunition'?' Every ball I fire has a quirk: it corkscrews, snakes, bounces without slowing, floats or hiccups.'
-            :info.id==='code-violation'?' Supplies hop away from rats, and the Quick Fix hops furthest and fastest; every other supply I claim now comes out as a short, harmless dud (slower legs, no jumping, seen through walls, a gun that blows up in my paws, a gun that cannot fire, or a paw stuck in a trap); a Quick Fix still heals fully. Launch machines fire on their own and alarm pillars clang; both shove rats beside them, but never into the water. Nothing in this incident can kill me.':'');
+            :info.id==='bad-ammunition'?' Every ball I fire has a quirk: it corkscrews, snakes, bounces without slowing, floats or hiccups.':'');
     }
 
     // Only aliases already given: an unseen attacker stays unnamed.

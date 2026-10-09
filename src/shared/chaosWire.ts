@@ -10,12 +10,12 @@ export const CHAOS_WIRE_MODE = 'compact-v2';
  * the miss of a straight-line prediction from them (balls fly smooth arcs, so most rows are a few small numbers).
  * Trailing zeros are left off. */
 export const MOTION_ENCODING = 'predict-v1';
-const REST_KEYS = ['clues','prints','chalk','tips','muck','case','extraCases','dispatch','pressure','possession','corpses','notice','assignment','pickups','buffs','traps','beams'] as const;
+const REST_KEYS = ['clues','prints','chalk','muck','wax','flocks','scanner','case','extraCases','dispatch','pressure','possession','corpses','notice','assignment','pickups','buffs','traps','beams'] as const;
 /** Lists of things with ids. While a list changes only by edits, removals and additions at its end, it travels as
  * `{put,drop}` (changed and new items, ids gone) when that is shorter than the whole list. */
-const KEYED_KEYS: Record<string, true> = { clues: true, prints: true, chalk: true, tips: true, muck: true, corpses: true, beams: true, traps: true };
+const KEYED_KEYS: Record<string, true> = { clues: true, prints: true, chalk: true, muck: true, wax: true, flocks: true, scanner: true, corpses: true, beams: true, traps: true };
 const restValue=(state:ChaosState,key:typeof REST_KEYS[number]):unknown=>
-  state[key]??(key==='extraCases'?[]:key==='clues'||key==='prints'||key==='chalk'||key==='tips'||key==='muck'||key==='pressure'||key==='assignment'||key==='pickups'||key==='buffs'||key==='traps'||key==='beams'?null:undefined);
+  state[key]??(key==='extraCases'?[]:key==='clues'||key==='prints'||key==='chalk'||key==='muck'||key==='wax'||key==='flocks'||key==='scanner'||key==='pressure'||key==='assignment'||key==='pickups'||key==='buffs'||key==='traps'||key==='beams'?null:undefined);
 type Definition = [number, string, string | null];
 type KeyedItem = {id:string;text:string};
 export interface ChaosAck { type:'chaosAck'; stream:string; seq:number }
@@ -31,8 +31,8 @@ function impactRow(i:ChaosImpact):unknown[] {
   while(row.length>7&&row[row.length-1]===null)row.pop();
   return row;
 }
-/** Lists whose items never change once made (case papers, paw prints, chalk, tips, muck): an item's text is kept with the item. */
-const STABLE_KEYS: Record<string, true> = { clues: true, prints: true, chalk: true, tips: true, muck: true };
+/** Lists whose items never change once made (case papers, paw prints, chalk, muck, wax, flocks, radio calls): an item's text is kept with the item. */
+const STABLE_KEYS: Record<string, true> = { clues: true, prints: true, chalk: true, muck: true, wax: true, flocks: true, scanner: true };
 const stableText=new WeakMap<object,string>();
 /** Each item's rounded text, or undefined when an item has no id or two share one (the list then travels whole). */
 function keyedItems(value:readonly unknown[],stable=false):KeyedItem[]|undefined {
@@ -88,8 +88,8 @@ export interface PreparedChaos {
 export function prepareChaos(state:ChaosState):PreparedChaos {
   const flag=(v:boolean|undefined)=>v===undefined?0:v?2:1;
   return {shots:state.shots.map(s=>{
-    // Flags: the bounce flag (0 absent, 1 false, 2 true) plus three times the Crossfire heat.
-    const flags=flag(s.wallBounced)+3*(s.heat??0);
+    // Flags: the bounce flag (0 absent, 1 false, 2 true), plus three times the Crossfire heat, plus six for a Persuader slug.
+    const flags=flag(s.wallBounced)+3*(s.heat??0)+(s.slug?6:0);
     const life=s.life===undefined?0:Math.round(s.life*1000);
     const values=[...[s.p.x,s.p.y,s.p.z,s.v.x,s.v.y,s.v.z,s.age].map(n=>Math.round(n*1000)),flags];
     // Optional tail: a longer lifetime (Crossfire, Bad Ammunition).
@@ -216,13 +216,15 @@ export class ChaosDecoder {
         row=encoded.slice(1);
       }
       const d=definitions.get(handle),flags=row[7];
-      if(!d||ids.has(d[0])||flags<0||flags>2+3*CROSSFIRE.maxHeat)return null;
+      if(!d||ids.has(d[0])||flags<0||flags>8+3*CROSSFIRE.maxHeat)return null;
       active.add(handle);ids.add(d[0]);motions.set(handle,row);
       if(!fresh&&previous&&previous.length===row.length)bases.set(handle,previous);
       const life=row[8];
       const shot:ChaosShot={id:d[0],owner:d[1],p:{x:row[0]/1000,y:row[1]/1000,z:row[2]/1000},v:{x:row[3]/1000,y:row[4]/1000,z:row[5]/1000},age:row[6]/1000};
-      if(flags%3)shot.wallBounced=flags%3===2;
-      if(flags>=3)shot.heat=Math.floor(flags/3);
+      const kept=flags%6;
+      if(kept%3)shot.wallBounced=kept%3===2;
+      if(kept>=3)shot.heat=Math.floor(kept/3);
+      if(flags>=6)shot.slug=true;
       if(life)shot.life=life/1000;
       shots.push(shot);
     }
@@ -239,7 +241,9 @@ export class ChaosDecoder {
     if(rest.clues===null)delete rest.clues;
     if(rest.prints===null)delete rest.prints;
     if(rest.chalk===null)delete rest.chalk;
-    if(rest.tips===null)delete rest.tips;
+    if(rest.wax===null)delete rest.wax;
+    if(rest.flocks===null)delete rest.flocks;
+    if(rest.scanner===null)delete rest.scanner;
     if(rest.muck===null)delete rest.muck;
     if(rest.pressure===null)delete rest.pressure;
     if(rest.assignment===null)delete rest.assignment;

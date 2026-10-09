@@ -41,7 +41,7 @@ export function addRatShapes(body:C.Body):C.Sphere[] {
 /** The rat model's raised firing arm (-.49, .91+.36, .09+.10) plus its muzzle anchor (0,.106,.28), turned by the
  * body's heading. Rendering recoil or walk animation never moves it. */
 /** How much further forward a held weapon's barrel ends than the pistol's (the model's muzzle moves with it). */
-export const MUZZLE_REACH:Readonly<Record<Exclude<WeaponKind,'mousetrap'>,number>>={'tommy-gun':.53,laser:.44};
+export const MUZZLE_REACH:Readonly<Record<Exclude<WeaponKind,'mousetrap'>,number>>={'tommy-gun':.53,laser:.44,persuader:.4};
 export const muzzleReach=(weapon?:WeaponKind):number=>weapon&&weapon!=='mousetrap'?MUZZLE_REACH[weapon]:0;
 export function ratMuzzle(position:Vec3Data,heading:number,out:Vec3Data={x:0,y:0,z:0},reach=0):Vec3Data {
     const x=-.49,z=.47+reach,c=Math.cos(heading),s=Math.sin(heading);

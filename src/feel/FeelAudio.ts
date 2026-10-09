@@ -139,8 +139,8 @@ export class FeelAudio {
         source.connect(filter).connect(env).connect(out);source.start(t,Math.random()*.4,.18);
     }
 
-    arsenal(kind:'laser'|'tommy-gun'|'mousetrap'|'pickup'|'trap-snap'|'trap-launch'|'trap-release'|'laser-hit'|'tommy-hit'|'laser-pickup'|'tommy-pickup'|'trap-pickup'):void {
-        const priority=kind==='laser-hit'||kind==='tommy-hit'?0:kind==='trap-release'?1:2;
+    arsenal(kind:'laser'|'tommy-gun'|'persuader'|'mousetrap'|'pickup'|'trap-snap'|'trap-launch'|'trap-release'|'laser-hit'|'tommy-hit'|'laser-pickup'|'tommy-pickup'|'trap-pickup'|'persuader-hit'|'persuader-pickup'):void {
+        const priority=kind==='laser-hit'||kind==='tommy-hit'||kind==='persuader-hit'?0:kind==='trap-release'?1:2;
         // Firing cadence and significant event identity already belong to their callers.
         // RAF/audio-clock jitter must not suppress a legitimate onset; only decorative
         // contact tails retain the secondary cooldown. The output pool stays bounded.
@@ -153,6 +153,14 @@ export class FeelAudio {
             this.tone(out,t,.04,'triangle',430+Math.random()*25,115,.95);
             this.tone(out,t,.032,'sine',185,80,.8);
             this.burst(out,t+.026,.013,'highpass',2600,1,.001);
+        }else if(kind==='persuader'){
+            // The hammer falls (a dry tick), then the BOOM: a deep thump sliding down, a cracking report, the frame's ring.
+            const out=this.arsenalOut(.42,.45,priority);if(!out)return;
+            this.burst(out,t,.008,'highpass',3200,1,.001);
+            this.tone(out,t+.012,.32,'sine',150,38,1.25);
+            this.burst(out,t+.012,.05,'bandpass',900,.6,.001);
+            this.burst(out,t+.02,.22,'lowpass',1400,.7,.004);
+            this.tone(out,t+.03,.4,'triangle',1240,980,.12);
         }else if(kind==='laser'){
             // A heavy pressure punch underneath a tearing, descending electrical strand.
             const out=this.arsenalOut(.32,.32,priority);if(!out)return;
@@ -170,6 +178,10 @@ export class FeelAudio {
             this.tone(out,t+.016,.24,'sine',1120,740,.3);
             this.tone(out,t+.024,.19,'sine',1670,1130,.18);
             this.burst(out,t+.09,.04,'bandpass',750,2,.002);
+        }else if(kind==='persuader-hit'){
+            // A slug landing: a fat wet thwack with a low body.
+            const out=this.arsenalOut(.3,.2,priority);if(!out)return;
+            this.burst(out,t,.06,'bandpass',420,1.2,.001);this.tone(out,t,.18,'sine',120,45,1.1);this.burst(out,t+.02,.1,'lowpass',900,1,.003);
         }else if(kind==='laser-hit'||kind==='tommy-hit'){
             const out=this.arsenalOut(.18,kind==='laser-hit'?.2:.07,priority);if(!out)return;
             this.burst(out,t,kind==='laser-hit'?.12:.035,'bandpass',kind==='laser-hit'?3100:550,3,.001);
@@ -188,6 +200,7 @@ export class FeelAudio {
             this.tone(out,t,.12,'triangle',190,65,.9);
             this.burst(out,t,.03,'bandpass',550,1,.001);
             if(kind==='laser-pickup'){this.tone(out,t+.035,.23,'sawtooth',240,1100,.22);this.burst(out,t+.045,.12,'bandpass',2400,5,.002);}
+            else if(kind==='persuader-pickup'){for(let i=0;i<6;i++)this.burst(out,t+.03+i*(.03+i*.006),.012,'bandpass',2600-i*120,3,.001);this.burst(out,t+.32,.02,'bandpass',1500,2,.001);this.tone(out,t+.32,.09,'triangle',260,90,.6);}
             else if(kind==='tommy-pickup'){this.burst(out,t+.04,.025,'bandpass',1100,1,.001);this.burst(out,t+.11,.02,'highpass',2300,2,.001);this.tone(out,t+.08,.08,'triangle',300,90,.5);}
             else {this.tone(out,t+.045,.17,'sine',660,1050,.5);this.tone(out,t+.05,.2,'sine',1320,1570,.18);}
             this.burst(out,t+.09,.025,'highpass',2200,2,.001);

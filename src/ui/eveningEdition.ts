@@ -1,7 +1,6 @@
 import type {HighlightKind} from '../shared/highlights';
-import type {RoundReport,Vec3Data} from '../shared/networkProtocol';
-import {ASSIGNMENT_DESTINATIONS,destinationContains,type DestinationId} from '../shared/assignments';
-import {districtAt,type District} from '../shared/city/frame';
+import type {RoundReport} from '../shared/networkProtocol';
+import {placePhrase} from '../shared/radioPlaces';
 import {clipNames} from '../replay/captions';
 import type {ReplayClip} from '../replay/types';
 
@@ -18,26 +17,6 @@ const CASE_NAMES=['THE HARBOUR JOB','THE ICEBOX AFFAIR','THE NEEDLEWORKS CAPER',
 export function caseName(roundId:string):{number:number;title:string} {
     const h=hash(roundId);
     return {number:1000+h%9000,title:CASE_NAMES[(h>>>13)%CASE_NAMES.length]!};
-}
-
-const AT:Record<DestinationId,{at:string;near:string}>={
-    icebox:{at:'AT THE ICEBOX',near:'OUTSIDE THE ICEBOX'},maintenance:{at:'IN THE SEWERS',near:'IN THE SEWERS'},
-    pump:{at:'AT THE PUMP STATION',near:'BY THE PUMP STATION'},needleworks:{at:'AT THE NEEDLEWORKS',near:'OUTSIDE THE NEEDLEWORKS'},
-    sluice:{at:'AT THE WEST SLUICE',near:'BY THE WEST SLUICE'},records:{at:'AT RECORDS',near:'OUTSIDE RECORDS'},
-    'harbour-master':{at:'AT PIER 9',near:'ON THE DOCKS'},precinct:{at:'AT THE PRECINCT',near:'OUTSIDE THE PRECINCT'},
-};
-const DISTRICT:Record<District,string>={'north-west':'ON THE NORTH-WEST SIDE',north:'ON THE NORTH SIDE','north-east':'ON THE NORTH-EAST SIDE',
-    west:'ON THE WEST SIDE',centre:'DOWNTOWN',east:'IN THE EAST END','south-west':'ON THE SOUTH-WEST SIDE',south:'ON THE SOUTH SIDE','south-east':'ON THE SOUTH-EAST SIDE'};
-/** Where a point is, as a paper says it: inside a landmark, just outside one, in the sewers, or the part of town. */
-export function placePhrase(p:Vec3Data):string {
-    if(p.y< -2)return 'IN THE SEWERS';
-    let near:DestinationId|undefined,best=40;
-    for(const id of Object.keys(ASSIGNMENT_DESTINATIONS) as DestinationId[]){
-        if(destinationContains(id,p))return AT[id].at;
-        const c=ASSIGNMENT_DESTINATIONS[id].center,d=Math.hypot(c.x-p.x,c.z-p.z);
-        if(d<best){best=d;near=id;}
-    }
-    return near?AT[near].near:DISTRICT[districtAt(p.x,p.z)];
 }
 
 /** Front-page headlines per moment: `{AT}` is where it happened (some read better without it). */
