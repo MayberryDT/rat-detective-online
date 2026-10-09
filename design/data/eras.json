@@ -688,7 +688,7 @@
       "environment": "production",
       "build": "production-2026-10-06-2822d1a",
       "from": "2026-10-06T20:04:06.037Z",
-      "to": null,
+      "to": "2026-10-09T00:40:35.689Z",
       "layout": 7,
       "mindVersion": 12,
       "protocol": 33,
@@ -700,6 +700,25 @@
       "baseline": "random-supplies",
       "receipt": "docs/verification/task74-release-2026-10-06.md",
       "notes": "Exact BUILD membership is authoritative. Boundary is observed deployment-log completion, not a provider timestamp. No measurement establishes subjective feel. Packed storage, human-seat hibernation and ordinary gun balance/ballistics remain preserved.",
+      "predictions": []
+    },
+    {
+      "id": "case-papers",
+      "environment": "production",
+      "build": "production-2026-10-09-648ff6e",
+      "from": "2026-10-09T00:40:35.689Z",
+      "to": null,
+      "layout": 7,
+      "mindVersion": 16,
+      "protocol": 39,
+      "worker": "e92c8831-e6e3-4f7e-a8cc-c2e23ba6880b",
+      "commits": [
+        "648ff6e"
+      ],
+      "change": "P4 case papers and paw prints replace the case ping, beacons and locator (bots know the case and carrier only by sight and the papers; mindVersion 13-16); smooth play: held join at Enter with the room ticking while the browser loads, city events pruned by key range, server clock from the chaos stream, look in movement, replays through the recorded look at real speed, loops without rebuilds.",
+      "baseline": "heavy-cheese",
+      "receipt": "docs/verification/smooth-play-release-2026-10-09.md",
+      "notes": "Exact BUILD membership is authoritative. Boundary is the observed end of the deploy command, not a provider timestamp. Finding the case changed for everyone (no ping), so case-time and assignment-length measures are not comparable with heavy-cheese without that caveat.",
       "predictions": []
     }
   ]

@@ -2,7 +2,7 @@
 
 Approved by Tyler on 8 October 2026 ("do it"). It follows the read-only scoping the same day; the evidence is on Halla under `/home/halla/build/rat-detective/scope-{entry,freeze,replay}-20261008/`.
 
-**Status (8 October, evening; [receipt](../verification/smooth-play-2026-10-08.md)):** staging `6537a3d`, protocol 39.
+**Status (9 October): live in production** (build `production-2026-10-09-648ff6e`; [release](../verification/smooth-play-release-2026-10-09.md)), with the P4 papers. Work state as of the release ([receipt](../verification/smooth-play-2026-10-08.md)):
 - **Entry:** E1–E3 are done, and all `verify-entry` checks pass on Halla. A cold room clicked after load plays in 2.8–3.1 s (baseline 5.2 s). The main cause was server-side: every wake read all 891k stored city events, and a held seat did not tick. E4, the client load in Brave on your laptop, is next.
 - **Replays:** R1–R3 are done. R4 is done for loops, which now rebuild nothing, and for fullscreen and save, which restart the clip in place. The server-clock fix stops clips whose rats never moved. Still open: building a clip before it plays, and the 110–160 ms GPU-bound frames in sent-flying clips (needs the laptop). R5 is unchanged.
 - **Freezes:** F1 reporting is on staging, unverified; it waits for your staging session. F2 and F3 have not started.

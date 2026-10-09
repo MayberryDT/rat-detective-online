@@ -2,6 +2,8 @@
 
 Updated 8 October 2026. Thread: **[P4] Rat Detective physical clues**.
 
+**Status (9 October): live in production** (build `production-2026-10-09-648ff6e`, protocol 39, `mindVersion` 16; [release](../verification/smooth-play-release-2026-10-09.md)). Earlier status follows.
+
 **Status (8 October, later): paw prints and the eye-catch gust are added on top of the P4 repair and on staging for Tyler's review (protocol 37, `mindVersion` 15); production is not deployed.** Tyler played the repair: the papers look great but the way to the case was still not obvious enough; he asked for sparse paw prints that go along with the papers, approved the scope ("implement all of it") and the [paw prints receipt](../verification/paw-prints-2026-10-08.md) records the result. Before that: **the P4 repair (persistent, sparse, varied papers in the wind) is implemented and on staging for Tyler's review; production is not deployed.** Tyler reviewed the 7 October candidate (`55489b0`, `bffa4d6`): better, but papers blinked and flipped, were too many, identical and lifeless. The [stability and wind handoff](../handoffs/noir-paper-stability-and-wind-handoff.md) diagnosed why; Tyler then approved the fix ("move forward"), scripted movement for the review recording and a staging deploy. What changed, the repeatable checks and the review artifacts are in the [repair receipt](../verification/noir-papers-v2-2026-10-08.md). The earlier [implementation receipt](../verification/noir-physical-clues-2026-10-07.md) is history.
 
 ### The P4 repair (8 October), in brief

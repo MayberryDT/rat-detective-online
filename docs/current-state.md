@@ -1,6 +1,14 @@
 # Current Rat Detective state
 
-Verified from source and production through **2026-10-06** (protocol 33). Prior gameplay receipts remain **2026-09-17**. Deployment details live in [live-service.md](live-service.md).
+Verified from source and production through **2026-10-09** (protocol 39). Prior gameplay receipts remain **2026-09-17**. Deployment details live in [live-service.md](live-service.md).
+
+## Case papers and smooth play — 9 October production
+
+Production Worker `e92c8831-e6e3-4f7e-a8cc-c2e23ba6880b`, build `production-2026-10-09-648ff6e`, client `index-DbIC0R2D.js`, **protocol 39**, layout 7 / mindVersion 16, era `case-papers` ([receipt](verification/smooth-play-release-2026-10-09.md)).
+
+- **Finding the case** ([P4 plan](plans/noir-physical-clues.md)): the case ping, beacons and screen locator are gone. Noir case papers lie in sparse groups at corners and long stretches along the way to the case, with paw prints across the gaps pointing the way; a gust lifts them to catch the eye. Bots know a loose case or a carrier only by sight and the papers, and keep going for a loose case they saw in the last 10 s.
+- **Entering the city** ([smooth-play plan](plans/smooth-play-2026-10.md)): Enter City holds a seat and wakes the room, which plays while the browser loads; a cold room clicked after load plays in about 3 s (Halla). City events are pruned by key range, so a wake no longer reads every stored event.
+- **Replays**: each rat's look travels in its movement, and a replay plays through the rat's recorded look at real speed; loops, fullscreen and save restart a clip without rebuilding it. The client's server clock follows the chaos stream, so clips keep their events.
 
 ## Accepted shooting and short trap throw — 6 October production
 
