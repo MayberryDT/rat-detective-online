@@ -30,9 +30,10 @@ if (process.env.CITY_AGGREGATES && process.env.CITY_AGGREGATES !== 'rows') {
   process.exit(2);
 }
 const aggregates = process.env.CITY_AGGREGATES ? ['--var', 'CITY_AGGREGATES:rows'] : [];
-// Staging latency diagnosis only: `DIAG_NO_WRITES=1 npm run deploy:staging` skips player and room writes while a room plays.
-const diagnosis = target === 'staging' && process.env.DIAG_NO_WRITES === '1' ? ['--var', 'DIAG_NO_WRITES:1'] : [];
-if (diagnosis.length) console.log('Diagnosis: no player or room writes while playing');
+// Staging latency diagnosis only: `DIAG_NO_WRITES=1` skips player and room writes while a room plays;
+// `DIAG_LOCATION_ROOMS=1` lets `latency-<hint>-<name>` rooms be created with that location hint.
+const diagnosis = target === 'staging' ? [...(process.env.DIAG_NO_WRITES === '1' ? ['--var', 'DIAG_NO_WRITES:1'] : []), ...(process.env.DIAG_LOCATION_ROOMS === '1' ? ['--var', 'DIAG_LOCATION_ROOMS:1'] : [])] : [];
+if (diagnosis.length) console.log('Diagnosis:', diagnosis.filter((_, i) => i % 2).join(' '));
 if (aggregates.length) console.log('Aggregates written per key (rollback mode)');
 const deploy = spawnSync('npx', ['wrangler', 'deploy', '--env', target, '--var', `BUILD:${name}`, ...incidents, ...aggregates, ...diagnosis], { stdio: 'inherit' });
 process.exit(deploy.status ?? 1);

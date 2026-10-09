@@ -164,7 +164,10 @@ export default {
 
         const roomName = url.searchParams.get('room') || DEFAULT_ROOM_NAME;
         if(!ROOM_NAME.test(roomName))return respond(json({error:'Unknown room'},{status:404}));
-        if(roomName!==DEFAULT_ROOM_NAME&&!await privateRoomAuthorized(request,admissionEnv))
+        // Latency diagnosis (staging only, `DIAG_LOCATION_ROOMS=1`): `latency-<hint>-<name>` rooms are created with that
+        // Durable Object location hint, to measure what a room's placement costs players.
+        const hint=(env as Env & {DIAG_LOCATION_ROOMS?:string}).DIAG_LOCATION_ROOMS==='1'?/^latency-(wnam|enam|sam|weur|eeur|apac|oc|afr|me)-/.exec(roomName)?.[1]:undefined;
+        if(roomName!==DEFAULT_ROOM_NAME&&!hint&&!await privateRoomAuthorized(request,admissionEnv))
           return respond(json({error:'Unknown room'},{status:404}));
         if(url.searchParams.get('observe')==='1'&&!observationAllowed(url,env as Env & {CAPACITY_FIXTURE_ID?:string;CAPACITY_EXPIRES_AT?:string}))return respond(json({error:'Observation requires an active private bot fixture'},{status:403}));
         const selection=url.searchParams.get('assignment');
@@ -172,7 +175,7 @@ export default {
           if(selection!==null)return respond(json({error:'Assignment selection requires a private room'},{status:400}));
           return respond(await env.MATCHMAKER.getByName(roomName).fetch(request));
         }
-        const room = env.GAME_ROOM.getByName(roomName);
+        const room = hint ? env.GAME_ROOM.get(env.GAME_ROOM.idFromName(roomName), {locationHint: hint as DurableObjectLocationHint}) : env.GAME_ROOM.getByName(roomName);
         if(selection!==null){
           if(!roomName.startsWith('graybox-practice-')||!allowsLocalDiagnostics(request)||
               selection!=='auto'&&!isAssignmentId(selection))return respond(json({error:'Assignment selection requires a local private practice room'},{status:400}));
