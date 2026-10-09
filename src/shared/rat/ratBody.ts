@@ -17,6 +17,9 @@ export const RAT_BODY={mass:5,linearDamping:.1,angularDamping:1,respawnDamping:.
 /** In a Blackout every rat's flashlight beam reaches this far (units), and a rat sees other rats only this near,
  * human or bot. */
 export const FLASHLIGHT_REACH=60;
+/** Pea Souper: how far the case and its papers are seen in the fog (about 86% hidden here, `FEEL.peaSouper` density
+ * .058), for bots as for players. Rats are seen as ever: their outlines carry through. */
+export const FOG_REACH=24;
 /** Every rat's everyday flashlight (a three.js SpotLight's settings, `distance` its reach and shadow depth); a
  * Blackout narrows it and stretches it to `FLASHLIGHT_REACH` (`FEEL.blackout`). */
 export const FLASHLIGHT={color:0xfffebb,intensity:2,distance:40,angle:.6,penumbra:.5,decay:1.2} as const;

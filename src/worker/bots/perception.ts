@@ -240,6 +240,7 @@ export function perceive(ctx:GoalContext,memory:RatMemory):RatView {
         incident=`${info.title}: ${info.description}`+(info.id==='most-wanted'&&dispatch.wanted
             ?dispatch.wanted===self.id?' I am the wanted rat.':` The wanted rat is ${alias(dispatch.wanted)}.`
             :info.id==='blackout'?' I see rats only as far as my flashlight reaches.'
+            :info.id==='pea-souper'?' I still see rats, but the case and its papers only up close.'
             :'');
     }
 

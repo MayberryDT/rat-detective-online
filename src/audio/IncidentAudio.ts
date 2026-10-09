@@ -84,6 +84,13 @@ const SYNTH = {
             return (body * 2.2 + .6 * whump) * Math.min(1, t * 45) * Math.exp(-t * 6.5);
         }};
     })(),
+    // Pea Souper: a harbour foghorn, the diaphone's long low "BEEEE" that drops into a grunt at the end.
+    foghorn: {seconds: 2.6, peak: .34, sample: (t: number) => {
+        // 98 Hz, gliding down 26 Hz over the last .6 s.
+        const late = Math.max(0, t - 2), phase = 2 * Math.PI * (98 * t - 26 * late * late / 1.2);
+        let tone = 0; for (let k = 1; k <= 7; k++) tone += Math.sin(k * phase) / (k * (k > 2 ? 1.6 : 1));
+        return tone * Math.min(1, t * 4) * Math.min(1, (2.6 - t) * 3) * (1 + .06 * Math.sin(2 * Math.PI * 5 * t));
+    }},
     // The hot case's carrier fires heavier (K3): a low boom gliding down under the shot, with a felt-mallet tap on top.
     thump: {seconds: .32, peak: .3, sample: (t: number, n: () => number) =>
         Math.sin(2 * Math.PI * (64 * t - 52 * t * t)) * Math.min(1, t * 400) * Math.exp(-t * 13) + n() * Math.exp(-t * 220) * .25},

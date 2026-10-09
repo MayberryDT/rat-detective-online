@@ -1,6 +1,6 @@
 import {visibleClues,type CaseClue,type CasePrints} from '../caseClues';
 import {looseLifts,type LooseLift} from '../paperWind';
-import {FLASHLIGHT_REACH} from '../rat/ratBody';
+import {FLASHLIGHT_REACH,FOG_REACH} from '../rat/ratBody';
 import {GOALS,type Goal,type Personality,type Plan,type PlaceOption} from './intent';
 import {distance,enemyTrap,TRAP_REACH,type BotMotor,type CaseEntry,type MotorNavigation} from './motor';
 import type {KnownCarrier} from './motor/carriers';
@@ -298,13 +298,13 @@ export class BotGoals {
             known.next=step.nextSlot;known.count=step.count;this.loose.set(c.id,known);
             return known.count%2?{...c,p:c.q}:c;
         });
-        const blackout=state?.dispatch.phase==='active'&&incidentInfo(state.dispatch.incident).id==='blackout';
+        const incident=state?.dispatch.phase==='active'?incidentInfo(state.dispatch.incident).id:undefined;
         const forward={x:2*(self.meshQx*self.meshQz+self.meshQw*self.meshQy),z:1-2*(self.meshQx*self.meshQx+self.meshQy*self.meshQy)};
-        // In a Blackout a paper is seen only as far as a flashlight reaches, as for rats.
+        // In a Blackout a paper is seen only as far as a flashlight reaches, as for rats; in a Pea Souper only up close.
         const seen=visibleClues(papers,self,p=>{
             const dx=p.x-self.x,dz=p.z-self.z,d=Math.hypot(dx,dz);
             return (d<2||(dx*forward.x+dz*forward.z)/d>.64)&&input.clear({...p,y:p.y+.15});
-        },blackout?FLASHLIGHT_REACH:undefined);
+        },incident==='blackout'?FLASHLIGHT_REACH:incident==='pea-souper'?FOG_REACH:undefined);
         for(const c of seen)if(distance(self,c.p)<3&&!this.inspectedClues.has(c.id)){this.inspectedClues.add(c.id);this.inspectedAt=now;}
         const look=this.printLook;
         if(look.id&&look.end&&!this.inspectedClues.has(look.id)&&distance(self,look.end)<1.5){this.inspectedClues.add(look.id);this.inspectedAt=now;}

@@ -97,6 +97,13 @@ export const FEEL={
      * intensity, cone half-angle `angle` rad, `penumbra`, `decay`) that carries to `FLASHLIGHT_REACH`. The city's own
      * lights go out; exposure stays, so what a beam lights reads bright. Muzzle flashes within `muzzleRange` lift the dark. */
     blackout:{label:'I3 Blackout',toggle:false,params:{fade:1.2,beam:320,angle:.42,penumbra:.12,decay:.6,muzzle:.7,muzzleRange:40}},
+    /** Pea Souper (incident, always on; Tyler, 9 October: "the buildings and walls can be hidden behind the fog… the
+     * rats always have to be visible… the lights breaking through the fog"): seconds to roll in; the fog's `density`
+     * (FogExp2: half the city gone at about 14 units) and `colour`, the sky taken `sky` of the way to it; lamp haze
+     * cones `haze` times brighter and `cone` wider, searchlights `beams` times brighter (both unfogged, so they glow
+     * through); every rat's far outline from `outlineNear` to full at `outlineFar` units, `outlinePixels` wide at
+     * `outlineOpacity`; a foghorn every `hornEvery` seconds. */
+    peaSouper:{label:'I4 Pea Souper',toggle:false,params:{fade:3,density:.058,colour:0x4b4a36,sky:.85,haze:1.8,cone:1.5,beams:3,outlineNear:3,outlineFar:12,outlinePixels:2.4,outlineOpacity:.9,hornEvery:16,horn:.55}},
     /** Bad Ammunition juice: muzzle `smoke` and each ball's personality sound (`volume`; a superball's boing at
      * `superballPitch`, at launch and every bounce), and your own ball's word. The paths themselves are gameplay. */
     badAmmo:{label:'I2 Bad Ammunition juice',toggle:true,params:{smoke:.6,volume:.8,superballPitch:1.7}},

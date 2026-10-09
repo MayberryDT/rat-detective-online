@@ -3,12 +3,16 @@
  * the noir layer, no network, no rats. Camera from the URL:
  *   ?view=<name>  a named view (see VIEWS), or
  *   ?eye=x,y,z&at=x,y,z  any camera.
+ *   ?incident=<id>  an incident's look, already set in (e.g. `pea-souper`).
+ *   ?rats=x,z;x,z…  remote rats standing on the street there (their far outlines).
  * `window.cityViewReady` turns true once a few frames have rendered (for screenshots).
  */
 import * as THREE from 'three';
 import {createStage} from '../../src/session/createStage';
 import {Neighborhood} from '../../src/prototype/Neighborhood';
 import {FeelDirector} from '../../src/feel/FeelDirector';
+import {RatEntity} from '../../src/entities/RatEntity';
+import {isIncidentId} from '../../src/shared/incidentCatalog';
 
 const VIEWS:Record<string,[number[],number[]]>={
     overview:[[-15,260,40],[-15,0,-10]],
@@ -48,6 +52,12 @@ const city=new Neighborhood(stage.scene,stage.world,{seed:341283204,version:3});
 stage.moonShadow.adoptCity(stage.scene,beforeCity);
 const feel=new FeelDirector();
 feel.attach(stage.renderer.domElement,stage.listener);feel.attachCity(stage.scene,city.streetLamps);
+const incident=params.get('incident');
+if(isIncidentId(incident)){feel.setIncident(incident);for(let i=0;i<300;i++)feel.update(.05,stage.camera);}
+const rats=(params.get('rats')??'').split(';').filter(Boolean).map((xz,i)=>{
+    const [x,z]=xz.split(',').map(Number);
+    return new RatEntity(stage.scene,stage.world,new THREE.Vector3(x,0,z),`Witness ${i+1}`,undefined,true);
+});
 const named=VIEWS[params.get('view')??'overview']??VIEWS.overview!;
 const parse=(v:string|null,fallback:number[])=>v?v.split(',').map(Number):fallback;
 const [ex,ey,ez]=parse(params.get('eye'),named[0]!),[ax,ay,az]=parse(params.get('at'),named[1]!);
@@ -61,8 +71,10 @@ const info=document.getElementById('info')!;
 stage.renderer.setAnimationLoop(now=>{
     const dt=Math.min((now-last)/1000,.05);last=now;
     city.update(dt,stage.camera,stage.camera.position);feel.update(dt,stage.camera,stage.camera.position);
+    const unitsPerPixel=2*Math.tan(THREE.MathUtils.degToRad(stage.camera.fov)/2)/innerHeight;
+    for(const rat of rats){rat.presentAlive(dt);rat.fitOutline(stage.camera.position,unitsPerPixel);}
     stage.renderer.render(stage.scene,stage.camera);
     // Every frame: a headless screenshot may land before the thirtieth.
     info.textContent=`static art inspection · draws ${stage.renderer.info.render.calls} · tris ${stage.renderer.info.render.triangles} · programs ${stage.renderer.info.programs?.length??0}`;
-    if(++frames===30)Object.assign(window,{cityViewReady:true});
+    if(++frames>=30&&now>2500)Object.assign(window,{cityViewReady:true});
 });

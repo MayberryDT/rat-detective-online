@@ -26,8 +26,9 @@ import type { ExhibitMessage, HighlightMarker } from './highlights';
  * 40: chaos leaves evidence: chalk outlines where bodies lay (`chalk`), dead witnesses' tips toward the carrier
  *     (`tips`) and sewer muck (`muck`) (staging only).
  * 41: tips out; hot wax along the carrier's path (`wax`), pigeons it flushes (`flocks`), the police scanner
- *     (`scanner`); Code Violation removed; the Persuader (a weapon pickup; `slug` balls). */
-export const PROTOCOL_VERSION = 41;
+ *     (`scanner`); Code Violation removed; the Persuader (a weapon pickup; `slug` balls).
+ * 42: Bad Ammunition removed; the Pea Souper incident (`pea-souper`). */
+export const PROTOCOL_VERSION = 42;
 /** Body hits deal 1; a headshot is always lethal. */
 export const MAX_HP = 5;
 export const KILLS_TO_WIN = 20;

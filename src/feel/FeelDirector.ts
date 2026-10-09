@@ -1,7 +1,7 @@
 import {HeavyCheese} from './HeavyCheese';
 import * as THREE from 'three';
 import type {IncidentId} from '../shared/incidentCatalog';
-import {RAT_BLACKOUT,type RatEntity} from '../entities/RatEntity';
+import {RAT_BLACKOUT,RAT_FOG,type RatEntity} from '../entities/RatEntity';
 import type {DeathStyle} from '../utils/RatAnimator';
 import {CameraFeel} from './CameraFeel';
 import {ScreenFeel} from './ScreenFeel';
@@ -115,6 +115,8 @@ export class FeelDirector {
     cue?:(cue:FeedbackCue)=>void;
     /** Blackout: eased power-off level, and the brief lift from nearby muzzle flashes. */
     private blackout=0;
+    /** How far a Pea Souper has rolled in, 0…1, and seconds to the next foghorn. */
+    private soup=0;private hornIn=0;
     private muzzleFlash=0;
     /** P4: seconds into the current Pressure Surge, and the lights' flicker from its latest pulse. */
     private surgeAge=0;
@@ -583,6 +585,7 @@ export class FeelDirector {
         this.camera.update(dt);
         this.updateSurge(dt);
         this.updateBlackout(dt);
+        this.updateSoup(dt);
         this.dust?.update(dt);
         this.launchJuice?.update(dt);
         this.tommy?.update(dt);
@@ -648,6 +651,16 @@ export class FeelDirector {
         this.dark=Math.max(this.blackout*stutter,flicker)*(1-flash);
         this.noirCity?.setDark(this.dark);this.noirCity?.setEvidenceDark(this.blackout);
         RAT_BLACKOUT.value=this.blackout;
+    }
+    /** Pea Souper rolls in and out over `fade` seconds: the city goes into the fog while the rats' outlines come in
+     * close, and a foghorn sounds from the harbour as it arrives and every so often while it lasts. */
+    private updateSoup(dt:number):void {
+        const p=FEEL.peaSouper.params,on=this.incident==='pea-souper';
+        if(on&&this.soup===0)this.hornIn=.6;
+        this.soup=THREE.MathUtils.clamp(this.soup+(on?dt:-dt)/p.fade,0,1);
+        if(on&&(this.hornIn-=dt)<=0){this.hornIn=p.hornEvery;playSynth('foghorn',undefined,.97+Math.random()*.06,p.horn);}
+        if(this.noirAtmosphere)this.noirAtmosphere.soup=this.soup;
+        RAT_FOG.value=this.soup;
     }
     /** Offset the rendered view; `afterRender` must follow the same frame. */
     beforeRender(camera:THREE.PerspectiveCamera):void {this.camera.apply(camera);}

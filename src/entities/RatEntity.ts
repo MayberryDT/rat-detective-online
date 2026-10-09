@@ -51,6 +51,10 @@ const EMISSIVE_INTENSITY = 0.28;  // Rat-only lift; lamps still model the hat an
  * and your own rat keeps a thin pale black-and-white edge. */
 export const RAT_BLACKOUT = { value: 0 };
 const SELF_OUTLINE = 0xd4d4d4, SELF_OUTLINE_OPACITY = 0.55;
+/** Pea Souper 0…1, shared by every rat: the far outline comes in close and bolder (`FEEL.peaSouper`), so a rat in the
+ * fog is always seen (Tyler: "the rats always have to be visible"). Rat bodies ignore the fog already. */
+export const RAT_FOG = { value: 0 };
+const glowOpacity = () => GLOW_OPACITY + (FEEL.peaSouper.params.outlineOpacity - GLOW_OPACITY) * RAT_FOG.value;
 /** The Hunch: occluded parts of a rat drawn as a pale boiling pencil sketch.
  * One time uniform shared by every rat; materials stay per rat for disposal. */
 const HUNCH_TIME={value:0};
@@ -475,13 +479,14 @@ export class RatEntity {
     public fitOutline(camera:THREE.Vector3,unitsPerPixel:number):void {
         if(this.dead)return;
         const distance=this.mesh.position.distanceTo(camera);
-        this.outlineFade=THREE.MathUtils.smoothstep(distance,OUTLINE_NEAR,OUTLINE_FAR);
-        this.outlineReach=Math.max(0,OUTLINE_PIXELS*this.outlineFade*unitsPerPixel*distance-GLOW_THICKNESS);
+        const fog=RAT_FOG.value,soup=FEEL.peaSouper.params,mix=(a:number,b:number)=>a+(b-a)*fog;
+        this.outlineFade=THREE.MathUtils.smoothstep(distance,mix(OUTLINE_NEAR,soup.outlineNear),mix(OUTLINE_FAR,soup.outlineFar));
+        this.outlineReach=Math.max(0,mix(OUTLINE_PIXELS,soup.outlinePixels)*this.outlineFade*unitsPerPixel*distance-GLOW_THICKNESS);
         this.updatePowerupOutline();
     }
     private updatePowerupOutline():void {
         const pursuit=this.hustleRemaining>0&&!this.dead,own=this.isPlayer&&!this.dead?this.blackout:0,far=this.isPlayer?0:this.outlineFade*(1-this.blackout);
-        if(this.glowMaterial){this.glowMaterial.color.setHex(pursuit?0xff1605:own>0?SELF_OUTLINE:OUTLINE_COLOR);this.glowMaterial.opacity=pursuit?.95:own>0?SELF_OUTLINE_OPACITY*own:GLOW_OPACITY*far;}
+        if(this.glowMaterial){this.glowMaterial.color.setHex(pursuit?0xff1605:own>0?SELF_OUTLINE:OUTLINE_COLOR);this.glowMaterial.opacity=pursuit?.95:own>0?SELF_OUTLINE_OPACITY*own:glowOpacity()*far;}
         this.shellOffset.value=pursuit?Math.max(.055,this.outlineReach):this.outlineReach;
         if(this.glowMesh)this.glowMesh.visible=!this.sharedDeath&&(pursuit||own>.01||far>.01);
     }
@@ -598,7 +603,7 @@ export class RatEntity {
             const fadeOut = Math.max(0, 1 - t / DEATH_GLOW_FADE);
             this.glowMesh.traverse((c) => {
                 if (c instanceof THREE.Mesh && c.material instanceof THREE.MeshBasicMaterial) {
-                    c.material.opacity = GLOW_OPACITY * this.outlineFade * fadeOut;
+                    c.material.opacity = glowOpacity() * this.outlineFade * fadeOut;
                 }
             });
         }
@@ -883,7 +888,7 @@ export class RatEntity {
         this.resetColor();
         this.glowMesh?.traverse(child => {
             if (child instanceof THREE.Mesh && child.material instanceof THREE.MeshBasicMaterial) {
-                child.material.opacity = GLOW_OPACITY * this.outlineFade;
+                child.material.opacity = glowOpacity() * this.outlineFade;
             }
         });
     }

@@ -19,7 +19,7 @@ import {BotZoneHold} from './motor/zoneHold';
 import {BotTricks} from './motor/tricks';
 import {zoneStepSafe} from './motor/zoneStepSafe';
 import {CarrierSight,type KnownCarrier} from './motor/carriers';
-import {FLASHLIGHT_REACH,RAT_MOVEMENT,lookHeading,muzzleReach,noControls,ratMuzzle,type RatControls} from '../rat/ratBody';
+import {FLASHLIGHT_REACH,FOG_REACH,RAT_MOVEMENT,lookHeading,muzzleReach,noControls,ratMuzzle,type RatControls} from '../rat/ratBody';
 
 export interface MotorNavigation {
     /** A supported local route leg, without replacing the actual objective. */
@@ -480,11 +480,12 @@ export class BotMotor {
      * Blackout sight reaches only as far as a flashlight. */
     perceive(now:number,self:PlayerData,living:readonly PlayerData[],state:ChaosState|undefined,
         clear:(p:Vec3Data)=>boolean,clearControl:(p:Vec3Data)=>boolean,quietBell:boolean,preferred?:string):void {
-        const time=state?.time??now,sight=state?.dispatch.phase==='active'&&incidentInfo(state.dispatch.incident).id==='blackout'?FLASHLIGHT_REACH:80;
+        const incident=state?.dispatch.phase==='active'?incidentInfo(state.dispatch.incident).id:undefined;
+        const time=state?.time??now,sight=incident==='blackout'?FLASHLIGHT_REACH:80,caseSight=Math.min(60,sight,incident==='pea-souper'?FOG_REACH:Infinity);
         const visible=living.filter(p=>distance(self,p)<sight&&clear(p)).sort((a,b)=>distance(self,a)-distance(self,b));
         if(this.mode==='case'){
             const selected=this.cases.find(c=>c.key===this.key);
-            if(selected&&!selected.value.owner&&distance(self,selected.value.p)<Math.min(60,sight)&&clearControl(selected.value.p))this.destination={...selected.value.p};
+            if(selected&&!selected.value.owner&&distance(self,selected.value.p)<caseSight&&clearControl(selected.value.p))this.destination={...selected.value.p};
             else if(this.destination&&distance(self,this.destination)<3)this.failGoal(now);
         }
         this.visible=visible;

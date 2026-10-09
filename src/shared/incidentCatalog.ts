@@ -6,6 +6,7 @@ export const INCIDENTS = [
     {id:'crossfire',title:'Crossfire',description:'Off the first wall the cheese catches fire and doubles its speed.'},
     {id:'scattershot',title:'Scattershot',description:'Every shot is a five-ball fan, and every ball knocks rats flying.'},
     {id:'blackout',title:'Blackout',description:'The power is out. Every rat has a flashlight.'},
+    {id:'pea-souper',title:'Pea Souper',description:'Fog rolls in off the harbour. The city vanishes; the rats do not.'},
     {id:'most-wanted',title:'Most Wanted',description:'Whoever is winning is in the searchlight. Take them down for a supply.'},
     {id:'all-units',title:'All Units',description:'The fallen respawn as backup, right beside the action.'},
 ] as const;
