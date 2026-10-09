@@ -34,13 +34,12 @@ describe('immediate single-ID local ball presentation',()=>{
         view.confirm(birth(),150);view.apply(state(1100),150);
         expect(view.render([],150)).toHaveLength(0);
     });
-    it.each([undefined,'bad-ammunition','scattershot'] as const)('uses exactly the authority volley for %s before and after confirmation',incident=>{
+    it.each([undefined,'scattershot'] as const)('uses exactly the authority volley for %s before and after confirmation',incident=>{
         const view=new LocalShotPresentation(),expected=resolveShotPattern(descriptor,incident);view.fire('owner',descriptor,incident,0);
         let balls=view.render([],0);expect(balls.map(b=>({id:b.id,velocity:b.v}))).toEqual(expected.map(b=>({id:b.id,velocity:b.velocity})));
         view.render([],16);expect(view.confirm(birth(incident),100)).toBe(true);
         balls=view.render([],116);expect(balls.map(b=>b.id)).toEqual(expected.map(b=>b.id));
         expect(new Set(balls.map(b=>b.id)).size).toBe(balls.length);
-        if(incident==='bad-ammunition')expect(balls[0]!.quirk).toBe(expected[0]!.quirk);
     });
     it('corrects an incident boundary without retaining stale volley members',()=>{
         const view=new LocalShotPresentation();view.fire('owner',descriptor,'scattershot',0);expect(view.render([],0)).toHaveLength(5);
@@ -87,7 +86,7 @@ describe('shared shot pattern',()=>{
     it('keeps all volley IDs within the wire limit and repeats exactly across independent calls',()=>{
         for(let i=0;i<200;i++){
             const shot={...descriptor,shotId:String(i).padStart(64,'a')};
-            for(const incident of ['scattershot','bad-ammunition'] as const){
+            for(const incident of ['scattershot'] as const){
                 const a=resolveShotPattern(shot,incident),b=resolveShotPattern(shot,incident);expect(a).toEqual(b);
                 expect(new Set(a.map(x=>x.id)).size).toBe(a.length);
                 for(const ball of a){expect(ball.id.length).toBeLessThanOrEqual(64);if(incident==='scattershot')expect(Math.hypot(ball.velocity.x,ball.velocity.y,ball.velocity.z)).toBeCloseTo(175);}

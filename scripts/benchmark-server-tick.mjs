@@ -157,7 +157,7 @@ for(let tick=0;tick<TICKS;tick++){
     c.wire=ms(at,clock());
     if(recipients){
         clientBytes[tick]=(first?.length??0)+(others.bytes-othersBefore)/recipients;
-        if(first){const at=clock();if(!decoder.read(first))throw Error(`tick ${tick}: the chaos frame did not decode`);decodeMs[tick]=ms(at,clock());}
+        if(first){const at=clock();if(!decoder.read(first)){await writeFile(resolve(out,`undecodable-${tick}.json`),JSON.stringify({frame:JSON.parse(first),state},null,1));throw Error(`tick ${tick}: the chaos frame did not decode (state in ${out}/undecodable-${tick}.json)`);}decodeMs[tick]=ms(at,clock());}
         // Where one recipient's chaos frame bytes go, by top-level field and rest key.
         if(first){const f=JSON.parse(first);for(const k of ['definitions','motion','impacts'])fields[k]=(fields[k]??0)+JSON.stringify(f[k]).length;
             for(const [k,v] of Object.entries(f.rest))fields[`rest.${k}`]=(fields[`rest.${k}`]??0)+JSON.stringify(v).length;}

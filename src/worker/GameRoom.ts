@@ -1,3 +1,4 @@
+import { PICKUP_COPY } from '../shared/pickups';
 import { MAX_OBSERVERS, observationAllowed } from '../shared/observation';
 import {RoundAwards} from './RoundAwards';
 import type {Award,RoundReport} from '../shared/networkProtocol';
@@ -1893,6 +1894,11 @@ export class GameRoom extends DurableObject<Env> {
         break;
       case 'reset-case':
         ok = chaos.resetCase(); message = ok ? 'Case returning to a fresh spot.' : 'The case is already returning.';
+        break;
+      case 'give':
+        ok = !!by && !!chaos.rewardSupply(by, 'admin', command.kind);
+        message = ok ? `Handed you ${PICKUP_COPY[command.kind].title}.` : by ? 'Your rat must be alive to take it.' : 'Give works from the game.';
+        if (ok) this.applyPickupEvents();
         break;
     }
     this.city.admin({ command: command.command, via, ok, ...(command.command === 'next-mode' ? { next: command.mode } : {}), ...(roll ? { roll } : {}) }, now, round, by, winner);

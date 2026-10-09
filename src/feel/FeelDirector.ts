@@ -7,8 +7,6 @@ import {CameraFeel} from './CameraFeel';
 import {ScreenFeel} from './ScreenFeel';
 import {NoirAudio} from './NoirAudio';
 import {Dust,registerDust} from './Dust';
-import {badRound} from '../shared/shotPattern';
-import {BAD_AMMO,type BadRound} from '../shared/shotBallistics';
 import type {Vec3Data} from '../shared/networkProtocol';
 import {CityReactions,registerCity} from './CityReactions';
 import {NoirCity} from './NoirCity';
@@ -19,7 +17,7 @@ import type {StreetLampPosition} from '../shared/streetLampLayout';
 import {FeelSound,spaceAt,type FootstepSource} from './FeelSound';
 import type {Sting} from './FeelAudio';
 import {type ChaosShot} from '../shared/chaosState';
-import {playHic,playSynth} from '../audio/IncidentAudio';
+import {playSynth} from '../audio/IncidentAudio';
 import {MAX_HP} from '../shared/networkProtocol';
 import {feelState,type FeelState} from './feelState';
 import {FEEL} from './feelTuning';
@@ -42,8 +40,6 @@ import type {CaseState} from '../shared/chaosState';
 const CLAIM_INK:Record<PickupKind,string>={ironclad:'#c9d3de',hustle:'#d9473a','quick-fix':'#5fc884',stakeout:'#7ad8e8','tommy-gun':'#e8873e',laser:'#c8f040',mousetrap:'#e6dcc4',persuader:'#d9b25a'};
 /** C4: Hot Pursuit claim dust, a multiplier on the grey dust colour. */
 const CLAIM_DUST=new THREE.Color(3.2,.42,.26);
-/** Bad Ammunition: the word over your own ball, by its personality. */
-const BAD_WORDS:Record<BadRound,string>={corkscrew:'WHEEE!',snake:'WIGGLE!',superball:'BOING!',floater:'PFFFT.',hiccup:'HIC!'};
 
 /** The lull: how long nothing must happen near you, how slowly the city settles and how fast it wakes (seconds). */
 const LULL={quietMs:8000,inS:4,outS:.6} as const;
@@ -389,24 +385,12 @@ export class FeelDirector {
     /** Bad Ammunition, per trigger (`plain` when a special weapon fired it instead): a puff of muzzle smoke and the
      * ball's personality sound for everyone near (a corkscrew's drill, a snake's slide whistle, a superball's boing, a
      * floater's lazy kazoo, a hiccup's HIC! where it stops); your own also gets its word. */
-    fired(shotId:string,origin:Vec3Data,direction:Vec3Data,local:boolean,view:THREE.Camera,now=performance.now(),plain=false):void {
+    fired(_shotId:string,origin:Vec3Data,_direction:Vec3Data,_local:boolean,view:THREE.Camera,_now=performance.now(),_plain=false):void {
         // Blackout: a shot nearby lights the street for a blink.
         if(this.incident==='blackout'){
             const d=Math.hypot(origin.x-view.position.x,origin.y-view.position.y,origin.z-view.position.z),reach=FEEL.blackout.params.muzzleRange;
             if(d<reach)this.muzzleFlash=Math.max(this.muzzleFlash,FEEL.blackout.params.muzzle*(1-d/reach));
         }
-        if(plain||this.incident!=='bad-ammunition'||!this.state.on('badAmmo'))return;
-        const quirk=badRound(shotId),p=FEEL.badAmmo.params,muzzle=new THREE.Vector3(origin.x,origin.y,origin.z);
-        const aim=new THREE.Vector3(direction.x,direction.y,direction.z).normalize();
-        this.dust?.smoke(muzzle,aim,p.smoke);
-        if(quirk==='hiccup'){
-            // It hangs in the air where it stops, the hiccup's own spot along the aim.
-            const at=muzzle.clone().addScaledVector(aim,BAD_AMMO.hiccup.speed*BAD_AMMO.hiccup.stopAt);
-            setTimeout(()=>{playHic(at);if(local&&this.view)this.word('HIC!',at,this.view,performance.now(),true);},BAD_AMMO.hiccup.stopAt*1000);
-            return;
-        }
-        playSynth(quirk==='superball'?'boing':quirk,local?undefined:origin,quirk==='superball'?p.superballPitch:1,p.volume);
-        if(local)this.word(BAD_WORDS[quirk],muzzle.addScaledVector(aim,4),view,now,true);
     }
     /** Bad Ammunition: a superball struck a wall or floor at `at`. */
     superballBounce(at:Vec3Data):void {

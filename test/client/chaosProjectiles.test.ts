@@ -1,4 +1,3 @@
-import {badRound} from '../../src/shared/shotPattern';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three';
 import * as C from 'cannon-es';
@@ -36,7 +35,7 @@ function snapshot(): ChaosState {
 const shot = { shotId: 'local-shot', origin: { x: 0, y: 2, z: 0 }, direction: { x: 1, y: 0, z: 0 } };
 
 describe('authoritative ball presentation', () => {
-  it.each(([undefined,'bad-ammunition','scattershot'] as const).flatMap(incident=>[false,true].map(moved=>({incident,moved}))))('draws one actual ball per ID at the current animated muzzle: $incident, moved=$moved',({incident,moved})=>{
+  it.each(([undefined,'scattershot'] as const).flatMap(incident=>[false,true].map(moved=>({incident,moved}))))('draws one actual ball per ID at the current animated muzzle: $incident, moved=$moved',({incident,moved})=>{
     const clock=vi.spyOn(performance,'now').mockReturnValue(0),scene=new THREE.Scene(),world=new C.World();
     const player=new RatController(scene,world,camera,'Shooter',{},new THREE.Vector3(0,100,0));player.updateView();
     const gun=new CheeseGun(scene,world,{} as THREE.AudioListener);gun.authoritative=true;gun.setPlayer(camera,player.entity);
@@ -48,7 +47,6 @@ describe('authoritative ball presentation', () => {
     try{
       // Bad Ammunition: a superball leaves at full muzzle speed, as the distances below expect.
       let descriptor=gun.shoot(player.entity,new THREE.Vector3(0,100,100))!;
-      while(incident==='bad-ammunition'&&badRound(descriptor.shotId)!=='superball')descriptor=gun.shoot(player.entity,new THREE.Vector3(0,100,100))!;
       const muzzle=player.entity.getMuzzlePosition();expect(descriptor.origin).toEqual(muzzle);
       const fired=sim.shoot(rat.id,descriptor);
       const birth={type:'playerShot' as const,shooterId:rat.id,...descriptor,launch:{at:sim.time,balls:fired.map(ball=>({id:ball.id,velocity:{...ball.v}}))}};
@@ -72,7 +70,7 @@ describe('authoritative ball presentation', () => {
       view.apply({...travelled,time:at+100,shots:[]});view.update(1/60,camera);expect(balls.count).toBe(0);
     }finally{view.dispose();gun.dispose();player.dispose();clock.mockRestore();}
   });
-  it.each([undefined,'bad-ammunition','scattershot'] as const)('renders immediately at the real muzzle and merges the same server IDs: %s',incident=>{
+  it.each([undefined,'scattershot'] as const)('renders immediately at the real muzzle and merges the same server IDs: %s',incident=>{
     const clock=vi.spyOn(performance,'now').mockReturnValue(0),scene=new THREE.Scene(),world=new C.World();
     const player=new RatController(scene,world,camera,'Shooter',{},new THREE.Vector3(0,100,0));player.updateView();
     const gun=new CheeseGun(scene,world,{} as THREE.AudioListener);gun.authoritative=true;gun.setPlayer(camera,player.entity);
@@ -84,7 +82,6 @@ describe('authoritative ball presentation', () => {
     view.setScores([],rat.id);view.apply(initial);
     try{
       let shot=gun.shoot(player.entity,new THREE.Vector3(0,100,100))!;
-      while(incident==='bad-ammunition'&&badRound(shot.shotId)!=='superball')shot=gun.shoot(player.entity,new THREE.Vector3(0,100,100))!;
       const muzzle=player.entity.getMuzzlePosition();view.fire(shot);
       const fired=sim.shoot(rat.id,shot);
       const balls=scene.getObjectByName('cheese-balls') as THREE.InstancedMesh,matrix=new THREE.Matrix4(),point=new THREE.Vector3();

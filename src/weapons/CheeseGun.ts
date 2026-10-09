@@ -175,7 +175,7 @@ export class CheeseGun {
     localWeaponReport?: (weapon:'laser'|'tommy-gun'|'persuader')=>void|boolean;
 
     setIncident(incident?: IncidentId): void {
-        this.fireCue = incident === 'bad-ammunition' ? 'malfunction' : incident === 'scattershot' ? 'shotgun' : 'normal';
+        this.fireCue = incident === 'scattershot' ? 'shotgun' : 'normal';
     }
 
     /** Presentation sweeps never damage entities or emit hit feedback. Exclude

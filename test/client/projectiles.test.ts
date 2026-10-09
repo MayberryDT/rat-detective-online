@@ -24,7 +24,7 @@ describe('projectile behavior', () => {
     const animate=vi.spyOn(owner,'playShootAnimation'),hit=vi.fn();gun.onHitEntity=hit;
     const shot=gun.shoot(owner,new THREE.Vector3(100,1.45,0))!;
     expect(animate).toHaveBeenCalledOnce();
-    expect(gun.fireCue).toBe(incident==='bad-ammunition'?'malfunction':incident==='scattershot'?'shotgun':'normal');
+    expect(gun.fireCue).toBe(incident==='scattershot'?'shotgun':'normal');
     expect(owner.mesh.getObjectByName('rat-muzzle-flash')!.visible).toBe(true);
     expect(shot.origin).toEqual(owner.getMuzzlePosition());
     gun.update(.02);

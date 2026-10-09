@@ -561,7 +561,9 @@ export class CaseClues {
                 if(pair.length>best.length)best=pair;
                 if(best.length===8)break;
             }
-            f.push(...best);
+            // A pair can straddle the cap: never lay more than `PRINTS.run` prints (a 17th made every client refuse the
+            // whole chaos frame, `validPrints`, and reconnect until the run retired).
+            f.push(...best.slice(0,PRINTS.run*4-f.length));
         }
         if(f.length<8)return;
         if(old)this.prints=this.prints.filter(r=>r!==old);

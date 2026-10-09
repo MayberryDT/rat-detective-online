@@ -4,7 +4,6 @@ import type {IncidentId} from '../shared/incidentCatalog';
 const drawings: Record<IncidentId | 'dispatch', string> = {
     dispatch: '<path d="M14 43h37l-3 8H11zM19 40V28a13 13 0 0 1 26 0v12M26 23l-2 9M32 5v6M9 15l7 5M55 15l-7 5"/><path class="incident-ink" d="M30 20h5l-1 14h-3z"/>',
     'improper-disposal': '<path d="m5 41 12-2M4 49l17-6M9 30l10 3M24 32l-3-10 9 3 4-10 5 9 13-2-7 10 10 4-12 6-1 10-10-9-12 2zM29 30l6 6m0-6-6 6M38 28l6 6m0-6-6 6M26 43q-11 17-16 7"/>',
-    'bad-ammunition': '<path d="M3 30h12l3-4h4v10h-4l-3-3H3z"/><path d="M25 31q3-9 6 0t6 0 6 0"/><path class="incident-ink" d="M24 46q4-10 8 0 4-7 8 0 4-4 8 0"/><circle cx="55" cy="31" r="4"/><circle cx="54" cy="46" r="2.5"/><path d="M28 14h2m5 0h2m5 0h2M50 18l4-5m-2 9 6-2"/>',
     'pressure-surge': '<path d="M13 53h38l-3-9H16zM20 39V23h9v16m6 0V23h9v16M15 17l8-10 9 10m-9-8v12M32 17 41 7l8 10m-8-8v12M5 31l8 3m40-3 7-4"/>',
     'evidence-tampering': '<path d="m17 25 34-5 4 25-35 5zM27 22l-1-8 14-2 1 8M18 32l35-5M30 30l1 6 10-2-1-6M5 31l9-2M7 41l8-2M12 51l4-1M48 9l3-5m5 11 5-2"/>',
     crossfire: '<path d="M50 11v42M7 49l34-22-14-8m14 8-9 13M38 13l3-10 5 10 11-6-3 12 8 4-11 4"/><circle class="incident-ink" cx="17" cy="42" r="6"/>',

@@ -50,7 +50,7 @@ describe('the weapon slot',()=>{
 describe('the Tommy Gun',()=>{
     it('replaces any incident pattern with one ball in a cone that blooms while held, the same on every machine',()=>{
         const shot={shotId:'tommy-1',origin:{x:0,y:1,z:0},direction:{x:0,y:0,z:1}};
-        for(const incident of ['scattershot','bad-ammunition','crossfire'] as const){
+        for(const incident of ['scattershot','crossfire'] as const){
             const balls=resolveShotPattern(shot,incident,{kind:'tommy-gun',heat:W.tommyBloomShots});
             expect(balls).toHaveLength(1);
             const v=balls[0]!.velocity,off=Math.acos(v.z/Math.hypot(v.x,v.y,v.z));

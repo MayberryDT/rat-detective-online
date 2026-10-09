@@ -1,7 +1,6 @@
 /** Shared copy and stable IDs for authoritative Dispatch results. */
 export const INCIDENTS = [
     {id:'improper-disposal',title:'Improper Disposal',description:'Dead rats become ricocheting corpse missiles and burst into cheese.'},
-    {id:'bad-ammunition',title:'Bad Ammunition',description:'Every cartridge has a mind of its own. They still go roughly where you aim.'},
     {id:'pressure-surge',title:'Pressure Surge',description:'Every launcher fires at once. Mind your step.'},
     {id:'evidence-tampering',title:'Evidence Tampering',description:'Runaway case missiles! Dodge them or shoot them back.'},
     {id:'crossfire',title:'Crossfire',description:'Off the first wall the cheese catches fire and doubles its speed.'},
@@ -28,6 +27,8 @@ export const LEGACY_INCIDENTS = {
     'big-cheese':'crossfire',
     // Removed 9 October (protocol 41, Tyler: "I hate code violation ... everyone always complains about it").
     'code-violation':'crossfire',
+    // Removed 9 October (Tyler: "bad ammunition's not good ... five different reworks ... none of them are good").
+    'bad-ammunition':'crossfire',
 } as const satisfies Record<string,IncidentId>;
 export type LegacyIncidentId = keyof typeof LEGACY_INCIDENTS;
 export const isLegacyIncidentId = (value: unknown): value is LegacyIncidentId => typeof value === 'string' && Object.prototype.hasOwnProperty.call(LEGACY_INCIDENTS, value);

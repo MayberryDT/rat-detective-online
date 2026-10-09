@@ -1,4 +1,5 @@
 import { ASSIGNMENT_IDS, ASSIGNMENTS } from '../shared/assignments';
+import { PICKUP_COPY, PICKUP_KINDS } from '../shared/pickups';
 import { incidentInfo, type IncidentId } from '../shared/incidentCatalog';
 import type { AdminCommand, AdminResult, AdminStatus } from '../shared/admin';
 import type { ClientMessage } from '../shared/networkProtocol';
@@ -71,6 +72,9 @@ class AdminSheet {
         });
         button(incidentRow, 'End incident', () => this.command({ command: 'end-incident' }));
         button(row(), 'Reset case', () => this.command({ command: 'reset-case' }));
+        const giveRow = row(), give = doc.createElement('select'); give.setAttribute('aria-label', 'Pickup'); giveRow.appendChild(give);
+        for (const kind of PICKUP_KINDS) { const o = doc.createElement('option'); o.value = kind; o.textContent = PICKUP_COPY[kind].title; give.appendChild(o); }
+        button(giveRow, 'Give me', () => { const kind = PICKUP_KINDS.find(k => k === give.value); if (kind) this.command({ command: 'give', kind }); });
         this.note = doc.createElement('p'); this.note.className = 'admin-note'; this.note.setAttribute('role', 'status'); this.root.appendChild(this.note);
         const hint = doc.createElement('small'); hint.textContent = 'F10, ` or Esc closes'; this.root.appendChild(hint);
         doc.body.appendChild(this.root);

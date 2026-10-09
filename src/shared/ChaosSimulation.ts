@@ -84,7 +84,7 @@ export type PickupEvent =
     | { kind:'rewarded'; playerId:string; pickup:PickupKind; why:RewardReason }
     /** A Mousetrap was set down, snapped on a rat and holds it (`victim`), or destroyed (`by` the rat whose hit broke it). */
     | { kind:'trap'; what:'launch'|'set'|'snap'|'break'; trapId:string; playerId:string; p:Vec3Data; victim?:string; by?:string|null; hits?:number };
-export type RewardReason='streak'|'dispatch'|'bounty';
+export type RewardReason='streak'|'dispatch'|'bounty'|'admin';
 /** Supply sites per world (`seedPickups`): the same layout always resolves the same points. */
 const SUPPLY_POINTS=new Map<string,PickupPoint[]>();
 /** One authoritative simulation, also usable by the solo preview. No rendering or DOM. */
@@ -758,11 +758,11 @@ export class ChaosSimulation {
     }
     /** A random supply on the spot through the ordinary claim effects: the Dispatch caller's reward
      * and each new kill streak title's. Quick Fix is only in the draw when it would heal. */
-    rewardSupply(playerId:string,why:RewardReason):PickupKind|undefined{
+    rewardSupply(playerId:string,why:RewardReason,chosen?:PickupKind):PickupKind|undefined{
         const player=this.players.get(playerId);
         if(!player||player.hp<=0)return undefined;
         const supplies=player.hp<MAX_HP?PICKUP_KINDS:PICKUP_KINDS.filter(kind=>kind!=='quick-fix');
-        const supply=supplies[Math.floor(Math.random()*supplies.length)]!;
+        const supply=chosen??supplies[Math.floor(Math.random()*supplies.length)]!;
         if(supply==='quick-fix'){player.hp=MAX_HP;this.pickupEvents.push({kind:'healed',playerId:player.id,hp:MAX_HP,cause:'pickup'});}
         else this.buffs[player.id]=mergePickup(this.buffs[player.id],supply,this.now);
         this.pickupEvents.push({kind:'rewarded',playerId:player.id,pickup:supply,why});

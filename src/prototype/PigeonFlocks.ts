@@ -19,6 +19,9 @@ const seeded=(id:string)=>{let s=0;for(let i=0;i<id.length;i++)s=Math.imul(s^id.
 export class PigeonFlocks {
     readonly root=new THREE.Group();
     onFlush?:(p:THREE.Vector3)=>void;
+    /** This view's own rat: a carrier never sees or hears its own flock (Tyler, 9 October: from the carrier it was a
+     * distracting flash, "almost looks like lightning"); the flock is a clue for everyone else. */
+    self='';
     private readonly birds:THREE.InstancedMesh;
     private readonly feathers:THREE.InstancedMesh;
     private readonly seen=new Map<string,Seen>();
@@ -43,6 +46,7 @@ export class PigeonFlocks {
         if(flocks.length)this.ensureArt();
         let b=0,f=0;
         for(const flock of flocks){
+            if(flock.c===this.self)continue;
             live.add(flock.id);
             let seen=this.seen.get(flock.id);
             if(!seen){

@@ -1,11 +1,7 @@
 import {afterEach,describe,expect,it,vi} from 'vitest';
-import * as C from 'cannon-es';
-import {ChaosSimulation,type ChaosHit} from '../../src/shared/ChaosSimulation';
+import {ChaosSimulation} from '../../src/shared/ChaosSimulation';
 import {CHAOS_TUNING as T,DISPATCH_STATIONS} from '../../src/shared/chaosState';
 import {INCIDENTS,incidentInfo,incidentRoster,type IncidentId} from '../../src/shared/incidentCatalog';
-import {badRound} from '../../src/shared/shotPattern';
-import {BAD_ROUNDS,type BadRound} from '../../src/shared/shotBallistics';
-import {LocalShotPresentation} from '../../src/shared/LocalShotPresentation';
 import {BALL_SPEED} from '../../src/shared/ballTuning';
 import {parseServerMessage} from '../../src/shared/messageValidation';
 import {createPlayer} from '../../src/worker/gameState';
@@ -91,7 +87,7 @@ describe('authoritative Dispatch incidents',()=>{
   restored.step(0,now+T.rollMs+T.activeMs);expect(restored.snapshot(false).dispatch.phase).toBe('cooldown');
   restored.step(0,now+T.rollMs+T.activeMs+T.cooldownMs);expect(restored.snapshot(false).dispatch.phase).toBe('ready');
   fireDispatch(restored,now+T.rollMs+T.activeMs+T.cooldownMs+10);
-  expect(restored.snapshot(false).dispatch.incident).toBe('bad-ammunition');
+  expect(restored.snapshot(false).dispatch.incident).toBe('pressure-surge');
  });
  it('keeps exact Improper Disposal behavior and interprets missing legacy IDs as that incident',()=>{
   for(const legacy of [false,true]){
@@ -105,46 +101,13 @@ describe('authoritative Dispatch incidents',()=>{
   expect(sim.snapshot(false).corpses[0].v.x).toBe(T.normalCorpseSpeed);expect(sim.snapshot(false).shots).toHaveLength(0);
  });
  it('fires one ball per trigger even at capacity, and plain balls once it ends',()=>{
-  const {sim}=fixture('bad-ammunition');
+  const {sim}=fixture('crossfire');
   shoot(sim,'one');expect(sim.snapshot(false).shots).toHaveLength(1);
   for(let i=0;i<300;i++)shoot(sim,`fill-${i}`);
   const shots=sim.snapshot(false).shots;expect(shots).toHaveLength(T.maxShots);expect(shots.at(-1)!.id).toBe('fill-299');
   sim.step(0,now+T.activeMs);shoot(sim,'expired');
   const plain=sim.snapshot(false).shots.at(-1)!;expect(plain.id).toBe('expired');
   expect(plain.v.x).toBeCloseTo(BALL_SPEED);expect(Math.hypot(plain.v.y,plain.v.z)).toBeCloseTo(0);
- });
- const quirkShot=(quirk:BadRound,tag:string)=>{for(let i=0;;i++){const id=`${tag}-${quirk}-${i}`;if(badRound(id)===quirk)return id;}};
- it.each(['corkscrew','snake','floater','hiccup'] as const)('a %s ball wanders but stays near the aim line, and still lands on the rat it was aimed at',quirk=>{
-  for(const aim of [{x:1,y:0,z:0},{x:.3,y:.4,z:.5},{x:0,y:-1,z:0}]){
-   const {sim}=fixture('bad-ammunition'),a=new C.Vec3(aim.x,aim.y,aim.z);a.normalize();
-   const id=quirkShot(quirk,'line'),origin={x:30,y:60,z:30};
-   sim.shoot('shooter',{shotId:id,origin,direction:aim});
-   // Half a second, clear of both rats and before the straight-down shot reaches the ground.
-   let wander=0,along=0;
-   for(let i=1;i<=30;i++){
-    sim.step(1/60,now+i*1000/60);const s=sim.snapshot(false).shots.find(s=>s.id===id)!;
-    const d=new C.Vec3(s.p.x-origin.x,s.p.y-origin.y,s.p.z-origin.z);along=d.dot(a);
-    wander=Math.max(wander,d.vsub(a.scale(along)).length());
-   }
-   expect(wander).toBeLessThan(.75);expect(along).toBeGreaterThan(15);
-  }
-  const {players,victim}=fixture(),hits:ChaosHit[]=[];
-  let sim=new ChaosSimulation(players,hit=>hits.push(hit));sim.step(0,now);
-  const saved=sim.snapshot(false);saved.dispatch={phase:'active',incident:'bad-ammunition',started:now,until:now+T.activeMs,serial:1};
-  sim=new ChaosSimulation(players,hit=>hits.push(hit),saved);
-  sim.shoot('shooter',{shotId:quirkShot(quirk,'hit'),origin:{x:victim.x-20,y:victim.y+1,z:0},direction:{x:1,y:0,z:0}});
-  for(let i=1;i<=90&&!hits.length;i++)sim.step(1/60,now+i*1000/60);
-  expect(hits).toEqual([expect.objectContaining({owner:'shooter',victim:'victim'})]);
- });
- it.each(BAD_ROUNDS)('the shooter\'s prediction of a %s ball follows the authority\'s path for the same shot ID',quirk=>{
-  const {sim}=fixture('bad-ammunition'),view=new LocalShotPresentation();
-  const descriptor={shotId:quirkShot(quirk,'predict'),origin:{x:0,y:60,z:0},direction:{x:.6,y:.1,z:-.8}};
-  sim.shoot('shooter',descriptor);view.fire('shooter',descriptor,'bad-ammunition',0);view.render([],0);
-  for(let i=1;i<=45;i++){
-   sim.step(1/60,now+i*1000/60);
-   const server=sim.snapshot(false).shots.find(s=>s.id===descriptor.shotId)!,local=view.render([],i*1000/60).find(s=>s.id===descriptor.shotId)!;
-   expect(Math.hypot(local.p.x-server.p.x,local.p.y-server.p.y,local.p.z-server.p.z)).toBeLessThan(.05);
-  }
  });
  it('fills every machine by itself during Pressure Surge, faster as it goes, and stops afterwards',()=>{
   const {sim}=fixture('pressure-surge');

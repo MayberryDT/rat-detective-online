@@ -240,7 +240,7 @@ export function perceive(ctx:GoalContext,memory:RatMemory):RatView {
         incident=`${info.title}: ${info.description}`+(info.id==='most-wanted'&&dispatch.wanted
             ?dispatch.wanted===self.id?' I am the wanted rat.':` The wanted rat is ${alias(dispatch.wanted)}.`
             :info.id==='blackout'?' I see rats only as far as my flashlight reaches.'
-            :info.id==='bad-ammunition'?' Every ball I fire has a quirk: it corkscrews, snakes, bounces without slowing, floats or hiccups.':'');
+            :'');
     }
 
     // Only aliases already given: an unseen attacker stays unnamed.

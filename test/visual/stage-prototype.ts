@@ -10,7 +10,7 @@ import {RatController} from '../../src/player/RatController';
 import {InputState} from '../../src/session/InputState';
 import {bindPointerLockMenu} from '../../src/session/PointerLockMenu';
 import {ChaosSimulation,type ChaosHit} from '../../src/shared/ChaosSimulation';
-import {INCIDENTS,incidentInfo} from '../../src/shared/incidentCatalog';
+import {INCIDENTS} from '../../src/shared/incidentCatalog';
 import {CITY_BOUNDS,CITY_PREVIEW_SEED,GRAYBOX_VERSION} from '../../src/shared/grayboxLayout';
 import {ChaosView} from '../../src/prototype/ChaosView';
 import {RatEntity} from '../../src/entities/RatEntity';
@@ -192,7 +192,7 @@ if(new URLSearchParams(location.search).has('review')&&reviewView?.startsWith('d
 }
 player.applyPressureLaunches(chaosState,'local');
 for(const event of chaosState.pressure?.launches||[]){const entity=entities.get(event.playerId);if(event.playerId!=='local' && entity && !seenLaunches.has(event.id) && !entity.dead){seenLaunches.add(event.id);if(seenLaunches.size>64)seenLaunches.delete(seenLaunches.values().next().value!);entity.body.velocity.set(event.velocity.x,event.velocity.y,event.velocity.z);entity.body.wakeUp();launched.set(event.playerId,Date.now()+2600);}}
-gun.fireCue=chaosState.dispatch.phase==='active'&&incidentInfo(chaosState.dispatch.incident).id==='bad-ammunition'?'malfunction':'normal';
+gun.fireCue='normal';
 chaosView.apply(chaosState);
 const p=player.entity.mesh.position;
 if(p.y < -20 && !player.entity.dead)reset(-10,0,-27);

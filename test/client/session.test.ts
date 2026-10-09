@@ -419,8 +419,8 @@ describe('GameSession', () => {
 
     it('uses only active incidents for shot presentation and resets it on a fresh welcome',()=>{
         const {transport,gun,session}=start();
-        const state={time:1000,shots:[],dispatch:{phase:'active',incident:'bad-ammunition',started:1000,until:26000,serial:1}} as unknown as ChaosState;
-        transport.onMessage?.({type:'chaos',state});expect(gun.setIncident).toHaveBeenLastCalledWith('bad-ammunition');
+        const state={time:1000,shots:[],dispatch:{phase:'active',incident:'scattershot',started:1000,until:26000,serial:1}} as unknown as ChaosState;
+        transport.onMessage?.({type:'chaos',state});expect(gun.setIncident).toHaveBeenLastCalledWith('scattershot');
         state.dispatch.phase='cooldown';
         transport.onMessage?.({type:'chaos',state});expect(gun.setIncident).toHaveBeenLastCalledWith(undefined);
         state.dispatch.phase='active';state.dispatch.incident='blackout';

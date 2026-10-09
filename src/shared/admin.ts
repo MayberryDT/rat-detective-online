@@ -1,17 +1,20 @@
 import type { AssignmentId } from './assignments';
 import type { IncidentId } from './incidentCatalog';
 import type { DispatchPhase } from './chaosState';
+import type { PickupKind } from './pickups';
 
 /** Tyler's admin controls (docs/live-service.md, "Admin controls"). The same commands arrive over HTTP
  * (`/api/admin/v1/<command>`, bearer `ADMIN_TOKEN`) and from an authenticated game socket (`admin` message);
  * every one but `status` is recorded as an `admin` city fact. Parsed in messageValidation.ts. */
-export const ADMIN_COMMANDS = ['status', 'end-round', 'next-mode', 'incident', 'end-incident', 'reset-case'] as const;
+export const ADMIN_COMMANDS = ['status', 'end-round', 'next-mode', 'incident', 'end-incident', 'reset-case', 'give'] as const;
 export type AdminCommandName = typeof ADMIN_COMMANDS[number];
 export type AdminCommand =
   | { command: 'status' | 'end-round' | 'end-incident' | 'reset-case' }
   | { command: 'next-mode'; mode: AssignmentId }
   /** Roll an incident now: `incident` when given, otherwise the ordinary no-repeat draw. */
-  | { command: 'incident'; incident?: IncidentId };
+  | { command: 'incident'; incident?: IncidentId }
+  /** Hand a pickup to the admin's own rat (game socket only), as a site claim would. */
+  | { command: 'give'; kind: PickupKind };
 /** Where a command came from: the HTTP endpoint (the CLI) or an admin's game socket. */
 export type AdminVia = 'http' | 'game';
 

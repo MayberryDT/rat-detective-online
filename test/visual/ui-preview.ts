@@ -95,7 +95,7 @@ const allAwards=[award('top-gun','TOP GUN','Lieutenant Gorgonzola',14),award('mo
     award('dispatcher','DISPATCHER','Sergeant Stilton',3)];
 const climb=(final:number,n=22)=>Array.from({length:n},(_,i)=>Math.floor(final*Math.pow(i/(n-1),1.4)));
 const report:RoundReport={seconds:871,kills:47,handoffs:23,carry:{playerId:'rat-1',playerName:'Detective Rind',seconds:72},supplies:31,flights:12,calls:3,
-    incidents:{'pressure-surge':3,'bad-ammunition':2,'improper-disposal':2},
+    incidents:{'pressure-surge':3,crossfire:2,'improper-disposal':2},
     rats:people.map((p,i)=>({id:p.id,name:p.name,kills:p.kills,deaths:p.deaths,assists:(7-i)%4,shots:60-i*5,hits:24-i*2,headshots:3-i%3,longest:70-i*6,
         caseSeconds:[31,62,12,0,8,0,4,0][i]!,takes:[3,5,2,0,1,0,1,0][i]!,carry:[18,40,9,0,8,0,4,0][i]!,streak:4-i%4,supplies:5-i%5,flights:i%3,damage:9+i,dealt:31-i*3,alive:780-i*40,
         weapons:{cheese:Math.max(0,p.kills-2),...(i%2?{}:{'tommy-gun':1}),...(i%3?{}:{laser:1})},kinds:{hustle:1+i%2,'quick-fix':1,...(i%2?{}:{'tommy-gun':1})},

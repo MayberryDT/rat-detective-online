@@ -62,9 +62,7 @@ export class LocalShotPresentation {
             // Usually this is identical. The authority wins a boundary change.
             const expectedVelocity=resolveShotPattern(message,local.incident,local.weapon).find(b=>b.id===ball.id)?.velocity;
             if(!expectedVelocity||distance(expectedVelocity,ball.velocity)>.01){
-                // A Bad Ammunition ball the prediction did not expect (or a predicted one the authority did not fire) takes the authority's personality.
-                const quirk=resolveShotPattern(message,'bad-ammunition').find(b=>b.id===ball.id&&distance(b.velocity,ball.velocity)<=.01)?.quirk;
-                const state:ChaosShot={id:local.shot.id,owner:local.shot.owner,p:{...message.origin},v:{...ball.velocity},age:0,...(quirk?quirkBirth(quirk,message.direction):{})};
+                const state:ChaosShot={id:local.shot.id,owner:local.shot.owner,p:{...message.origin},v:{...ball.velocity},age:0};
                 const hidden=this.advance(state,Math.min(.5,Math.max(0,(now-local.fired)/1000)),local.hot);
                 local.shot=state;local.hidden=hidden;local.offset=undefined;local.updated=now;
             }

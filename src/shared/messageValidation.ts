@@ -95,6 +95,7 @@ export function parseAdminCommand(value: unknown): AdminCommand | null {
     case 'incident':
       if (value.incident === undefined) return { command: 'incident' };
       return isIncidentId(value.incident) ? { command: 'incident', incident: value.incident } : null;
+    case 'give': return isPickupKind(value.kind) ? { command: 'give', kind: value.kind } : null;
     default: return null;
   }
 }

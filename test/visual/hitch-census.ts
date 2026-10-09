@@ -121,7 +121,7 @@ const me=createPlayer('me','Census',appearance,{x:-10,y:1,z:-27});
 const rivals:PlayerData[]=Array.from({length:8},(_,i)=>createPlayer(`rat-${i}`,`Rival ${i}`,{...appearance,hatColor:0x224466+i*0x101010,coatColor:0x553322+i*0x080808},{x:-4+i*1.6,y:1,z:-29+(i%3)*1.8}));
 const players=Object.fromEntries([me,...rivals].map(p=>[p.id,p]));
 transport.welcome={type:'welcome',id:me.id,player:me,players,round:{phase:'playing',assignment:{roundId:'census',id:'chain-of-custody',phase:'active',revealedAt:now(),liveAt:now(),deliverySerial:0,destinations:['records'],deliveries:{},caseKills:{},revision:1}},
-    world:{seed:341283204,version:GRAYBOX_VERSION},protocolVersion:PROTOCOL_VERSION,serverTime:now(),incidents:['improper-disposal','bad-ammunition','pressure-surge','crossfire','scattershot','blackout','most-wanted','all-units']};
+    world:{seed:341283204,version:GRAYBOX_VERSION},protocolVersion:PROTOCOL_VERSION,serverTime:now(),incidents:['improper-disposal','pressure-surge','crossfire','scattershot','blackout','most-wanted','all-units']};
 const pose=(x:number,y:number,z:number)=>({p:{x,y,z},q:{x:0,y:0,z:0,w:1},v:{x:0,y:0,z:0},spin:{x:0,y:0,z:0}});
 const near:PickupState[]=[{id:'near-ironclad',kind:'ironclad',x:-6,y:.7,z:-25},{id:'near-hustle',kind:'hustle',x:-3,y:.7,z:-25},{id:'near-fix',kind:'quick-fix',x:0,y:.7,z:-25}];
 const state:ChaosState={time:now(),epoch:'census',tick:0,case:{...pose(CASE_HOME.x,CASE_HOME.y,CASE_HOME.z),owner:null,previousOwner:null,pickupAfter:0,returningUntil:0},
@@ -184,7 +184,7 @@ const script:[string,()=>void,number?][]=[
     ['pressure building',()=>{state.pressure={serial:1,levels:Object.fromEntries(LAUNCH_MACHINES.map(m=>[m.id,8])),launches:[]};},40],
     ['you launched',()=>{const m=LAUNCH_MACHINES[1]!;state.pressure={serial:2,levels:{},fired:{[m.id]:now()},launches:[{id:'launch-1',playerId:'me',at:now(),velocity:{x:0,y:60,z:0},machineId:m.id}]};},150],
     ['rival launched (boost)',()=>{const m=LAUNCH_MACHINES[1]!;state.pressure={serial:3,levels:{},fired:{[m.id]:now()},boosts:{[m.id]:now()},launches:[{id:'launch-2',playerId:'rat-5',at:now(),velocity:{x:5,y:70,z:0},machineId:m.id,boost:true}]};},150],
-    ...(['improper-disposal','bad-ammunition','crossfire','scattershot','all-units','blackout'] as IncidentId[]).map((id):[string,()=>void,number]=>
+    ...(['improper-disposal','crossfire','scattershot','all-units','blackout'] as IncidentId[]).map((id):[string,()=>void,number]=>
         [`incident ${id}`,()=>{incident(id);shotPattern=volley('rat-1',id==='crossfire'?{wallBounced:true}:{});
             if(id==='improper-disposal')state.corpses=[corpse(1,true),corpse(3,true)];},120]),
     ['crossfire, your own bank shots',()=>{incident('crossfire');shotPattern=volley('me',{wallBounced:true});},60],

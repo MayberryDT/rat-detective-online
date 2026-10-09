@@ -715,7 +715,7 @@ export class ChaosView {
             this.caseMotion.loose(wall,Math.hypot(s.case.v.x,s.case.v.y,s.case.v.z));
         }
         this.caseMotion.finish(dt,wall);
-        this.caseFiles.update(s.clues??[],now,camera,dt,this.resolveRat(this.myId)?.mesh.position,s.prints??[],s);
+        this.caseFiles.marks.pigeons.self=this.myId;this.caseFiles.update(s.clues??[],now,camera,dt,this.resolveRat(this.myId)?.mesh.position,s.prints??[],s);
         this.hotLook.update(camera,renderTime,s.case,now,this.carrier,this.arm?.parent??null);
         // Physical evidence replaces the primary case's through-wall and screen locators.
         this.carrierFlash.hide();
@@ -735,7 +735,7 @@ export class ChaosView {
         // superball is big and bouncy, a floater a fat lazy bubble, a hiccup quivers while it hangs, a corkscrew spins
         // hard, a snake waggles; each trails a pale streak so its path reads. Your own carry their personality; other
         // rats' are named by their id (never a special weapon's ball, never neutral debris).
-        const bad=active==='bad-ammunition'&&feelState().on('badAmmo');
+        const bad=false;
         const heavy=s.assignment?.phase==='active'&&!!s.case.owner;
         const shots=this.extrapolate?this.localShots.render(this.presentation.renderShots(s.shots,renderTime),renderTime):s.shots;
         const me=this.resolveRat(this.myId);this.threatAlive=!!me&&!me.dead;
