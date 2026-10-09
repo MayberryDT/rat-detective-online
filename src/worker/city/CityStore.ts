@@ -67,6 +67,16 @@ const ROW_UPSERT: Record<PackKind, string> = {
   minds: 'INSERT INTO city_minds (day, build, layout, mode, measure, n) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(day, build, layout, mode, measure) DO UPDATE SET n = n + excluded.n',
 };
 
+/** The tables a room's history is copied in (`exportChunk`): the per-key aggregates, the packs, the events. */
+export const COPY_STEPS = [
+  ...AGGREGATES.map(([table, , key]) => ({ table, kind: table.slice(5) as PackKind, key: `day, build, layout, mode, ${key}`, columns: `day, build, layout, mode, ${key}, n` })),
+  { table: 'city_packs', kind: 'packs', key: 'id', columns: 'kind, day, build, layout, mode, layer, data, id' },
+  { table: 'city_events', kind: 'events', key: 'seq', columns: 'seq, day, t, round, type, data' },
+] as const;
+export interface CopyChunk { rows: unknown[][]; after: unknown[] | null }
+/** Copied events sit this far below the room's own, in their old order. */
+const COPIED_SEQ = 2 ** 40;
+
 /** Where a flush writes aggregates. `packs` is the default. `rows` writes one row per key into the four per-key
  * tables, which every release reads: the rollback mode (docs/live-service.md, "Rolling back past packed aggregates"),
  * where `unpackBatch` also moves every pack into those tables so a release from before packing sees all the counts. */
@@ -214,6 +224,33 @@ export class CityStore {
       }
     });
     return { packs, counts, left: this.sql.exec<{ n: number }>('SELECT COUNT(*) AS n FROM city_packs').one().n };
+  }
+
+  /** One step of copying a room's history into another (the public room's move, docs/live-service.md): up to `limit`
+   * rows of step `step`'s table after the key `after` (null: from the start), in key order, and the key to continue
+   * after (null once the step is done). Reads only; the source room records nothing while it is read. */
+  exportChunk(step: number, after: unknown[] | null, limit: number): CopyChunk {
+    const { table, columns, key } = COPY_STEPS[step]!;
+    const keys = key.split(', '), marks = keys.map(() => '?').join(', ');
+    const cursor = this.sql.exec(`SELECT ${columns} FROM ${table} ${after ? `WHERE (${key}) > (${marks})` : ''} ORDER BY ${key} LIMIT ?`, ...(after ?? []), limit);
+    const rows = [...cursor.raw()] as unknown[][], last = rows[rows.length - 1];
+    const at = columns.split(', ');
+    return { rows, after: rows.length < limit || !last ? null : keys.map(k => last[at.indexOf(k)]) };
+  }
+  /** Adds an exported chunk to this room's history. Aggregates add to what is here (counts of different play); packs
+   * take fresh ids; events keep their order below this room's own (`seq` less COPIED_SEQ), so retention still holds.
+   * The caller runs it in one transaction with the place the copy reached. */
+  importChunk(step: number, rows: unknown[][]): void {
+    const { kind } = COPY_STEPS[step]!;
+    for (const row of rows) {
+      if (kind === 'packs') {
+        const [k, day, build, layout, mode, layer, data] = row as [PackKind, string, string, number, string, string, string];
+        this.insertPack({ kind: k, day, build, layout, mode, layer }, data);
+      } else if (kind === 'events') {
+        const [seq, ...rest] = row as [number, string, number, string | null, string, string];
+        this.sql.exec('INSERT OR IGNORE INTO city_events (seq, day, t, round, type, data) VALUES (?, ?, ?, ?, ?, ?)', seq - COPIED_SEQ, ...rest);
+      } else this.sql.exec(ROW_UPSERT[kind], ...row);
+    }
   }
 
   addEvent(t: number, round: string | undefined, type: string, data: string): void {

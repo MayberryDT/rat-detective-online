@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { consumePublicInvitation, isPublicRoomName, isRoomInPool, publicInvitationUrl, publicRoomLabel, readPublicInvitation } from '../../src/network/publicInvitation';
 
-const overflow='public-live-v2-12345678-1234-4123-8123-123456789abc';
+const overflow='public-live-v3-12345678-1234-4123-8123-123456789abc';
 
 describe('public dispatch invitations',()=>{
     it('accepts only the canonical public room and matchmaker UUID overflow rooms',()=>{
-        expect(isPublicRoomName('public-live-v2')).toBe(true);
+        expect(isPublicRoomName('public-live-v3')).toBe(true);
         expect(isPublicRoomName(overflow)).toBe(true);
-        for(const room of ['public-live-v2-overflow','public-live-v2-1234','graybox-practice-review',
-            'public-live-v2-12345678-1234-7123-8123-123456789abc','PUBLIC-LIVE-V2']) {
+        for(const room of ['public-live-v3-overflow','public-live-v3-1234','graybox-practice-review',
+            'public-live-v3-12345678-1234-7123-8123-123456789abc','PUBLIC-LIVE-V3']) {
             expect(isPublicRoomName(room)).toBe(false);
         }
     });
@@ -22,7 +22,7 @@ describe('public dispatch invitations',()=>{
     });
 
     it('uses compact public labels and consumes only the invitation parameter',()=>{
-        expect(publicRoomLabel('public-live-v2')).toBe('Public city');
+        expect(publicRoomLabel('public-live-v3')).toBe('Public city');
         expect(publicRoomLabel(overflow)).toBe('City 12345678');
         let page=new URL(`https://ratdetective.online/play?mute=1&preferred=${overflow}&diagnostics=quiet#case`);
         const target={
@@ -34,8 +34,8 @@ describe('public dispatch invitations',()=>{
     });
 
     it('keeps saved resume rooms inside their original pool',()=>{
-        expect(isRoomInPool(overflow,'public-live-v2')).toBe(true);
-        expect(isRoomInPool('graybox-benchmark-match-a-overflow','public-live-v2')).toBe(false);
+        expect(isRoomInPool(overflow,'public-live-v3')).toBe(true);
+        expect(isRoomInPool('graybox-benchmark-match-a-overflow','public-live-v3')).toBe(false);
         expect(isRoomInPool('graybox-benchmark-match-a-overflow','graybox-benchmark-match-a')).toBe(true);
     });
 });

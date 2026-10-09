@@ -515,9 +515,9 @@ describe('GameSession', () => {
     it('shows invitation routing feedback after the title closes',()=>{
         const {transport,hud,session}=start();
         transport.onMessage?.(welcome());
-        transport.onState?.('playing','Invited dispatch expired. Joined public-live-v2.');
+        transport.onState?.('playing','Invited dispatch expired. Joined public-live-v3.');
         expect(hud.enterPlaying).toHaveBeenCalledOnce();
-        expect(hud.addKillFeed).toHaveBeenCalledWith({kind:'note',text:'Invited dispatch expired. Joined public-live-v2.'});
+        expect(hud.addKillFeed).toHaveBeenCalledWith({kind:'note',text:'Invited dispatch expired. Joined public-live-v3.'});
         session.dispose();
     });
 

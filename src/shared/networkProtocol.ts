@@ -38,7 +38,10 @@ export const WIN_DISPLAY_MS = 30_000;
 /** Results (protocol 28): a human still reading the results board when the next round starts sits it out until
  * they continue (`ready`), or this long at most. Bots never wait. */
 export const READING_CAP_MS = 180_000;
-export const DEFAULT_ROOM_NAME = 'public-live-v2';
+/** The public city. `public-live-v3` since 9 October: `public-live-v2` ran in Seattle, so players in the middle of the
+ * country played on 60–220 ms pings; a room lives where it was first reached, so v3 was first reached from Kansas City
+ * (docs/live-service.md, "The public room"). Its history was copied in. */
+export const DEFAULT_ROOM_NAME = 'public-live-v3';
 /** Wire-format ceiling for private capacity experiments; not an admission limit. */
 export const MAX_SCORE_ENTRIES = 100;
 export const MAX_PLAYERS = 10;

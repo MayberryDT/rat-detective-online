@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // How the game runs on players' machines, from the `perf` facts in the city map mirror (docs/city-map.md).
-// Usage: node scripts/city-mirror.mjs && node scripts/perf-report.mjs [--db=output/city/city.db] [--room=public-live-v2]
+// Usage: node scripts/city-mirror.mjs && node scripts/perf-report.mjs [--db=output/city/city.db] [--room=public-live-v3]
 //        [--since=ISO] [--until=ISO] [--json=out.json]
 // Actors are numbered per round, so a session is one machine (os, browser, GPU, screen) in one room with no gap
 // over 90 s between its reports. Percentiles cannot be pooled across windows: a session's p50 is frame-weighted,

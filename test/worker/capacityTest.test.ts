@@ -14,7 +14,7 @@ describe('isolated hosted capacity baseline', () => {
     expect((await worker.fetch(request('/health'), { ...env, CAPACITY_FIXTURE_ID: undefined })).status).toBe(503);
   });
   it('cannot route public rooms, status requests, or assets', async () => {
-    for (const path of ['/', '/status', '/ws', '/ws?room=public-live-v2', '/ws?room=anything']) {
+    for (const path of ['/', '/status', '/ws', '/ws?room=public-live-v3', '/ws?room=anything']) {
       expect((await worker.fetch(request(path), env)).status).toBe(404);
     }
     expect((await worker.fetch(request('/ws?room=graybox-practice-probe-fixture'), env)).status).toBe(400);

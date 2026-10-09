@@ -1,6 +1,6 @@
 import { DEFAULT_ROOM_NAME } from '../shared/networkProtocol';
 
-const PUBLIC_OVERFLOW_ROOM = /^public-live-v2-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+const PUBLIC_OVERFLOW_ROOM = new RegExp(`^${DEFAULT_ROOM_NAME}-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`);
 
 /** Public invitations can select only the canonical room or an overflow room
  * that the matchmaker itself created. Private room names are never accepted. */

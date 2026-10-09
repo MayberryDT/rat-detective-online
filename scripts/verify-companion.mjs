@@ -20,7 +20,7 @@ async function status(query='') {
   const data=await response.json();
   assert.equal(data.schemaVersion,1); assert.ok(Array.isArray(data.rooms));
   for(const room of data.rooms) {
-    assert.ok(room.room==='public-live-v2'||/^public-live-v2-[0-9a-f-]{36}$/.test(room.room));
+    assert.ok(room.room==='public-live-v3'||/^public-live-v3-[0-9a-f-]{36}$/.test(room.room));
     assert.ok(room.players<=16 && room.humans<=room.players);
     assert.equal(room.scores.length,room.players);
     assert.ok(room.expiresAt>room.observedAt);
@@ -67,7 +67,7 @@ try {
     const page=await status('?limit=1');assert.equal(page.rooms.length,1);assert.ok(page.nextCursor);
     const second=await status('?limit=1&cursor='+encodeURIComponent(page.nextCursor));
     assert.equal(second.rooms.length,1);assert.notEqual(second.rooms[0].room,page.rooms[0].room);
-    const overflow=expected.find(room=>room!=='public-live-v2');
+    const overflow=expected.find(room=>room!=='public-live-v3');
     const invited=await join(overflow);assert.equal(invited.room,overflow);
     report.admission={initialTotal:first.total,humans:18,rooms:2,maxRoomSize:16,preferredJoin:true,pagination:true};
     await closeAll();

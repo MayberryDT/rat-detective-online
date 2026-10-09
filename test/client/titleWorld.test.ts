@@ -5,7 +5,7 @@ import { GRAYBOX_VERSION as version } from '../../src/shared/grayboxLayout';
 afterEach(()=>{vi.unstubAllGlobals();vi.useRealTimers();});
 const url='wss://ratdetective.online/ws?chaos=compact-v2';
 it('prepares the authoritative public world with HTTP, without entering a lobby',async()=>{
-    const fetcher=vi.fn(async(_url:URL,_init:RequestInit)=>Response.json({room:'public-live-v2',world:{seed:341283204,version}}));
+    const fetcher=vi.fn(async(_url:URL,_init:RequestInit)=>Response.json({room:'public-live-v3',world:{seed:341283204,version}}));
     vi.stubGlobal('fetch',fetcher);
     expect(await loadTitleWorld(undefined,url)).toEqual({seed:341283204,version});
     expect(fetcher).toHaveBeenCalledOnce();
@@ -19,13 +19,13 @@ it('does not prepare an unrelated public map for explicit private rooms',async()
 });
 it('does not warm the canonical room for an overflow invitation',async()=>{
     const fetcher=vi.fn();vi.stubGlobal('fetch',fetcher);
-    const room='public-live-v2-12345678-1234-4123-8123-123456789abc';
+    const room='public-live-v3-12345678-1234-4123-8123-123456789abc';
     expect(await loadTitleWorld(undefined,`${url}&preferred=${room}`)).toBeUndefined();
     expect(fetcher).not.toHaveBeenCalled();
 });
 it('falls back safely for legacy, malformed, mismatched or unavailable metadata',async()=>{
     const fetcher=vi.fn();vi.stubGlobal('fetch',fetcher);
-    for(const data of [{}, {room:'other',world:{seed:1,version}}, {room:'public-live-v2',world:{seed:-1,version}}, {room:'public-live-v2',world:{seed:1,version:9}}]){
+    for(const data of [{}, {room:'other',world:{seed:1,version}}, {room:'public-live-v3',world:{seed:-1,version}}, {room:'public-live-v3',world:{seed:1,version:9}}]){
         fetcher.mockResolvedValueOnce(Response.json(data));
         expect(await loadTitleWorld(undefined,url)).toBeUndefined();
     }

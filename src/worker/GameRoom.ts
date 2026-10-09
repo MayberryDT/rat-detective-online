@@ -59,7 +59,7 @@ import { JevBudget, JEV_LEDGER } from './bots/jevBudget';
 import { createRoundBotRoster, dealPersonalities, fillBotRoster, nextRoundBotRoster, MAX_PERSISTENT_BOTS, MIN_PERSISTENT_BOTS, PERSISTENT_BOT_IDS, PERSISTENT_BOT_ROSTER, type PersistentBot } from '../shared/botRoster';
 import { NAME_MAX_LENGTH } from '../shared/ratNames';
 import { HEAT_CELL } from './HeatMap';
-import { aggregateMode, buildName, CityStore, type AggregateMode, type Filter, type Range, type UnpackResult } from './city/CityStore';
+import { aggregateMode, buildName, CityStore, COPY_STEPS, type AggregateMode, type CopyChunk, type Filter, type Range, type UnpackResult } from './city/CityStore';
 import { CityArchive } from './city/CityArchive';
 import { CityRecorder } from './city/CityRecorder';
 import { HighlightDetector } from './HighlightDetector';
@@ -142,6 +142,8 @@ const FORCED_INCIDENT_KEY = 'incident-forced-v1';
 const COMPANION_GENERATION_KEY = 'companion-generation-v1';
 const COMPANION_REVISION_KEY = 'companion-revision-v1';
 const COMPANION_ACTIVE_KEY = 'companion-active-v1';
+/** How far copying the old public room's history has got (`cityCopy`). */
+const CITY_COPY_KEY = 'city-copy-v1';
 const COMPANION_REFRESH_MS = 20_000;
 export const BOT_REFILL_MS = 10_000;
 const JOIN_LEASE_MS = 10_000;
@@ -262,14 +264,16 @@ export class GameRoom extends DurableObject<Env> {
   private clock: () => number = () => Date.now();
 
   /** The Cloudflare data centre this room runs in (latency diagnosis; in each diagnostics line). */
-  private colo = '?';
+  private copying = false;
+  private where = '?';
   private coloReady?: Promise<void>;
-  /** Latency diagnosis (staging `/status?colo=<room>`): where this room runs. */
-  async diagColo(): Promise<string> { await this.coloReady; return this.colo; }
+  /** Where this room runs (`/status`, and staging's `/status?colo=<room>`): a room lives where it was first reached,
+   * and its distance from the players is their ping floor. */
+  async colo(): Promise<string> { await Promise.race([this.coloReady, new Promise(resolve => setTimeout(resolve, 500))]); return this.where; }
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
     // Where this room runs (latency diagnosis): Cloudflare's trace names the data centre the object lives in.
-    this.coloReady = fetch('https://www.cloudflare.com/cdn-cgi/trace').then(r => r.text()).then(text => { this.colo = /colo=(\w+)/.exec(text)?.[1] ?? '?'; }).catch(() => undefined);
+    this.coloReady = fetch('https://www.cloudflare.com/cdn-cgi/trace').then(r => r.text()).then(text => { this.where = /colo=(\w+)/.exec(text)?.[1] ?? '?'; }).catch(() => undefined);
     this.cityStore = new CityStore(ctx.storage.sql, fn => ctx.storage.transactionSync(fn), aggregateMode(env.CITY_AGGREGATES));
     ctx.blockConcurrencyWhile(async () => {
       this.migrate();
@@ -1758,7 +1762,7 @@ export class GameRoom extends DurableObject<Env> {
       if(critical||routine){this.checkpointGame(state);this.chaosSavedAt=now;this.chaosSignature=signature;this.observeCheckpointSettlement();}
       const metrics=this.diagnostics.tick(now,{gapMs,costMs:performance.now()-tickStart,steps,balls:state.shots.length,
         snapshotBytes:recipients?sentBytes/recipients:0,maxSnapshotBytes:maxBytes,sentBytes,recipients});
-      if(metrics)log('info','room diagnostics',{roomId:this.ctx.id.toString(),colo:this.colo,players:this.players.size,
+      if(metrics)log('info','room diagnostics',{roomId:this.ctx.id.toString(),colo:this.where,players:this.players.size,
         connections:this.ctx.getWebSockets().length,roundPhase:this.round.phase,incident:state.dispatch.incident??null,...metrics,
         ...(this.cityStore.scans.length?{cityScans:this.cityStore.scans.splice(0)}:{})});
     },1000/30);
@@ -2017,6 +2021,36 @@ export class GameRoom extends DurableObject<Env> {
     if (this.cityStore.mode !== 'rows') return { ok: false, mode: this.cityStore.mode, message: 'Deploy with CITY_AGGREGATES=rows first: packs keep arriving otherwise.' };
     if (!this.diagNoWrites) this.cityRecorder?.flush(now);
     return { ok: true, mode: 'rows', ...this.cityStore.unpackBatch(maxBytes) };
+  }
+
+  /** The public room's move (Tyler, 9 October: the old room ran in Seattle, far from its players): the old room hands
+   * out its history a chunk at a time (`CityStore.exportChunk`). Reading wakes it but starts nothing. */
+  async cityExport(step: number, after: unknown[] | null, limit: number): Promise<CopyChunk> {
+    return this.cityStore.exportChunk(step, after, limit);
+  }
+  /** Copies `from`'s city history into this room for about `budgetMs`, one chunk per transaction with the place it
+   * reached (`city-copy-v1`), so it resumes where it stopped and never copies a chunk twice; call until `done`. */
+  async cityCopy(from: string, budgetMs: number): Promise<{ done: boolean; step: string | null; copied: number }> {
+    type Progress = { step: number; after: unknown[] | null; copied: number };
+    const saved = this.readRoomState(CITY_COPY_KEY);
+    let progress: Progress = saved ? JSON.parse(saved) as Progress : { step: 0, after: null, copied: 0 };
+    const report = () => ({ done: progress.step >= COPY_STEPS.length, step: COPY_STEPS[progress.step]?.table ?? null, copied: progress.copied });
+    if (this.copying || from === this.matchRoom) return report();
+    this.copying = true;
+    try {
+      const source = this.env.GAME_ROOM.getByName(from), end = Date.now() + budgetMs;
+      while (progress.step < COPY_STEPS.length && Date.now() < end) {
+        const step = COPY_STEPS[progress.step]!, chunk = await source.cityExport(progress.step, progress.after, step.kind === 'packs' ? 4 : 2_000) as unknown as CopyChunk;
+        const next: Progress = chunk.after ? { step: progress.step, after: chunk.after, copied: progress.copied + chunk.rows.length }
+          : { step: progress.step + 1, after: null, copied: progress.copied + chunk.rows.length };
+        this.ctx.storage.transactionSync(() => {
+          this.cityStore.importChunk(progress.step, chunk.rows);
+          this.writeRoomState(CITY_COPY_KEY, JSON.stringify(next));
+        });
+        progress = next;
+      }
+    } finally { this.copying = false; }
+    return report();
   }
 
   private readRoomState(key: string): string | undefined {

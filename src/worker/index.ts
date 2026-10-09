@@ -95,7 +95,7 @@ export default {
       if (url.pathname === '/status' && url.searchParams.has('colo') && (env as Env & {DIAG_LOCATION_ROOMS?:string}).DIAG_LOCATION_ROOMS === '1') {
         const name = url.searchParams.get('colo') || DEFAULT_ROOM_NAME, hint = /^latency-(wnam|enam|sam|weur|eeur|apac|oc|afr|me)-/.exec(name)?.[1];
         const stub = hint ? env.GAME_ROOM.get(env.GAME_ROOM.idFromName(name), {locationHint: hint as DurableObjectLocationHint}) : env.GAME_ROOM.getByName(name);
-        return respond(json({ room: name, colo: await stub.diagColo() }));
+        return respond(json({ room: name, colo: await stub.colo() }));
       }
       if (url.pathname === '/status') {
         if (request.method === 'OPTIONS') {
@@ -114,7 +114,7 @@ export default {
         const room = env.GAME_ROOM.getByName(DEFAULT_ROOM_NAME);
         await room.enableMatchmaking(DEFAULT_ROOM_NAME);
         return respond(json(
-          { room: DEFAULT_ROOM_NAME, ...(await room.status()) },
+          { room: DEFAULT_ROOM_NAME, ...(await room.status()), colo: await room.colo() },
           {
             headers: {
               'access-control-allow-origin': '*',

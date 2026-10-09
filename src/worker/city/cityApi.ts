@@ -13,6 +13,9 @@ const json = (body: unknown, status = 200) => Response.json(body, { status, head
 let model: CityModel | undefined;
 /** About this much packed JSON moves per unpack call (a few tens of thousands of per-key rows). */
 const UNPACK_BYTES = 1024 * 1024;
+/** The public room before the move to Chicago (9 October); it sleeps with its history as a backup. */
+export const PREVIOUS_ROOM_NAME = 'public-live-v2';
+const COPY_BUDGET_MS = 8_000;
 
 function filterOf(params: URLSearchParams): Filter | null {
   const mode = params.get('mode'), layout = params.get('layout'), build = params.get('build');
@@ -26,8 +29,8 @@ function filterOf(params: URLSearchParams): Filter | null {
 export async function cityApi(request: Request, url: URL, env: CityEnv): Promise<Response | null> {
   const path = url.pathname;
   if (path !== '/api/heat/v1' && !path.startsWith('/api/city/v1/')) return null;
-  const unpack = path === '/api/city/v1/unpack';
-  if (request.method !== (unpack ? 'POST' : 'GET')) return json({ error: 'Method not allowed' }, 405);
+  const unpack = path === '/api/city/v1/unpack', copy = path === '/api/city/v1/copy';
+  if (request.method !== (unpack || copy ? 'POST' : 'GET')) return json({ error: 'Method not allowed' }, 405);
   const room = env.GAME_ROOM.getByName(DEFAULT_ROOM_NAME), now = Date.now();
   const range = heatRange(url.searchParams, now), filter = filterOf(url.searchParams);
   const badRange = () => json({ error: 'Use days=1-3650, days=all, or from and to as YYYY-MM-DD; mode, layout and build are optional' }, 400);
@@ -67,6 +70,9 @@ export async function cityApi(request: Request, url: URL, env: CityEnv): Promise
     const result = await target.cityUnpack(UNPACK_BYTES);
     return json(result, result.ok ? 200 : 409);
   }
+  // The public room's move (docs/live-service.md, "The public room"): copies the old room's history into the new one
+  // for a few seconds a call; repeat until `done` (`scripts/copy-city.mjs`).
+  if (copy) return json(await room.cityCopy(PREVIOUS_ROOM_NAME, COPY_BUDGET_MS));
   if (path === '/api/city/v1/events') {
     const type = url.searchParams.get('type'), round = url.searchParams.get('round'), since = url.searchParams.get('since'), limit = Number(url.searchParams.get('limit') ?? 1000);
     if ((type && !/^[a-z-]{1,20}$/.test(type)) || (round && !/^[\w-]{1,80}$/.test(round)) || (since && !/^\d{1,16}$/.test(since)) || !(limit >= 1 && limit <= 10_000)) return json({ error: 'Bad event filter' }, 400);

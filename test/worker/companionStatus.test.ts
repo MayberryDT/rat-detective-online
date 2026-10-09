@@ -36,8 +36,8 @@ describe('companion projection', () => {
     const a = player('a', 'Ada', 4, 1);
     const b = player('b', 'Basil', 2, 3);
     const base = {
-      room: 'public-live-v2',
-      pool: 'public-live-v2',
+      room: 'public-live-v3',
+      pool: 'public-live-v3',
       generation: 1,
       revision: 1,
       observedAt: now,
@@ -99,7 +99,7 @@ describe('companion projection', () => {
       method: 'kills', posthumous: false,
     };
     const projected = projectCompanionRoom({
-      room: 'public-live-v2', pool: 'public-live-v2', generation: 3, revision: 8,
+      room: 'public-live-v3', pool: 'public-live-v3', generation: 3, revision: 8,
       observedAt: now, round: round(assignment), assignment, players: [winner],
       humanIds: new Set([winner.id]), holderId: null,
     });
@@ -123,7 +123,7 @@ describe('companion projection', () => {
 });
 
 function publication(room: string, generation: number, revision: number, observedAt: number,
-  pool = 'public-live-v2'): CompanionRoomPublication {
+  pool = 'public-live-v3'): CompanionRoomPublication {
   const assignment = createAssignment('chain-of-custody', observedAt, `round-${room}`, () => 0);
   assignment.phase = 'active';
   return projectCompanionRoom({

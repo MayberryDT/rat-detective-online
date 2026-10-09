@@ -35,7 +35,7 @@ async function connect(stub:ReturnType<typeof env.GAME_ROOM.getByName>,name:stri
 it('rejects public, ordinary private and expired observation requests',async()=>{
  const active={CAPACITY_FIXTURE_ID:'fixture',CAPACITY_EXPIRES_AT:'2000'};
  expect(observationAllowed(new URL('https://x/ws?room=graybox-benchmark-ai-observer'),active,1000)).toBe(true);
- for(const room of ['public-live-v2','graybox-benchmark-match-observer','graybox-practice-observer'])expect(observationAllowed(new URL(`https://x/ws?room=${room}`),active,1000)).toBe(false);
+ for(const room of ['public-live-v3','graybox-benchmark-match-observer','graybox-practice-observer'])expect(observationAllowed(new URL(`https://x/ws?room=${room}`),active,1000)).toBe(false);
  expect(observationAllowed(new URL('https://x/ws?room=graybox-benchmark-ai-observer'),active,2000)).toBe(false);
  const response=await SELF.fetch('http://localhost/ws?room=graybox-observer-denied&observe=1',{headers:{Upgrade:'websocket',Origin:'http://localhost'}});
  expect(response.status).toBe(403);

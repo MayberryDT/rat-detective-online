@@ -21,7 +21,7 @@ const player = { id: 'one', name: 'Rat', ...appearance, x: 15, y: 2, z: 15,
     qx: 0, qy: 0, qz: 0, qw: 1, meshQx: 0, meshQy: 0, meshQz: 0, meshQw: 1, hp: 3, kills: 0, deaths: 0 };
 const welcome = () => ({ type: 'welcome', protocolVersion: PROTOCOL_VERSION, id: player.id,
     player, players: { one: player }, world: { seed: 1, version: 1 }, round: { phase: 'playing' }, serverTime: Date.now() });
-const publicOverflow='public-live-v2-87654321-4321-4123-8123-cba987654321';
+const publicOverflow='public-live-v3-87654321-4321-4123-8123-cba987654321';
 
 describe('network session transport', () => {
     let sockets: FakeSocket[];
@@ -156,7 +156,7 @@ describe('network session transport', () => {
 
         network.destroy();states.length=0;
         network=makeNetwork({url:`ws://localhost/ws?preferred=${publicOverflow}`});network.onState=(state,message)=>states.push([state,message]);
-        network.connect('Rat',appearance);sockets.at(-1)!.open();sockets.at(-1)!.receive({...welcome(),matchRoom:'public-live-v2'});
+        network.connect('Rat',appearance);sockets.at(-1)!.open();sockets.at(-1)!.receive({...welcome(),matchRoom:'public-live-v3'});
         expect(states.at(-1)).toEqual(['playing','Invited City 87654321 was unavailable. Joined Public city.']);
     });
 
@@ -212,7 +212,7 @@ describe('network session transport', () => {
 
     it('uses explicit invitation intent instead of a saved ordinary-return credential',()=>{
         const token='12345678-1234-4123-8123-123456789abc',data=new Map<string,string>([['rat-detective-resume',JSON.stringify({
-            scope:'ws://localhost/ws?room=public-live-v2',token,room:'public-live-v2',
+            scope:'ws://localhost/ws?room=public-live-v3',token,room:'public-live-v3',
         })]]);
         const resumeStorage={getItem:(key:string)=>data.get(key)??null,setItem:(key:string,value:string)=>{data.set(key,value);},removeItem:(key:string)=>{data.delete(key);}};
         network.destroy();network=makeNetwork({url:`ws://localhost/ws?preferred=${publicOverflow}`,resumeStorage});
@@ -223,7 +223,7 @@ describe('network session transport', () => {
 
     it('rejects a private-room invitation and enters ordinary public matchmaking without resuming',()=>{
         const token='12345678-1234-4123-8123-123456789abc',data=new Map<string,string>([['rat-detective-resume',JSON.stringify({
-            scope:'ws://localhost/ws?room=public-live-v2',token,room:'public-live-v2',
+            scope:'ws://localhost/ws?room=public-live-v3',token,room:'public-live-v3',
         })]]),urls:string[]=[];
         const resumeStorage={getItem:(key:string)=>data.get(key)??null,setItem:(key:string,value:string)=>{data.set(key,value);},removeItem:(key:string)=>{data.delete(key);}};
         network.destroy();network=makeNetwork({url:'ws://localhost/ws?preferred=graybox-practice-secret',resumeStorage,createSocket:url=>{
@@ -266,7 +266,7 @@ describe('network session transport', () => {
 
     it('isolates reload credentials by server and room and tolerates blocked storage',()=>{
         const token='12345678-1234-4123-8123-123456789abc';
-        const saved=JSON.stringify({scope:'ws://elsewhere/ws?room=public-live-v2',token});
+        const saved=JSON.stringify({scope:'ws://elsewhere/ws?room=public-live-v3',token});
         for(const resumeStorage of [{getItem:()=>saved,setItem:()=>{},removeItem:()=>{}},
             {getItem:()=>{throw Error('blocked');},setItem:()=>{throw Error('blocked');},removeItem:()=>{throw Error('blocked');}}]){
             network.destroy();network=makeNetwork({resumeStorage});network.connect('Rat',appearance);

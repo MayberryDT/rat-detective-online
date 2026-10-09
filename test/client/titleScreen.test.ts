@@ -41,7 +41,7 @@ it('blocks repeated entry while busy and releases title listeners and timers on 
     f.enter.click();expect(enter).not.toHaveBeenCalled();
 });
 it('shows valid and rejected public invitation intent before entry',()=>{
-    const room='public-live-v2-12345678-1234-4123-8123-123456789abc';
+    const room='public-live-v3-12345678-1234-4123-8123-123456789abc';
     const invited=setup(`?preferred=${room}`);expect(invited.invitation.textContent).toBe('INVITED DISPATCH — ENTER TO JOIN');expect(invited.invitation.hidden).toBe(false);
     const invalid=setup('?preferred=graybox-practice-secret');expect(invalid.invitation.textContent).toBe('INVITATION UNAVAILABLE — OPEN MATCHMAKING');expect(invalid.invitation.hidden).toBe(false);
 });

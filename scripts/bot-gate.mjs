@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Bot gate metrics (docs/bot-overhaul.md, "Acceptance"): how the bots play, from the city map mirror.
-// Usage: node scripts/bot-gate.mjs [--db=output/city/city.db] [--room=public-live-v2] [--layout=3]
+// Usage: node scripts/bot-gate.mjs [--db=output/city/city.db] [--room=public-live-v2,public-live-v3] [--layout=3]
 //        [--since=ISO] [--until=ISO] [--mind=<mindVersion>] [--build=<build>|unknown] [--mode=<assignment id>] [--rounds=ordinary|code-only] [--json=out.json]
 // `minds` (B5) reads the `decision`, `goal-end` and `minds` facts. Agent rats (`agent=1` browsers) count as neither humans nor bots.
 // `--rounds=ordinary` leaves out code-only rounds (from L4, the bots keep the code mind with humans playing), so Jev's cost per
@@ -11,7 +11,8 @@ import { actorClasses, buildOf, ratClass } from './lib/traffic.mjs';
 
 const arg = (name, fallback) => process.argv.find(a => a.startsWith(`--${name}=`))?.slice(name.length + 3) ?? fallback;
 const db = new DatabaseSync(arg('db', 'output/city/city.db'), { readOnly: true });
-const room = arg('room', 'public-live-v2'), layout = Number(arg('layout', '3'));
+// The public city is both rooms: v2 until the move to Chicago on 9 October, v3 since.
+const room = arg('room', 'public-live-v2,public-live-v3'), rooms = room.split(','), layout = Number(arg('layout', '3'));
 const since = Date.parse(arg('since', '2000-01-01')), until = Date.parse(arg('until', '2100-01-01'));
 const mind = arg('mind', undefined), mode = arg('mode', undefined), build = arg('build', undefined), rounds = arg('rounds', 'all');
 if (!['all', 'ordinary', 'code-only'].includes(rounds)) throw new Error('--rounds must be ordinary or code-only');
@@ -21,8 +22,8 @@ const inRounds = f => rounds === 'all' || (rounds === 'code-only') === !!f.codeO
  * respawn or recent launch, is a stuck-bot rescue. An estimate for data recorded before the `rescue` fact (B2b). */
 const RESCUE_JUMP = 40, RESCUE_SPEED = 25, FRAME_CAP_S = 6;
 
-const facts = (type) => db.prepare('select data from facts where type = ? and room = ? and layout = ? and t between ? and ? order by t')
-  .all(type, room, layout, since, until).map(r => JSON.parse(r.data))
+const facts = (type) => db.prepare(`select data from facts where type = ? and room in (${rooms.map(() => '?').join(', ')}) and layout = ? and t between ? and ? order by t`)
+  .all(type, ...rooms, layout, since, until).map(r => JSON.parse(r.data))
   .filter(f => (mind === undefined || String(f.mindVersion ?? '') === mind) && (mode === undefined || f.mode === mode) && (build === undefined || buildOf(f) === build) && inRounds(f));
 const classes = actorClasses(db);
 const classOf = (round, a) => classes.get(`${round}:${a}`) ?? 'bot';
