@@ -125,6 +125,7 @@ const actions:Record<string,()=>void>={
     'Feed: all kinds':()=>{actions['Feed: you nabbed a rat']!();actions['Feed: headshot']!();actions['Feed: you were nabbed']!();actions['Feed: the city (launcher)']!();actions['Feed: you called Dispatch']!();},
     'Score: Case Kills mode':()=>setMode('excessive-force'),
     'Score: Paper Chase mode':()=>setMode('chain-of-custody'),
+    'Round start: NEW CASE ASSIGNED (case file typed in)':()=>{setMode('chain-of-custody');assignment.roundId=crypto.randomUUID();assignment.phase='briefing';assignment.liveAt=performance.now()+60_000;},
     'Score: case kill +1 (roll, fly)':()=>score('me',1),
     'Score: rank swap (you overtake)':()=>{score('me',3);},
     'Score: rival overtakes':()=>score('rat-3',5),
