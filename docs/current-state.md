@@ -4,7 +4,7 @@ Verified from source and production through **2026-10-09** (protocol 39). Prior 
 
 ## Softer bots — 9 October production
 
-Tyler approved and shipped 20% longer reaction and tracking delays: base reaction 288–576 ms, gremlin 312–600 ms, all archetypes tracking 156–252 ms. Personalities and gameplay behavior remain; burst pauses and attention changes wait for playtesting. Worker `652e3479-4485-4c42-9b3c-f8f809f00ea5`, build `production-2026-10-10-8aafdad`, source `8aafdad`, protocol 43, layout 7, mindVersion 21, era `softer-bots`. Build date is UTC (still 9 October locally). [Receipt](verification/bot-softening-2026-10-09.md).
+Tyler approved and shipped 20% longer reaction and tracking delays: base reaction 288–576 ms, gremlin 312–600 ms, all archetypes tracking 156–252 ms. Personalities and gameplay behavior remain; burst pauses and attention changes wait for playtesting. Worker `e5c0c7a1-f332-48ee-ad44-1b406189292c`, build `production-2026-10-10-21177b7`, source `21177b7`, protocol 43, layout 7, mindVersion 21, era `softer-bots`. Build date is UTC (still 9 October locally). [Receipt](verification/bot-softening-2026-10-09.md).
 
 ## Case papers and smooth play — 9 October production
 
