@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import {createRatMesh,ratAccessory,type RatOptions} from '../utils/RatModel';
+import {createRatMesh,ratAccessory,type RatOptions} from '../rat/RatModel';
 import {batchRigidMeshes} from '../utils/RigidMeshBatch';
 import type {Award} from '../shared/networkProtocol';
 import {awardValue} from '../shared/awardUnits';

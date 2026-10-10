@@ -1980,7 +1980,7 @@ function emptyCounts() {
   };
 }
 
-// src/utils/RatModel.ts
+// src/rat/RatModel.ts
 import * as THREE4 from "three";
 
 // src/shared/ratAppearance.ts
@@ -2019,7 +2019,7 @@ var DEFAULT_APPEARANCE = {
   furColor: FUR_COLORS[0]
 };
 
-// src/utils/RatCoatGeometry.ts
+// src/rat/RatCoatGeometry.ts
 import * as THREE2 from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 var COAT_PROFILE = [
@@ -2175,7 +2175,7 @@ function addCoatTailoring(body, coat, highlight, shirt, fasteners) {
   }
 }
 
-// src/utils/RatArmModel.ts
+// src/rat/RatArmModel.ts
 import * as THREE3 from "three";
 function createRatArm(coat, highlight) {
   const root2 = new THREE3.Group();
@@ -2208,7 +2208,7 @@ function updateGunSleeve({ shoulder, sleeve, arm, pistol }) {
   sleeve.position.set(0, 0, reach);
 }
 
-// src/utils/RatModel.ts
+// src/rat/RatModel.ts
 function material(color, roughness = 0.78) {
   return new THREE4.MeshStandardMaterial({ color, roughness });
 }
@@ -2415,7 +2415,7 @@ function createRatMesh(options = {}) {
   return root2;
 }
 
-// src/prototype/CaseModel.ts
+// src/presentation/CaseModel.ts
 import * as THREE5 from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { mergeGeometries as mergeGeometries2 } from "three/addons/utils/BufferGeometryUtils.js";

@@ -1,3 +1,4 @@
+import {LooseCaseSight} from './looseCaseSight';
 import {visibleClues,type CaseClue,type CasePrints} from '../caseClues';
 import {looseLifts,type LooseLift} from '../paperWind';
 import {FLASHLIGHT_REACH,FOG_REACH} from '../rat/ratBody';
@@ -99,7 +100,7 @@ function where(self:Vec3Data,point:Vec3Data):string {
 }
 
 /** How long a bot keeps going for a loose case it has lost sight of, to where it saw it. */
-const CASE_MEMORY_MS=10_000;
+
 /** The paw prints a rat standing at `self` takes in: the run with a print within 4 units on its floor and in sight
  * (within a flashlight's reach in a Blackout too), one not followed yet (`done`) first. `yaw`: the nearest print's
  * heading (where its toes point); `end`: where the run ends, by the next paper. */
@@ -146,7 +147,7 @@ export class BotGoals {
         this.places=navigation.explorationTargets();
     }
     reset():void {
-        this.inspectedClues.clear();this.inspectedAt=-Infinity;this.loose.clear();this.printLook={until:-Infinity,yaw:0};this.caseSeen.clear();
+        this.inspectedClues.clear();this.inspectedAt=-Infinity;this.loose.clear();this.printLook={until:-Infinity,yaw:0};this.caseSeen.reset();
         this.reflexSite=undefined;this.reflexUntil=0;this.supplyTripAt=0;this.dispatchGiveUpAt=0;this.dispatchDetour='';
         this.deliveryKey='';this.deliveryEntering=false;this.fleeAt=0;this.zonePostAt=0;this.zonePost=0;
     }
@@ -164,16 +165,14 @@ export class BotGoals {
         const found:CaseEntry[]=[];
         for(const entry of input.cases){
             const {key,value}=entry;
-            if(value.owner||value.returningUntil>time||(value.previousOwner===self.id&&value.pickupAfter>time)){this.caseSeen.delete(key);continue;}
-            let p:Vec3Data|undefined;
-            if(distance(self,value.p)<60&&input.clear(value.p)){p=value.p;this.caseSeen.set(key,{p:{...value.p},at:now});}
-            else{const seen=this.caseSeen.get(key);if(seen&&now-seen.at<CASE_MEMORY_MS)p=seen.p;}
+            if(value.owner||value.returningUntil>time||(value.previousOwner===self.id&&value.pickupAfter>time)){this.caseSeen.forget(key);continue;}
+            const p=this.caseSeen.observe(key,value.p,self,now,state,input.clear);
             if(p&&distance(self,p)<60&&!this.motor.suppressed(key,p,now))found.push(p===value.p?entry:{...entry,value:{...value,p}});
         }
         return found.sort((a,b)=>distance(self,a.value.p)-distance(self,b.value.p))[0];
     }
     /** Where each loose case was last seen, and when (`takeable`). */
-    private readonly caseSeen=new Map<string,{p:Vec3Data;at:number}>();
+    private readonly caseSeen=new LooseCaseSight();
 
     /** Whether a stocked supply is of use to this rat now: never a Quick Fix at full health; a timed supply or weapon
      * it already holds refreshes (another weapon replaces the held one). Never one with another rat's Mousetrap in

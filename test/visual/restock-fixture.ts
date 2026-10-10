@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import {PickupRespawnVisual} from '../../src/prototype/PickupRespawnVisual';
+import {PickupRespawnVisual} from '../../src/presentation/PickupRespawnVisual';
 // A deterministic art sheet using production meshes/shaders, not a gameplay preview.
 const scene=new THREE.Scene();scene.background=new THREE.Color(0x28232e);
 const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio,2));document.body.appendChild(renderer.domElement);

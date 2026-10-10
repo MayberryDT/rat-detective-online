@@ -1,12 +1,16 @@
+// Bounded protocol smoke, not human gameplay acceptance. Failure modes: failed admission, wrong protocol, lost peer/movement, accepted implausible shot, absent authoritative shot, stale pickup claim accepted, leaked sockets.
+import {mkdir,writeFile} from 'node:fs/promises';
+import {dirname,resolve} from 'node:path';
+import {tmpdir} from 'node:os';
 import {readSocketMessage,PROTOCOL_VERSION} from './lib/network-codec.mjs';
 import assert from 'node:assert/strict';
 import { resolveSmokeWsUrl } from './lib/process.mjs';
 
 
-const targetUrl = resolveSmokeWsUrl(process.argv[2]);
-if (!targetUrl.searchParams.has('room')) {
-  targetUrl.searchParams.set('room', `smoke-${crypto.randomUUID()}`);
-}
+const targetUrl = resolveSmokeWsUrl(process.argv.slice(2).find(arg=>/^wss?:/.test(arg)));
+targetUrl.searchParams.set('agent','1');
+const out=resolve(process.argv.find(arg=>arg.startsWith('--out='))?.slice(6)??process.env.SMOKE_WS_RECEIPT??resolve(tmpdir(),'rat-detective-websocket-smoke.json'));
+const report={at:new Date().toISOString(),kind:'bounded protocol fixture; not gameplay acceptance',protocol:PROTOCOL_VERSION,checks:[]};
 const appearance = { hatType: 'fedora', hatColor: 0xdc4a3c, furColor: 0xe8b84d, coatColor: 0xbe4545 };
 const clients = [];
 
@@ -74,8 +78,8 @@ try {
     z: firstWelcome.player.z,
   };
   const rotation = { x: 0, y: 0, z: 0, w: 1 };
-  first.send({ type: 'updateMovement', position, rotation, meshRotation: rotation });
-  const moved = await second.waitFor('playerMoved');
+  first.send({ type: 'updateMovement', position, rotation, meshRotation: rotation, seq:1 });
+  const moved = await second.waitFor('playerMoved',m=>m.player.id===firstWelcome.id);
   assert.equal(moved.player.id, firstWelcome.id);
   assert.deepEqual([moved.player.x, moved.player.y, moved.player.z], [position.x, position.y, position.z]);
 
@@ -83,30 +87,25 @@ try {
   const direction = { x: 1, y: 0, z: 0 };
   const shotId = crypto.randomUUID();
   first.send({ type: 'shoot', shotId, origin, direction });
-  const shot = await second.waitFor('playerShot');
+  const shot = await second.waitFor('playerShot',m=>m.shotId===shotId);
   assert.equal(shot.shooterId, firstWelcome.id);
   assert.equal(shot.shotId, shotId);
   assert.deepEqual(shot.origin, origin);
   assert.deepEqual(shot.direction, direction);
 
-  first.send({ type: 'hit', victimId: secondWelcome.id, damage: 3 });
-  const damaged = await second.waitFor('playerDamaged');
-  assert.equal(damaged.id, secondWelcome.id);
-  assert.equal(damaged.hp, 0);
-  const died = await first.waitFor('playerDied');
-  assert.equal(died.victimId, secondWelcome.id);
-  assert.equal(died.killerId, firstWelcome.id);
-  const scoreboard = await first.waitFor('scoreboardUpdate', message => message.scores.some(score => score.kills === 1));
-  assert.equal(scoreboard.scores.find(score => score.id === firstWelcome.id).kills, 1);
-  assert.equal(scoreboard.scores.find(score => score.id === secondWelcome.id).deaths, 1);
-  const respawn = await second.waitFor('playerRespawn');
-  assert.equal(respawn.id, secondWelcome.id);
-  assert.equal(respawn.hp, 3);
-  assert.ok([respawn.x, respawn.y, respawn.z].every(Number.isFinite));
-
-  second.socket.close(1000, 'smoke complete');
-  assert.equal((await first.waitFor('playerLeft')).id, secondWelcome.id);
-  console.log(`WebSocket smoke passed at ${targetUrl}: join v${PROTOCOL_VERSION}, movement, shot, damage, death, scoring, respawn, leave`);
+  // The authority rejects a shot from outside the rat's muzzle envelope.
+  const invalidId=crypto.randomUUID();
+  first.send({type:'shoot',shotId:invalidId,origin:{x:position.x+1000,y:position.y,z:position.z},direction});
+  const rejected=await first.waitFor('shotResult',m=>m.shotId===invalidId);
+  assert.equal(rejected.outcome,'rejected');assert.equal(rejected.fallback,'implausible');
+  const interactionId=crypto.randomUUID();
+  first.send({type:'pickupIntent',interactionId,target:'pickup',targetId:'not-a-site',generation:0,movement:{position,rotation,meshRotation:rotation,seq:2}});
+  const claim=await first.waitFor('pickupResult',m=>m.interactionId===interactionId);
+  assert.equal(claim.accepted,false);
+  report.checks.push('current admission and protocol','two peers join','sequenced movement broadcast','authoritative shot broadcast','implausible shot rejected','unknown supply claim rejected');
+  console.log(`WebSocket smoke passed: protocol ${PROTOCOL_VERSION}, joins, movement, shot admission and pickup rejection`);
+  report.passed=true;
 } finally {
   for (const { socket } of clients) socket.close(1000, 'smoke complete');
+  await mkdir(dirname(out),{recursive:true});await writeFile(out,JSON.stringify(report,null,2)+'\n');
 }

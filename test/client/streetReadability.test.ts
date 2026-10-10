@@ -1,7 +1,7 @@
 import {expect,it,vi} from 'vitest';
 import * as THREE from 'three';
-import {StreetReadability,sampleStreetSpill,streetReadabilityEnabled,type SpillSource} from '../../src/prototype/StreetReadability';
-import {StreetLightPool} from '../../src/prototype/StreetLightPool';
+import {StreetReadability,sampleStreetSpill,streetReadabilityEnabled,type SpillSource} from '../../src/presentation/StreetReadability';
+import {StreetLightPool} from '../../src/presentation/StreetLightPool';
 
 const source:SpillSource={x:0,z:0,y:3,nx:0,nz:1,kind:'window',color:0xffffff,reach:12};
 it('keeps spill local, directional and blocked by walls and corners',()=>{

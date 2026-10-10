@@ -2,7 +2,7 @@ import {HeavyCheese} from './HeavyCheese';
 import * as THREE from 'three';
 import type {IncidentId} from '../shared/incidentCatalog';
 import {RAT_BLACKOUT,RAT_FOG,type RatEntity} from '../entities/RatEntity';
-import type {DeathStyle} from '../utils/RatAnimator';
+import type {DeathStyle} from '../rat/RatAnimator';
 import {CameraFeel} from './CameraFeel';
 import {ScreenFeel} from './ScreenFeel';
 import {NoirAudio} from './NoirAudio';
@@ -32,7 +32,7 @@ import type {LaunchMachineKind} from '../shared/chaosState';
 import type {PickupKind,WeaponKind} from '../shared/pickups';
 import type {FeedbackCue} from '../audio/FeedbackAudio';
 import {reducedMotion} from '../ui/motion';
-import {pickupArtwork} from '../prototype/pickupArtwork';
+import {pickupArtwork} from '../presentation/pickupArtwork';
 import {CarrierFeel} from './CarrierFeel';
 import type {CaseState} from '../shared/chaosState';
 /** C1: each supply's claim flash colour: silver Ironclad, red Hot Pursuit, green Quick Fix, cold lens cyan Stakeout; the

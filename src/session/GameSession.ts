@@ -1,4 +1,5 @@
-import * as CANNON from 'cannon-es';
+import {adoptEvidence,attachEvidenceWorld} from '../presentation/evidencePresentation';
+import {ResultsCoordinator} from './ResultsCoordinator';
 import { SURGE } from '../shared/launcherVelocity';
 import { actionBound, lookDelta } from '../settings/PlayerPreferences';
 import {FoleyAudio} from '../audio/FoleyAudio';
@@ -6,9 +7,9 @@ import { unlockEffectsAudio } from '../audio/effectsAudio';
 import { duckWorld } from '../audio/PlayerAudioMix';
 import {FoleyWorld} from '../audio/FoleyWorld';
 import * as THREE from 'three';
-import { ChaosView } from '../prototype/ChaosView';
-import { HARD_SHOVE } from '../prototype/RatReactionEvents';
-import { Neighborhood } from '../prototype/Neighborhood';
+import { ChaosView } from '../presentation/ChaosView';
+import { HARD_SHOVE } from '../presentation/RatReactionEvents';
+import { Neighborhood } from '../presentation/Neighborhood';
 import { CITY_BOUNDS, GRAYBOX_VERSION } from '../shared/grayboxLayout';
 import { CityGenerator } from '../world/CityGenerator';
 import { DEFAULT_CITY_OPTIONS, createWorldSpec, type WorldSpec } from '../shared/worldSpec';
@@ -16,7 +17,7 @@ import { RatController } from '../player/RatController';
 import { CheeseGun } from '../weapons/CheeseGun';
 import { initEntitySounds, disposeEntitySounds } from '../entities/RatEntity';
 import { generateRandomAppearance } from '../shared/ratAppearance';
-import { MAX_HP, READING_CAP_MS, type ClientMessage, type MovementInput, type ServerMessage } from '../shared/networkProtocol';
+import {MAX_HP, type ClientMessage, type MovementInput, type ServerMessage} from '../shared/networkProtocol';
 import { NetworkManager } from '../network/NetworkManager';
 import { GameHud } from '../ui/GameHud';
 import { TitleScreen } from '../ui/TitleScreen';
@@ -29,7 +30,7 @@ import { PerformanceStats } from './PerformanceStats';
 import { PerfReporter } from './perfReporter';
 import { SimulationClock } from './SimulationClock';
 import { NormalGameBots, normalGameBotCount } from './NormalGameBots';
-import { muzzleAtPose } from '../utils/muzzlePose';
+import { muzzleAtPose } from '../rat/muzzlePose';
 import { incidentInfo, type IncidentId } from '../shared/incidentCatalog';
 import { LAUNCH_MACHINES, PRESSURE_TUNING, type ChaosState, type LaunchMachine } from '../shared/chaosState';
 import { FAULTY_COPY, PICKUP_TUNING, WEAPON_TUNING, faultyOf, heldWeapon, jumpBlocked, legScale, shortedOut, trapped, type WeaponKind } from '../shared/pickups';
@@ -50,10 +51,7 @@ import {loadCameos} from '../cameos/loadCameos';
 import {ReplayRecorder} from '../replay/ReplayRecorder';
 import {ReplayStage} from '../replay/ReplayStage';
 import type {ReplayClip} from '../replay/types';
-import {Exhibits} from '../ui/Exhibits';
-import {frontPage} from '../ui/eveningEdition';
 import {perfMark} from './perfMarks';
-import {ASSIGNMENTS} from '../shared/assignments';
 import {FeelDirector} from '../feel/FeelDirector';
 import {IncidentStory,STORY} from '../feel/IncidentStory';
 import {headlines} from '../ui/Headlines';
@@ -61,7 +59,7 @@ import {deathRecap} from '../ui/deathRecap';
 import {feelState} from '../feel/feelState';
 import {FEEL} from '../feel/feelTuning';
 import {FLASHLIGHT,FLASHLIGHT_REACH} from '../shared/rat/ratBody';
-import {PoliceLineup,type LineupEntry} from '../feel/PoliceLineup';
+import {PoliceLineup} from '../feel/PoliceLineup';
 import {entryRequested} from './yieldToPage';
 import {checkPrograms,uploadTextures} from './warmPrograms';
 import {qualityFrame,qualityStatus,settleQuality} from './graphicsQuality';
@@ -87,10 +85,6 @@ function pooledSource(n:number,id:string,position:THREE.Vector3,grounded?:boolea
 }
 
 /** One owner for the complete local game lifetime, including reconnect reconciliation. */
-/** Round end (Tyler, 2026-09-28): the slow-motion finish, the CASE CLOSED card and the
- * lineup's photos share the first `results` seconds; the results board holds the other 25. */
-const ROUND_END={card:1,results:5};
-
 export class GameSession {
     private readonly stage;
     private readonly transport: NetworkManager;
@@ -101,7 +95,7 @@ export class GameSession {
     /** F10 with a saved admin key (docs/live-service.md, "Admin controls"); the mouse belongs to it while it is open. */
     private readonly admin = new AdminPanel(document, message => this.transport.send(message),
         () => this.transport.state === 'playing' && !this.observing && !this.title.settings?.isOpen,
-        open => { this.clearInput(); if (open) document.exitPointerLock(); else if (!this.reading) this.requestPointerLock(); });
+        open => { this.clearInput(); if (open) document.exitPointerLock(); else if (!this.results.reading) this.requestPointerLock(); });
     private readonly input = new InputState(window,document,()=>!this.title?.settings?.isOpen && this.transport?.state==='playing' && (this.touch?.active || document.pointerLockElement===this.stage?.renderer.domElement));
     private readonly events = new AbortController();
     private readonly gun;
@@ -151,7 +145,6 @@ export class GameSession {
     private readonly recorder = new ReplayRecorder(() => Date.now() + this.serverOffset);
     private readonly replay: ReplayStage;
     /** Built with the first results board, on the board's `#victory-overlay`. */
-    private exhibits?: Exhibits;
     /** `?replay=dev`: kept clips are listed in the console and F8 plays the newest fullscreen. */
     private replayDev = false;
     private readonly feel = new FeelDirector();
@@ -176,22 +169,7 @@ export class GameSession {
     private lampWarmed?:WeakSet<THREE.Material>=new WeakSet();
     private compileTimer?:ReturnType<typeof setTimeout>;
     private readonly lineup?:PoliceLineup;
-    private pendingLineup?:{entries:LineupEntry[];at:number};
-    /** Round end, last beat: when the Case File and final standings take over. */
-    private pendingResults?:number;
-    private resultsShown=false;
-    /** Results (protocol 28): this human still owes the round a CONTINUE (set by `gameWon`; observers never do), has
-     * continued before the next round started, or is held out of the round already under way until they continue. */
-    private awaitingContinue=false;
-    private continued=false;
-    private held=false;
-    private heldUntil=0;
-    /** When the next round starts (local clock), and when the results board appeared. */
-    private nextRoundAt=0;
-    private resultsShownAt=0;
-    private pendingVictory?:{message:Extract<ServerMessage,{type:'gameWon'}>;at:number};
-    /** The round just won, for the Evening Edition on the results board. */
-    private lastWin?:Extract<ServerMessage,{type:'gameWon'}>;
+    private readonly results:ResultsCoordinator;
     private lastChaos: ChaosState | null = null;
     private readonly caughtTraps=new Set<string>();
     /** Launch events already given their scream and view kick (L5/L6). */
@@ -253,7 +231,7 @@ export class GameSession {
         this.transport.onMessage = message => this.receive(message);
         this.transport.onState = (state, message) => {
             this.clearInput();
-            if(state!=='playing'){this.feel.reset();this.pendingLineup=undefined;this.lineup?.end();this.endResults();this.cameos?.reset();for(const id of this.pendingInteractions.keys())this.chaos?.cancelInteraction(id);this.pendingInteractions.clear();this.netplay.clear();}
+            if(state!=='playing'){this.feel.reset();this.results.disconnect();this.cameos?.reset();for(const id of this.pendingInteractions.keys())this.chaos?.cancelInteraction(id);this.pendingInteractions.clear();this.netplay.clear();}
             this.foleyWorld.setEnabled(state==='playing'&&!document.hidden);
             this.simulation.reset();
             this.hud.setConnection(state, message);
@@ -268,11 +246,14 @@ export class GameSession {
             const victimId = this.remotes.idFor(victim);
             if (victimId && this.transport.state === 'playing') this.transport.send({ type: 'hit', victimId, damage });
         };
-        this.bindInput();
-        this.title.focus();
         // The replay draws the city (scenery, the stage's lights and ground) and its own scene, never live things.
         this.replay=new ReplayStage({renderer:this.stage.renderer,scene,listener,flashlight:this.stage.flashlight,recorder:this.recorder,
             shared:object=>this.stage.moonShadow.isScenery(object)||object===this.stage.ground||object instanceof THREE.Light});
+        this.results=new ResultsCoordinator(this.hud,this.scoreboard,this.recorder,this.replay,this.feel,this.lineup,
+            ()=>this.myId,()=>this.observing,()=>this.serverOffset,id=>id===this.myId?this.rat?.entity:this.remotes.get(id),
+            message=>this.transport.send(message),()=>this.requestPointerLock());
+        this.bindInput();
+        this.title.focus();
         if(new URLSearchParams(window.location.search).get('replay')==='dev')this.bindReplayDev();
         this.frame = requestAnimationFrame(time => this.animate(time));
     }
@@ -302,22 +283,22 @@ export class GameSession {
         if (touchControlsAvailable()) this.touch = new TouchControls({canvas:this.stage.renderer.domElement,
             look:(dx,dy)=>this.rat?.onMouseMove(dx,dy),shoot:()=>this.shoot(),holdMs:()=>this.tommyRepeatMs(),
             openSettings:()=>this.title.settings?.open(),blocked:()=>!!this.title.settings?.isOpen,
-            scores:visible=>{if(!this.resultsShown)this.scoreboard.setVisible(visible);},clearKeys:()=>this.input.clear()});
+            scores:visible=>{if(!this.results.shown)this.scoreboard.setVisible(visible);},clearKeys:()=>this.input.clear()});
         // While a reader is on the results the mouse belongs to the board: no lock from stray clicks, no pause menu on unlock.
         this.pointerLock=bindGamePointerLock({canvas:this.stage.renderer.domElement,
-            playing:()=>this.transport.state==='playing'&&!this.reading&&!this.admin.isOpen,enabled:()=>!this.touch?.active,signal:this.events.signal,
+            playing:()=>this.transport.state==='playing'&&!this.results.reading&&!this.admin.isOpen,enabled:()=>!this.touch?.active,signal:this.events.signal,
             allowUnlockedClick:target=>!!this.title.settings?.contains(target)||credits.allowUnlockedClick(target),
             record:(type,detail)=>this.stats?.event(type,detail)});
-        this.title.settings?.attach({observing:()=>this.observing,playing:()=>this.transport.state==='playing'&&!this.reading&&!this.admin.isOpen,touch:()=>!!this.touch?.active,clear:()=>{this.clearInput();this.scoreboard.setVisible(false);},resume:()=>this.requestPointerLock(),cue:cue=>this.feedback?.play(cue)});
-        bindScoreboardHold({available:()=>this.transport.state==='playing'&&!this.title.settings?.isOpen&&!this.resultsShown,
-            show:visible=>{if(!this.resultsShown)this.scoreboard.setVisible(visible);},scroll:(dy,dx)=>this.scoreboard.scroll(dy,dx),signal:this.events.signal});
-        this.hud.onContinue=()=>this.continueFromResults();
+        this.title.settings?.attach({observing:()=>this.observing,playing:()=>this.transport.state==='playing'&&!this.results.reading&&!this.admin.isOpen,touch:()=>!!this.touch?.active,clear:()=>{this.clearInput();this.scoreboard.setVisible(false);},resume:()=>this.requestPointerLock(),cue:cue=>this.feedback?.play(cue)});
+        bindScoreboardHold({available:()=>this.transport.state==='playing'&&!this.title.settings?.isOpen&&!this.results.shown,
+            show:visible=>{if(!this.results.shown)this.scoreboard.setVisible(visible);},scroll:(dy,dx)=>this.scoreboard.scroll(dy,dx),signal:this.events.signal});
+        this.hud.onContinue=()=>this.results.continueFromResults();
         // Any key leaves the results too, once they have been up long enough not to catch a key held from play.
         document.addEventListener('keydown',event=>{
-            if(!this.reading||event.repeat||event.altKey||event.ctrlKey||event.metaKey||this.title.settings?.isOpen||performance.now()-this.resultsShownAt<800)return;
+            if(!this.results.reading||event.repeat||event.altKey||event.ctrlKey||event.metaKey||this.title.settings?.isOpen||performance.now()-this.results.shownAt<800)return;
             if(['Escape','Tab','CapsLock','ShiftLeft','ShiftRight','ControlLeft','ControlRight','AltLeft','AltRight','MetaLeft','MetaRight'].includes(event.code)||/^F\d+$/.test(event.code))return;
             if((event.target as HTMLElement|null)?.tagName==='BUTTON'&&(event.code==='Enter'||event.code==='Space'))return;
-            event.preventDefault();this.continueFromResults();
+            event.preventDefault();this.results.continueFromResults();
         },options);
         document.addEventListener('visibilitychange', () => {
             this.foleyWorld.setEnabled(!document.hidden&&this.transport.state==='playing');
@@ -395,13 +376,8 @@ export class GameSession {
     /** K3: `id` carries the buffed hot case (twice the damage, a kill heals it), as the authority's `carrierPower` judges. */
     private carriesHotCase(id:string|null|undefined):boolean {const s=this.lastChaos;return !!id&&!!s&&s.case.owner===id&&s.assignment?.phase==='active';}
 
-    private welcome(message: Extract<ServerMessage, { type: 'welcome' }>): void {
-        this.clearInput(); this.touch?.showScores(false); this.roundWon = message.round.phase === 'won';
-        this.serverOffset = message.serverTime - Date.now();
-        this.foleyWorld.reset();
-        // The scoreboard has already taken this welcome's round (its results when the round is won).
-        this.caughtTraps.clear();this.feel.reset();this.feel.resetRound();this.story?.reset();headlines.reset();this.pendingVictory=undefined;this.pendingLineup=undefined;this.lineup?.end();this.endResults(false);
-        this.cameos?.reset();
+    /** Tear down participant views before any welcome rebuild; city lifetime is reconciled separately. */
+    private clearWelcomeViews():void {
         this.bots?.dispose();this.bots=null;
         this.chaos?.dispose();this.chaos=null;
         this.gun.clearProjectiles();
@@ -409,6 +385,16 @@ export class GameSession {
         this.gun.setIncident();
         this.rat?.dispose();
         this.rat = null;
+    }
+
+    private welcome(message: Extract<ServerMessage, { type: 'welcome' }>): void {
+        this.clearInput(); this.touch?.showScores(false); this.roundWon = message.round.phase === 'won';
+        this.serverOffset = message.serverTime - Date.now();
+        this.foleyWorld.reset();
+        // The scoreboard has already taken this welcome's round (its results when the round is won).
+        this.caughtTraps.clear();this.feel.reset();this.feel.resetRound();this.story?.reset();headlines.reset();this.results.cancel();
+        this.cameos?.reset();
+        this.clearWelcomeViews();
         if (message.world.seed !== this.worldSpec.seed || message.world.version !== this.worldSpec.version) {
             this.city.dispose();
             this.worldSpec = message.world;
@@ -440,14 +426,8 @@ export class GameSession {
         this.gun.authoritative=this.worldSpec.version===GRAYBOX_VERSION;
         if(this.gun.authoritative)this.chaos=new ChaosView(this.stage.scene,id=>id===this.myId?this.rat?.entity:this.remotes.get(id),this.stage.listener.context as AudioContext,true,(cue,origin)=>this.feedback.play(cue,origin),this.foleyWorld,this.gun.tracePresentation);
         if(this.chaos?.caseFiles){
-            this.feel.adoptEvidence(this.chaos.caseFiles.root);
-            const hit=new CANNON.RaycastResult(),from=new CANNON.Vec3(),to=new CANNON.Vec3();
-            this.chaos.caseFiles.support=p=>{
-                from.set(p.x,p.y+.3,p.z);to.set(p.x,p.y-.4,p.z);hit.reset();
-                if(!this.stage.world.raycastClosest(from,to,{collisionFilterMask:1,skipBackfaces:true},hit)||hit.hitNormalWorld.y<.85)return undefined;
-                return {y:hit.hitPointWorld.y,normal:{x:hit.hitNormalWorld.x,y:hit.hitNormalWorld.y,z:hit.hitNormalWorld.z}};
-            };
-            this.chaos.caseFiles.clearPath=this.gun.sceneryClear;
+            adoptEvidence(this.chaos.caseFiles,root=>this.feel.adoptEvidence(root));
+            attachEvidenceWorld(this.chaos.caseFiles,this.stage.world,this.gun.sceneryClear);
         }
 
         if(this.chaos){
@@ -734,7 +714,7 @@ export class GameSession {
                 if (message.id === this.myId) {
                     this.stats?.event('respawn'); this.rat?.entity.respawn(message); this.rat?.resetGrounding(); this.feel.reset(); this.feel.health(message.hp); settleQuality();
                     // Held out of the round, then brought in (CONTINUE, a resume or the server's cap): the results go.
-                    if(this.held){this.endResults();this.hud.hideVictory();}
+                    if(this.results.holding){this.results.endResults();this.hud.hideVictory();}
                     this.lastInteractionPosition.set(message.x,message.y+.8,message.z);this.clearInput(); this.hud.hideRespawn();
                 } else this.remotes.respawn(message.id, message);
                 // All Units: the fallen arrive as backup, strobing red and blue to a prowl-car yelp; yours gets the card.
@@ -747,29 +727,14 @@ export class GameSession {
             case 'playerLeft': this.remotes.remove(message.id); break;
             case 'scoreboardUpdate': this.chaos?.setScores(message.scores, this.myId); break;
             case 'gameWon': {
-                this.lastWin=message;this.roundWon=true;this.clearInput();this.hud.hideRespawn();
-                this.awaitingContinue=!this.observing;this.continued=false;this.held=false;this.nextRoundAt=message.resetAt-this.serverOffset;
-                // Polish 19: let the winning moment play in slow motion before the card slams in.
-                const hold=this.feel.victory();
-                if(hold>0)this.pendingVictory={message,at:performance.now()+hold*1000};
-                else this.hud.showVictory(message.winnerName,message.kills,{assignment:message.assignment,awards:message.awards,report:message.report,localId:this.myId,winnerId:message.winnerId});
-                // Round end: the CASE CLOSED card holds the screen, then the police lineup,
-                // then the Case File and final standings for the rest of the 30 seconds.
-                const won=performance.now(),entries=feelState().on('lineup')?this.lineupEntries(message):[];
-                if(entries.length)this.pendingLineup={entries,at:won+(hold+ROUND_END.card)*1000};
-                this.pendingResults=won+ROUND_END.results*1000;
+                this.roundWon=true;this.clearInput();this.hud.hideRespawn();
+                this.results.win(message);
                 break;
             }
             case 'gameReset': {
                 // A reader who has not continued stays on the results while the round starts without them (the server
                 // holds their rat until they continue); everyone else leaves them now.
-                const keep=this.awaitingContinue&&!this.continued,pending=this.pendingVictory;
-                this.pendingVictory=undefined;this.pendingLineup=undefined;this.lineup?.end();
-                if(keep){
-                    if(pending)this.hud.showVictory(pending.message.winnerName,pending.message.kills,{assignment:pending.message.assignment,awards:pending.message.awards,report:pending.message.report,localId:this.myId,winnerId:pending.message.winnerId});
-                    this.held=true;this.heldUntil=Date.now()+READING_CAP_MS;
-                    if(this.resultsShown)this.hud.setContinue({kind:'held',until:this.heldUntil});else this.showResultsBoard();
-                }else this.endResults();
+                const keep=this.results.reset();
                 this.cameos?.reset();
                 this.recorder.reset();
                 this.roundWon=false;this.rat?.entity.setPowerups(0,0,0);this.rat?.entity.resetReactions();this.rat?.entity.setStreak(0);
@@ -924,10 +889,7 @@ export class GameSession {
         const weapon=this.activeIncident==='crossfire'?this.weaponNow():undefined;
         const guiding=this.activeIncident==='crossfire'&&this.transport.state==='playing'&&!this.observing&&!this.roundWon&&!!this.rat&&!this.rat.entity.dead&&(!weapon||weapon==='tommy-gun');
         this.chaos?.crossfire.guide(guiding?this.rat?.entity.mesh:undefined,camera,this.gun.sceneryHit);
-        if(this.pendingVictory&&now>=this.pendingVictory.at){
-            const won=this.pendingVictory.message;this.pendingVictory=undefined;
-            if(this.roundWon)this.hud.showVictory(won.winnerName,won.kills,{assignment:won.assignment,awards:won.awards,report:won.report,localId:this.myId,winnerId:won.winnerId});
-        }
+        this.results.presentVictory(now,this.roundWon);
         if(this.transport.state==='playing'&&!document.hidden)this.cameos?.update(this.cameoVisitors,this.gun.sceneryClear);
         this.blackoutFrame(camera);
         this.city.update(dt, camera, this.rat?.entity.body.position);
@@ -946,8 +908,7 @@ export class GameSession {
         document.body.classList.toggle('heavy-cheese',this.feel.heavyActive);
         this.story?.update(camera,this.rat&&!this.rat.entity.dead?this.rat.entity.mesh.position:undefined);
         if(this.rat?.entity.dead)this.hud.pointRecap(undefined,0,'');
-        if(this.pendingResults!==undefined&&now>=this.pendingResults&&this.roundWon)this.showResultsBoard();
-        if(this.pendingLineup&&now>=this.pendingLineup.at){this.lineup?.start(this.pendingLineup.entries);this.feel.endDeathCamera(camera);this.pendingLineup=undefined;}
+        this.results.presentResults(now,this.roundWon,camera);
         if(this.lineup?.active)this.lineup.update(dt,camera,flashlight);
         this.replay?.update(dt);
         this.warmLampStates(now);
@@ -983,7 +944,7 @@ export class GameSession {
     private blackoutFrame(camera:THREE.Camera):void {
         const level=this.feel.blackoutLevel,{flashlight}=this.stage,p=FEEL.blackout.params,base=FLASHLIGHT;
         // The round-end lineup owns the flashlight's intensity (it reads the everyday one) once it is on its way.
-        const lineup=!!this.pendingLineup||!!this.lineup?.active,shape=lineup?0:level;
+        const lineup=this.results.lineupPending||!!this.lineup?.active,shape=lineup?0:level;
         flashlight.angle=base.angle+(p.angle-base.angle)*shape;flashlight.penumbra=base.penumbra+(p.penumbra-base.penumbra)*shape;
         flashlight.decay=base.decay+(p.decay-base.decay)*shape;flashlight.distance=base.distance+(FLASHLIGHT_REACH-base.distance)*shape;
         if(!lineup)flashlight.intensity=base.intensity+(p.beam-base.intensity)*level;
@@ -1001,52 +962,6 @@ export class GameSession {
     }
 
     /** The round-end results board takes the screen; a reader gets the mouse back to read it (pointer lock released). */
-    private showResultsBoard():void {
-        this.pendingResults=undefined;this.resultsShown=true;this.resultsShownAt=performance.now();
-        if(this.awaitingContinue&&!this.continued)this.hud.setContinue(this.held?{kind:'held',until:this.heldUntil}:{kind:'reading'});
-        this.hud.showResults(true);this.scoreboard.setVisible(true);
-        this.recorder.freeze();
-        const host=document.getElementById('victory-overlay');
-        if(host)this.exhibits??=new Exhibits({player:this.replay,myId:()=>this.myId,send:message=>this.transport.send(message),host});
-        this.exhibits?.show();
-        // The Evening Edition: Exhibit A (the round's best moment, the same on every client) makes the headline.
-        const win=this.lastWin;
-        if(win){
-            const lead=this.recorder.shared().map(id=>this.recorder.data(id)?.clip).find(clip=>!!clip);
-            this.hud.frontPage(frontPage({lead,report:win.report,winnerName:win.winnerName,roundId:win.assignment?.roundId,assignment:win.assignment?ASSIGNMENTS[win.assignment.id].title:undefined}));
-        }
-        if(this.reading&&document.pointerLockElement)document.exitPointerLock();
-    }
-    /** A reader on the results board, still to CONTINUE. */
-    private get reading():boolean { return this.resultsShown&&this.awaitingContinue&&!this.continued; }
-    /** CONTINUE (button or key): tell the room, and take the mouse back for play. Before the next round starts the board
-     * waits for it with everyone; once it is under way without you, the board goes and the room brings your rat in. */
-    private continueFromResults():void {
-        if(!this.reading)return;
-        this.transport.send({type:'ready'});
-        if(this.held){this.endResults();this.hud.hideVictory();}
-        else{this.continued=true;this.hud.setContinue({kind:'ready',until:this.nextRoundAt});this.exhibits?.hide();}
-        this.requestPointerLock();
-    }
-    /** Leave the round-end results board (reset, reconnect, leaving play, CONTINUE); `closeBoard` returns the standings to the live round. */
-    private endResults(closeBoard=true):void {
-        const shown=this.resultsShown;this.pendingResults=undefined;this.resultsShown=false;
-        this.awaitingContinue=false;this.continued=false;this.held=false;
-        if(closeBoard)this.scoreboard.closeResults();
-        if(shown){this.hud.showResults(false);this.scoreboard.setVisible(false);this.exhibits?.hide();this.recorder.release();}
-    }
-
-    /** Juice T5: the lineup's rats, winner first, rebuilt from the rats this client knows. */
-    private lineupEntries(message:Extract<ServerMessage,{type:'gameWon'}>):LineupEntry[] {
-        const entries:LineupEntry[]=[];
-        for(const id of message.lineup??[]){
-            const entity=id===this.myId?this.rat?.entity:this.remotes.get(id);
-            if(!entity)continue;
-            entries.push({id,name:entity.name,appearance:entity.appearance,award:message.awards?.find(award=>award.playerId===id),winner:id===message.winnerId});
-        }
-        return entries;
-    }
-
     /** Polish 17 music stings from consecutive snapshots. */
     private feelStings(previous:ChaosState|null,next:ChaosState):void {
         if(!previous||this.observing)return;
@@ -1169,7 +1084,7 @@ export class GameSession {
     dispose(): void {
         if (this.disposed) return;
         this.disposed = true;
-        this.exhibits?.dispose();this.replay.dispose();
+        this.results.dispose();this.replay.dispose();
         document.body.classList.remove('observing');
         this.title.dispose();
         this.releasePreparedModels?.();this.releasePreparedModels=undefined;

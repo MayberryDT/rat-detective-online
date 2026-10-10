@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
-import { FIXED_LIGHT_CLAMP, FixedLightField, type BakedLight } from '../../src/prototype/FixedLighting';
-import { KitArchitecture } from '../../src/prototype/KitArchitecture';
+import { FIXED_LIGHT_CLAMP, FixedLightField, type BakedLight } from '../../src/presentation/FixedLighting';
+import { KitArchitecture } from '../../src/presentation/KitArchitecture';
 import { KitBuilder } from '../../src/shared/city/kit/kit';
-import type { LightRoom } from '../../src/prototype/StreetLightPool';
+import type { LightRoom } from '../../src/presentation/StreetLightPool';
 
 const warm=new THREE.Color(0xffcd87);
 const lamp=(x:number,y:number,z:number,intensity=65,distance=24):BakedLight=>({position:new THREE.Vector3(x,y,z),color:warm,intensity,distance});

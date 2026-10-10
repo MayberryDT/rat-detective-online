@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import { createStage } from '../../src/session/createStage';
-import { Neighborhood } from '../../src/prototype/Neighborhood';
-import { createRatMesh } from '../../src/utils/RatModel';
-import { addLeatherBriefcase } from '../../src/prototype/CaseModel';
+import { Neighborhood } from '../../src/presentation/Neighborhood';
+import { createRatMesh } from '../../src/rat/RatModel';
+import { addLeatherBriefcase } from '../../src/presentation/CaseModel';
 import { createCheeseBallGeometry, createCheeseBallMaterial } from '../../src/weapons/CheeseProjectileModel';
 import { CITY_PREVIEW_SEED, GRAYBOX_VERSION } from '../../src/shared/grayboxLayout';
 

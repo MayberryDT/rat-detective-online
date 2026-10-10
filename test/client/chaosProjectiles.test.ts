@@ -5,11 +5,11 @@ import {CheeseGun} from '../../src/weapons/CheeseGun';
 import {RatController} from '../../src/player/RatController';
 import {ChaosSimulation} from '../../src/shared/ChaosSimulation';
 import {createPlayer} from '../../src/worker/gameState';
-import { ChaosView, THREAT } from '../../src/prototype/ChaosView';
-import { heatPalette } from '../../src/prototype/CrossfireVisual';
+import { ChaosView, THREAT } from '../../src/presentation/ChaosView';
+import { heatPalette } from '../../src/presentation/CrossfireVisual';
 import { CASE_HOME, CHAOS_TUNING, type ChaosState } from '../../src/shared/chaosState';
 
-vi.mock('../../src/prototype/DispatchHud',()=>({DispatchHud:class{update(){} setScores(){} dispose(){}}}));
+vi.mock('../../src/presentation/DispatchHud',()=>({DispatchHud:class{update(){} setScores(){} dispose(){}}}));
 vi.mock('../../src/shared/grayboxLayout',()=>({CITY_BOUNDS:{min:-196,max:166},SEWER_FLOOR:-7,grayboxBoxes:()=>[]}));
 
 const originalDocument = globalThis.document;

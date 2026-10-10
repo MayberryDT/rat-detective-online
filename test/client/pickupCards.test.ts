@@ -1,10 +1,10 @@
 import {afterEach,beforeEach,expect,it,vi} from 'vitest';
 import * as THREE from 'three';
-import {ChaosView} from '../../src/prototype/ChaosView';
+import {ChaosView} from '../../src/presentation/ChaosView';
 import {CASE_HOME,type ChaosState} from '../../src/shared/chaosState';
 import type {RatEntity} from '../../src/entities/RatEntity';
 
-vi.mock('../../src/prototype/DispatchHud',()=>({DispatchHud:class{update(){} setScores(){} dispose(){}}}));
+vi.mock('../../src/presentation/DispatchHud',()=>({DispatchHud:class{update(){} setScores(){} dispose(){}}}));
 vi.mock('../../src/shared/grayboxLayout',()=>({CITY_BOUNDS:{min:-196,max:166},SEWER_FLOOR:-7,grayboxBoxes:()=>[]}));
 class Element {
     width=0;height=0;className='';innerHTML='';textContent='';removed=false;

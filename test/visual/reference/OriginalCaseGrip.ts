@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import type { RatEntity } from '../../../src/entities/RatEntity';
 import { CASE_HAND } from '../../../src/shared/chaosState';
-import { getRatCarryAnchor, RAT_CARRY_SHOULDER } from '../../../src/utils/RatAnimator';
+import { getRatCarryAnchor, RAT_CARRY_SHOULDER } from '../../../src/rat/RatAnimator';
 
 /** Shared grip for every carryable case; attaches to the animated unused hand. */
 export function createCaseGrip(entity:RatEntity):THREE.Group {

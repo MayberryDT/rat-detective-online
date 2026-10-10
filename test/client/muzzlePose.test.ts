@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
 import * as THREE from 'three';
-import { muzzleAtPose } from '../../src/utils/muzzlePose';
+import { muzzleAtPose } from '../../src/rat/muzzlePose';
 
 it('uses the animated muzzle offset at the simulated pose, independent of display delay', () => {
     const root=new THREE.Group(), arm=new THREE.Group(), muzzle=new THREE.Object3D();

@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import {AUTHORED_LIGHT_GAIN} from '../../src/session/lightingTuning';
 import {expect,it} from 'vitest';
-import {StreetLightPool} from '../../src/prototype/StreetLightPool';
+import {StreetLightPool} from '../../src/presentation/StreetLightPool';
 import {readLightingMode} from '../../src/session/lightingMode';
-import {addLeatherBriefcase} from '../../src/prototype/CaseModel';
+import {addLeatherBriefcase} from '../../src/presentation/CaseModel';
 import {disposeMeshResources} from '../../src/utils/disposeMeshResources';
 
 it('excludes reassigned exterior spots from scenery while preserving other lights and room lighting',()=>{
@@ -77,7 +77,7 @@ it('bounds the eight-case material draw budget while preserving the shell and re
 });
 
 it('uses the rat room and floor, explicit fixture power, and the same four lights across transitions',async()=>{
- const {interiorFixtures,LIGHT_ROOMS}=await import('../../src/prototype/InteriorLighting');
+ const {interiorFixtures,LIGHT_ROOMS}=await import('../../src/presentation/InteriorLighting');
  const fixtures=interiorFixtures(),scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera();
  const pool=new StreetLightPool(scene,[{x:-50,y:9,z:-59,color:0xffffff,intensity:180},...fixtures],LIGHT_ROOMS);
  const lights=scene.children.filter((o):o is THREE.SpotLight=>o instanceof THREE.SpotLight);

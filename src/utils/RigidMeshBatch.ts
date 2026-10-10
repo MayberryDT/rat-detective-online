@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import {ratSpineWeights} from './RatModel';
+import {ratSpineWeights} from '../rat/RatModel';
 import {useShadowDepthForm} from './shadowDepthForms';
 
 /** How a deforming mesh (a rat's tail) reaches the current pose. Whoever draws it calls this

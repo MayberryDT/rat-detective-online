@@ -97,7 +97,7 @@ At the case, use matching documents sparingly to connect the trail to the real p
 
 | Area | Expected work | Limit |
 | --- | --- | --- |
-| `src/prototype/CaseFiles.ts` | Shared artwork/materials, varied sheet meshes, stable instances and visibility | No per-paper lights, physics, texture allocation or whole-frame outline pass |
+| `src/presentation/CaseFiles.ts` | Shared artwork/materials, varied sheet meshes, stable instances and visibility | No per-paper lights, physics, texture allocation or whole-frame outline pass |
 | `src/shared/caseClues.ts` | Supported irregular placement, stable route identity, valid current-case continuation | Bounded route work and shared authoritative information |
 | `GameSession.ts` clue visibility integration | Separate visual occlusion from center-point whole-cluster rejection | Preserve bot sight rules; GPU depth stays enabled |
 | `NoirCity.ts` integration | Explicit adoption of later-created clue materials | Reuse existing dynamic-object support |

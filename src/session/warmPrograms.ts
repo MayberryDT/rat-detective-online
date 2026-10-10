@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import {yieldToPage} from './yieldToPage';
-import {ACTOR_SPOTS} from '../prototype/StreetLightPool';
-import {SEWER_LAMPS} from '../prototype/Neighborhood';
+import {ACTOR_SPOTS} from '../presentation/StreetLightPool';
+import {SEWER_LAMPS} from '../presentation/Neighborhood';
 import {isShadowDepthForm} from '../utils/shadowDepthForms';
 
 /** Issue the stand-ins' programs, without waiting on them, lit as the finished city will be:

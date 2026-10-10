@@ -85,7 +85,7 @@ var DEFAULT_APPEARANCE = {
 	furColor: FUR_COLORS[0]
 };
 //#endregion
-//#region src/utils/RatCoatGeometry.ts
+//#region src/rat/RatCoatGeometry.ts
 /** Keep the rat's accepted body volume; tailoring sits just above this surface. */
 var COAT_PROFILE = [
 	[0, 0],
@@ -257,7 +257,7 @@ function addCoatTailoring(body, coat, highlight, shirt, fasteners) {
 	}
 }
 //#endregion
-//#region src/utils/RatArmModel.ts
+//#region src/rat/RatArmModel.ts
 /** A floating cartoon sleeve and cuff, without an elbow or anatomical hand.
 * Used for the pistol and equipped case; local +Z points toward the grip.
 */
@@ -310,7 +310,7 @@ function updateGunSleeve({ shoulder, sleeve, arm, pistol }) {
 	sleeve.position.set(0, 0, reach);
 }
 //#endregion
-//#region src/utils/RatModel.ts
+//#region src/rat/RatModel.ts
 function material(color, roughness = .78) {
 	return new THREE.MeshStandardMaterial({
 		color,

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import {feelState} from '../feel/feelState';
 import {FEEL} from '../feel/feelTuning';
 import {freezeStatic} from '../utils/freezeStatic';
-import {CASE_RED} from '../prototype/caseRed';
+import {CASE_RED} from '../presentation/caseRed';
 
 /** Clarity batch visual budget (protocol 29): crumbs 160 → 96, wall splats 40 → 24, drips 60 → 32 at once. */
 const CRUMBS=96,MARKS=24;

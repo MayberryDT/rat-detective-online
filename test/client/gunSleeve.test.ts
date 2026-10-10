@@ -1,9 +1,9 @@
 import {expect,it} from 'vitest';
 import * as THREE from 'three';
-import {createRatMesh} from '../../src/utils/RatModel';
+import {createRatMesh} from '../../src/rat/RatModel';
 import {createRatMesh as createOriginal} from '../visual/reference/OriginalRatModel';
-import {RatAnimator} from '../../src/utils/RatAnimator';
-import {RAT_GUN_SHOULDER} from '../../src/utils/RatArmModel';
+import {RatAnimator} from '../../src/rat/RatAnimator';
+import {RAT_GUN_SHOULDER} from '../../src/rat/RatArmModel';
 
 it('pivots the shorter sleeve at a fixed shoulder while preserving the original muzzle through firing and recovery',()=>{
     const root=createRatMesh(),outline=createRatMesh(),original=createOriginal();

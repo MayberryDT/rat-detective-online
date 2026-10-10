@@ -1,6 +1,6 @@
 import '../../src/style.css';
 import '../../src/ui/touchControls.css';
-import {DispatchHud} from '../../src/prototype/DispatchHud';
+import {DispatchHud} from '../../src/presentation/DispatchHud';
 import {createAssignment,isAssignmentId} from '../../src/shared/assignments';
 import type {ChaosState} from '../../src/shared/chaosState';
 

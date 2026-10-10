@@ -112,14 +112,20 @@ function makeCdpClient(socketUrl) {
     }
 
     if (message.method === 'Network.webSocketFrameSent') {
-      try { events.push({ kind: 'ws-sent', message: JSON.parse(message.params.response.payloadData) }); } catch { /* Non-JSON transport frame. */ }
+      try {
+        const sent = JSON.parse(message.params.response.payloadData);
+        delete sent.resumeToken;
+        events.push({ kind: 'ws-sent', message: sent });
+      } catch { /* Non-JSON transport frame. */ }
     }
 
     if (message.method === 'Network.webSocketFrameReceived') {
-      events.push({
-        kind: 'ws-received',
-        payload: message.params.response.payloadData.slice(0, 180),
-      });
+      try {
+        const raw = JSON.parse(message.params.response.payloadData);
+        const received = raw.type === 'delivery' ? raw.message : raw;
+        // Only the message kind is needed; welcome frames contain private credentials.
+        events.push({ kind: 'ws-received', payload: JSON.stringify({ type: received?.type }) });
+      } catch { /* Binary chaos frames do not carry welcome credentials. */ }
     }
 
     if (message.id && pending.has(message.id)) {
@@ -170,7 +176,7 @@ const chrome = spawn(chromePath, chromeArgs, { stdio: 'ignore' });
 try {
   await waitForJson(`http://127.0.0.1:${port}/json/version`);
   const smokeUrl = `${targetUrl}${targetUrl.includes('?') ? '&' : '?'}browserSmoke=${Date.now()}`;
-  const tabResponse = await fetch(`http://127.0.0.1:${port}/json/new?${encodeURIComponent(smokeUrl)}`, {
+  const tabResponse = await fetch(`http://127.0.0.1:${port}/json/new?about:blank`, {
     method: 'PUT',
   });
   const tab = await tabResponse.json();
@@ -191,6 +197,9 @@ try {
     mobile: false,
   });
   await send('Network.setCacheDisabled', { cacheDisabled: true });
+  // Navigate after attaching: Chrome may create /json/new tabs at about:blank,
+  // and early navigation would lose startup exceptions and network events.
+  await send('Page.navigate', { url: smokeUrl });
 
   let beforeState = null;
   for (let attempt = 0; attempt < 40; attempt++) {
@@ -204,6 +213,9 @@ try {
         const rect = button?.getBoundingClientRect();
         return {
           viewport: { width: innerWidth, height: innerHeight },
+          pageUrl: location.href,
+          pageTitle: document.title,
+          pageText: document.body?.innerText?.slice(0, 400),
           button: Boolean(button),
           input: Boolean(name) && Boolean(reroll),
           assignedName: name?.textContent?.trim() || '',
@@ -271,24 +283,31 @@ try {
   await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y });
   await send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', buttons: 1, clickCount: 1 });
   await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', buttons: 0, clickCount: 1 });
-  await new Promise((resolve) => setTimeout(resolve, 7_000));
-
-  const after = await send('Runtime.evaluate', {
+  // Cold shader warming can outlast a fixed sleep on software-rendered CI.
+  // Wait for the actual joined state, retaining a bounded startup timeout.
+  let after;
+  for (let attempt = 0; attempt < 180; attempt++) {
+  after = await send('Runtime.evaluate', {
     returnByValue: true,
     expression: `(() => {
       const canvas = document.querySelector('canvas');
       const title = document.querySelector('#title-screen');
-      const scoreboard = document.querySelector('#scoreboard');
+      const hud = document.querySelector('#hud');
+      const scoreboard = document.querySelector('.match-scoreboard');
       return {
         titleDisplay: title && getComputedStyle(title).display,
         titleClass: title?.className,
-        scoreboardDisplay: scoreboard && getComputedStyle(scoreboard).display,
+        hudDisplay: hud && getComputedStyle(hud).display,
+        scoreboardCreated: Boolean(scoreboard),
         canvas: Boolean(canvas),
         pointerLock: document.pointerLockElement === canvas,
         text: document.body.innerText.slice(0, 300),
       };
     })()`,
   });
+  if (after.result.result.value.titleDisplay === 'none') break;
+  await new Promise(resolve => setTimeout(resolve, 500));
+  }
   const afterState = after.result.result.value;
   const receivedWelcome = events.some((event) => event.kind === 'ws-received' && event.payload.includes('"type":"welcome"'));
   const blockingEvents = events.filter((event) => (
@@ -299,13 +318,23 @@ try {
   ));
 
   if (afterState.titleDisplay !== 'none') fail('Title screen did not dismiss after real click', { beforeState, afterState, events });
-  if (afterState.scoreboardDisplay !== 'block') fail('Scoreboard did not appear after joining', { beforeState, afterState, events });
+  if (!afterState.hudDisplay || afterState.hudDisplay === 'none' || !afterState.scoreboardCreated) fail('Gameplay HUD or scoreboard was not initialized after joining', { beforeState, afterState, events });
   if (!receivedWelcome) fail('WebSocket welcome was not received', { beforeState, afterState, events });
   if (blockingEvents.length > 0) fail('Browser smoke saw blocking console/network errors', { beforeState, afterState, blockingEvents });
 
   let gameplay;
   if (process.env.SMOKE_GAMEPLAY === '1') {
-    if (!afterState.pointerLock) fail('Gameplay smoke requires real pointer lock', afterState);
+    // A cold entry may complete after its original user activation expires.
+    // The game's supported recovery is a fresh canvas click, never a timer lock.
+    if (!afterState.pointerLock) {
+      await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 390, y: 246 });
+      await send('Input.dispatchMouseEvent', { type: 'mousePressed', x: 390, y: 246, button: 'left', buttons: 1, clickCount: 1 });
+      await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: 390, y: 246, button: 'left', buttons: 0, clickCount: 1 });
+      await new Promise(resolve => setTimeout(resolve, 500));
+      const lock = await send('Runtime.evaluate', { expression: 'document.pointerLockElement === document.querySelector("canvas")', returnByValue: true });
+      afterState.pointerLock = lock.result.result.value;
+    }
+    if (!afterState.pointerLock) fail('Gameplay smoke requires real pointer lock after a fresh canvas click', afterState);
     const movement = () => events.filter(event => event.kind === 'ws-sent' && event.message.type === 'updateMovement').map(event => event.message);
     const initial = movement().at(-1);
     if (!initial) fail('No initial movement state');

@@ -1,7 +1,7 @@
 // Frozen September 12 accepted animation, before movement polish.
 // Same current geometry; deliberately independent of the candidate animator.
 import * as THREE from 'three';
-import {updateGunSleeve,type GunSleeveRig} from '../../../src/utils/RatArmModel';
+import {updateGunSleeve,type GunSleeveRig} from '../../../src/rat/RatArmModel';
 
 const PARTS = ['rat-body', 'rat-head', 'rat-hat', 'rat-tail',
     'rat-eye-left', 'rat-eye-right', 'rat-ear-left', 'rat-ear-right', 'rat-arm', 'rat-pistol'] as const;

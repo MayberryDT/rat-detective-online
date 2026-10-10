@@ -37,8 +37,8 @@ const CASE_GOALS:Partial<Record<Goal,true>>={'take-case':true,'chase-carrier':tr
 /** One bot: a mind scores the goals code offers, the cast picks one, code makes it a Plan and the motor runs
  * that plan every tick. Like a player it decides rarely: on events (spawn, its goal ending or failing, a case
  * changing hands, the assignment moving on) and at most `DECIDE.holdMs` after its last decision; in between it
- * holds its goal and code only refreshes the plan every 180–300 ms. Objective choice knows the same globally
- * advertised case position as a human: a loose case where it lies, a carrier where it was last seen or pinged. The
+ * holds its goal and code only refreshes the plan every 180–300 ms. Objective choice uses direct sight, remembered positions and physical clues:
+ * a loose case where it was seen, a carrier where it was last seen or evidence placed it. The
  * pickup reflex comes before any decision: while it takes a supply, the goal waits and no mind is asked. */
 export class RatBot {
     private readonly motor:BotMotor;

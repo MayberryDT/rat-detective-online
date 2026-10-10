@@ -5,9 +5,9 @@ import * as CANNON from 'cannon-es';
 import { RemotePlayers } from '../../src/session/RemotePlayers';
 import { GameSession } from '../../src/session/GameSession';
 import { CASE_HAND } from '../../src/shared/chaosState';
-import { RAT_CARRY_SHOULDER } from '../../src/utils/RatAnimator';
+import { RAT_CARRY_SHOULDER } from '../../src/rat/RatAnimator';
 import { RigidBatch } from '../../src/utils/RigidMeshBatch';
-import { createCaseGrip } from '../../src/prototype/CaseGrip';
+import { createCaseGrip } from '../../src/presentation/CaseGrip';
 import { SimulationClock } from '../../src/session/SimulationClock';
 import { MotionFoley } from '../../src/audio/MotionFoley';
 import type { PlayerData } from '../../src/shared/networkProtocol';
@@ -30,6 +30,7 @@ function replay(fps: number, speed: number) {
     // Run the production frame orchestration with real remotes/physics; only
     // replace the GPU, transport and unrelated city work. No constructor UI.
     const session = Object.assign(Object.create(GameSession.prototype), {
+        results: {presentVictory() {}, presentResults() {}, lineupPending: false},
         disposed: false, previousTime: 0, stats: null, rat: null, bots: null, chaos: null,
         stage: { syncViewport: () => false, scene: new THREE.Scene(), world, camera: new THREE.PerspectiveCamera(), renderer: { render() {} }, flashlight: new THREE.SpotLight() },
         transport: { state: 'playing' }, simulation: new SimulationClock(), remotes,

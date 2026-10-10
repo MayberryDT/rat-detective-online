@@ -1,6 +1,6 @@
 import {describe,it,expect} from 'vitest';
 import { MAX_HP } from '../../src/shared/networkProtocol';
-import {PracticeBotBrain,PracticeLifeCycle,addPracticePlayers,practiceBotCount,practiceSpawnPoints,cityPracticeSpawnPoints,practiceRespawnPoint,PRACTICE_RESPAWN_MS} from '../../src/prototype/PracticeBots';
+import {PracticeBotBrain,PracticeLifeCycle,addPracticePlayers,practiceBotCount,practiceSpawnPoints,cityPracticeSpawnPoints,practiceRespawnPoint,PRACTICE_RESPAWN_MS} from '../../src/presentation/PracticeBots';
 import * as C from 'cannon-es';
 import {grayboxBoxes,isRampOpening} from '../../src/shared/grayboxLayout';
 import {cityBoxBody} from '../../src/shared/StaticCityBroadphase';

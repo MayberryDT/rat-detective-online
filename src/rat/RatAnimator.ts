@@ -10,7 +10,7 @@ import {RatActing,type RatReaction} from './RatActing';
 import {RatRagdoll} from './RatRagdoll';
 import {RatCorpseChain} from './RatCorpseChain';
 import {RAT_SPINE_JOINTS} from './RatModel';
-import {setDeformer} from './RigidMeshBatch';
+import {setDeformer} from '../utils/RigidMeshBatch';
 import {WEAPON_TUNING,type TimedPickup,type WeaponKind} from '../shared/pickups';
 import {heldWeaponModel,WEAPON_MUZZLE} from './WeaponModel';
 

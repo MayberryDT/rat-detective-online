@@ -7,7 +7,7 @@ import {worldSoundGain} from '../audio/worldSoundGain';
 import {incidentInfo} from '../shared/incidentCatalog';
 import {allUnitsPoint} from '../shared/allUnits';
 import {caseLastSeen} from '../shared/caseHeartbeat';
-import {pickupArtwork} from '../prototype/pickupArtwork';
+import {pickupArtwork} from '../presentation/pickupArtwork';
 import type {ChaosState} from '../shared/chaosState';
 import type {Vec3Data} from '../shared/networkProtocol';
 

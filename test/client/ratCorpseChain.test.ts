@@ -1,10 +1,10 @@
 import {afterEach,expect,it,vi} from 'vitest';
 import * as THREE from 'three';
 import * as C from 'cannon-es';
-import {createRatMesh} from '../../src/utils/RatModel';
-import {RatAnimator} from '../../src/utils/RatAnimator';
+import {createRatMesh} from '../../src/rat/RatModel';
+import {RatAnimator} from '../../src/rat/RatAnimator';
 import {batchRigidMeshes} from '../../src/utils/RigidMeshBatch';
-import {setRagdollWorld} from '../../src/utils/RatCorpseChain';
+import {setRagdollWorld} from '../../src/rat/RatCorpseChain';
 import {disposeMeshResources} from '../../src/utils/disposeMeshResources';
 import {RatEntity} from '../../src/entities/RatEntity';
 import {MAX_HP} from '../../src/shared/networkProtocol';

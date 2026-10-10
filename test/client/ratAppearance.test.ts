@@ -6,7 +6,7 @@ import { PROTOCOL_VERSION } from '../../src/shared/networkProtocol';
 import { createPlayer, respawnPlayer } from '../../src/worker/gameState';
 import { ChaosSimulation } from '../../src/shared/ChaosSimulation';
 import { ChaosEncoder, ChaosDecoder } from '../../src/shared/chaosWire';
-import { createRatMesh } from '../../src/utils/RatModel';
+import { createRatMesh } from '../../src/rat/RatModel';
 import { disposeMeshResources } from '../../src/utils/disposeMeshResources';
 
 it('exposes exactly 1,024 independent assignments with one hat shape', () => {

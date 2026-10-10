@@ -18,7 +18,7 @@ browser requests reduced motion. Choose Idle, Someone walks by or Shot at, then
 replay, pause, scrub or use half speed. GLB downloads include all three clips.
 
 `CameoRatModel.ts` authors both models in Three.js 0.182.0. It clones the actual
-game rat's continuous cheek/muzzle geometry from `src/utils/RatModel.ts`; other
+game rat's continuous cheek/muzzle geometry from `src/rat/RatModel.ts`; other
 costume geometry is independent. Named head, ear, eye, cape and tail groups remain
 editable. Shoulder, elbow and wrist joints preserve the accepted resting
 geometry; static details are merged within each joint. GLBs include portable
@@ -138,7 +138,7 @@ The broader suite was not repeated for this isolated animation follow-up.
 The generated manifest records file sizes, bounds, clips and export checks.
 No gameplay input automation or deployment was performed.
 
-Local baseline: `src/utils/RatModel.ts`, `test/visual/model-preview.ts` and
+Local baseline: `src/rat/RatModel.ts`, `test/visual/model-preview.ts` and
 `test/visual/OutfitStudioSubject.ts`. Previous workshop context:
 GBrain `sessions/2026/09/rat-detective-workshop-refinement-2026-09-12`.
 Export/controls references: installed `three/examples/jsm/exporters/GLTFExporter.js`,

@@ -6,8 +6,8 @@ import { CityGenerator } from '../../src/world/CityGenerator';
 import { cityStreetBuildings } from '../../src/shared/cityPlan';
 import { CENTRAL_BUILDINGS } from '../../src/shared/skyline';
 import { generateBuildingLayout } from '../../src/shared/worldSpec';
-import { createRatMesh } from '../../src/utils/RatModel';
-import { addLeatherBriefcase } from '../../src/prototype/CaseModel';
+import { createRatMesh } from '../../src/rat/RatModel';
+import { addLeatherBriefcase } from '../../src/presentation/CaseModel';
 
 // Canvas is only used to paint the game's own authored facade/road atlases.
 // This tiny offscreen implementation preserves those pixels without opening a browser.

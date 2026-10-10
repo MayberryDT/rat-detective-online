@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { PerspectiveCamera, Vector3 } from 'three';
-import { locateCase } from '../../src/prototype/caseLocator';
+import { locateCase } from '../../src/presentation/caseLocator';
 
 function camera() {
     const camera = new PerspectiveCamera(60, 16 / 9, .1, 1000);

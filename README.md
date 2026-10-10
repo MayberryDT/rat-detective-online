@@ -2,11 +2,12 @@
 
 **[Play Rat Detective](https://ratdetective.online/)** — a free multiplayer browser shooter about detective rats, ricocheting cheese balls and spectacular physical chaos in a dark, run-down city.
 
-Grab the Hot Case for double kill credit, shoot Dispatch to trigger a citywide incident, and turn launchers, flying bodies and loose evidence into trouble. The public game runs continuously on Cloudflare, with **8–11 server-owned AI rats and fresh names each round**. Up to thirteen humans can join. No player browser or local machine hosts the public AI.
+Grab the Hot Case for double damage and a full heal on a kill, shoot Dispatch to trigger a citywide incident, and turn launchers, flying bodies and loose evidence into trouble. Cloudflare runs each room while a human holds a seat, with **6–9 server-owned bots each round and ten rats total**. Humans join on top; at capacity a human replaces a bot. No player browser hosts the public AI.
 
 ## Start here
 
 - [Agent instructions](AGENTS.md)
+- [Find the code for your task](docs/code-map.md)
 - [Current game, architecture and known limits](docs/current-state.md)
 - [Documentation index](docs/README.md)
 - [Live deployment and recovery](docs/live-service.md)

@@ -1,6 +1,6 @@
 import {describe,it,expect,vi,type MockInstance} from 'vitest';
 import * as THREE from 'three';
-import {PressureMachine} from '../../src/prototype/PressureMachine';
+import {PressureMachine} from '../../src/presentation/PressureMachine';
 import {LAUNCH_MACHINES} from '../../src/shared/chaosState';
 import type {LauncherAudio} from '../../src/audio/LauncherAudio';
 

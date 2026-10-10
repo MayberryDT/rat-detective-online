@@ -11,8 +11,8 @@ import {CHAOS_TUNING} from '../../src/shared/chaosState';
 import {ServerBotController} from '../../src/worker/ServerBotController';
 import {BotNavigation} from '../../src/shared/BotNavigation';
 import {ChaosEncoder,ChaosDecoder} from '../../src/shared/chaosWire';
-import {JurisdictionZones} from '../../src/prototype/JurisdictionZones';
-import {assignmentGuidance} from '../../src/prototype/assignmentGuidance';
+import {JurisdictionZones} from '../../src/presentation/JurisdictionZones';
+import {assignmentGuidance} from '../../src/presentation/assignmentGuidance';
 const NOW=1_000_000;
 afterEach(()=>vi.restoreAllMocks());
 function fixture(){

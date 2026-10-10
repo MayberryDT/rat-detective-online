@@ -1,12 +1,12 @@
 import * as THREE from 'three';
 import {createStage} from '../../src/session/createStage';
 import {RatEntity} from '../../src/entities/RatEntity';
-import {createCaseGrip,disposeCaseGrip} from '../../src/prototype/CaseGrip';
-import {powerupCard} from '../../src/prototype/pickupArtwork';
-import {PickupVisual} from '../../src/prototype/PickupVisual';
+import {createCaseGrip,disposeCaseGrip} from '../../src/presentation/CaseGrip';
+import {powerupCard} from '../../src/presentation/pickupArtwork';
+import {PickupVisual} from '../../src/presentation/PickupVisual';
 import {BUFF_MS,PICKUP_KINDS,isTimedPickup,isWeaponKind} from '../../src/shared/pickups';
 import '../../src/style.css';
-import '../../src/prototype/dispatchHud.css';
+import '../../src/presentation/dispatchHud.css';
 // Art inspection only. Human gameplay previews always use the hosted Worker.
 const stage=createStage(new THREE.WebGLRenderer({antialias:true}));
 const {scene,camera,renderer,world}=stage;

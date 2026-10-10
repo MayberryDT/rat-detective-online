@@ -1,74 +1,19 @@
 import { GRAYBOX_VERSION, GRAYBOX_SPAWNS, grayboxBoxes } from './grayboxLayout';
-export interface WorldSpec {
-  seed: number;
-  version: number;
-}
+import { generateSeededBuildingLayout, DEFAULT_CITY_OPTIONS } from './seededCity';
+import type { WorldSpec, CityOptions, BuildingFootprint } from './seededCity';
+export { createSeededRandom, createDecorationRandom, DEFAULT_CITY_OPTIONS } from './seededCity';
+export type { WorldSpec, CityOptions, BuildingFootprint, FootprintChamfer } from './seededCity';
 
 export const WORLD_LAYOUT_VERSION = 1;
 export const WORLD_VERSION = WORLD_LAYOUT_VERSION;
-
 export function isSupportedWorldVersion(version: number): boolean {
   return version === WORLD_LAYOUT_VERSION || version === GRAYBOX_VERSION;
-}
-
-export interface CityOptions {
-  gridSize: number;
-  blockSpacing: number;
-  streetWidth: number;
-  minHeight: number;
-  maxHeight: number;
-  buildingWidthMin: number;
-  buildingWidthMax: number;
-}
-
-export const DEFAULT_CITY_OPTIONS: CityOptions = {
-  gridSize: 12,
-  blockSpacing: 30,
-  streetWidth: 14,
-  minHeight: 18,
-  maxHeight: 85,
-  buildingWidthMin: 8,
-  buildingWidthMax: 14,
-};
-
-/** One 45° cut across a footprint corner: `sx`/`sz` name the corner (+1 = east/south). */
-export interface FootprintChamfer {
-  sx: -1 | 1;
-  sz: -1 | 1;
-}
-
-export interface BuildingFootprint {
-  cx: number;
-  cz: number;
-  bw: number;
-  bd: number;
-  bh: number;
-  /** Cut corners at street junctions (bank faces); see `buildingColliders` in skyline. */
-  chamfers?: readonly FootprintChamfer[];
 }
 
 const RAT_RADIUS = 0.6;
 const SPAWN_PADDING = 0.5;
 const SPAWN_RANGE = 100;
 const SPAWN_ATTEMPTS = 48;
-
-export function createSeededRandom(seed: number): () => number {
-  let t = seed >>> 0;
-  return () => {
-    t += 0x6d2b79f5;
-    let n = Math.imul(t ^ (t >>> 15), 1 | t);
-    n ^= n + Math.imul(n ^ (n >>> 7), 61 | n);
-    return ((n ^ (n >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-function layoutRandom(spec: WorldSpec): () => number {
-  return createSeededRandom(spec.seed ^ Math.imul(spec.version, 0x9e3779b9));
-}
-
-export function createDecorationRandom(spec: WorldSpec): () => number {
-  return createSeededRandom((spec.seed + 0x9e3779b9) ^ Math.imul(spec.version, 0xc0dec0de));
-}
 
 export function createWorldSpec(seed?: number): WorldSpec {
   const value =
@@ -82,34 +27,12 @@ export function generateBuildingLayout(
   spec: WorldSpec,
   options?: Partial<CityOptions>,
 ): BuildingFootprint[] {
-  // Version 1 is the only seeded generator. Parent grayboxBoxes calls this
-  // with version:1 for outer-city reservations; never recurse from that path.
   if (spec.version === GRAYBOX_VERSION) {
     return grayboxBoxes({ seed: spec.seed, version: spec.version })
       .filter((box) => box.building)
       .map((box) => ({ cx: box.x, cz: box.z, bw: box.w, bd: box.d, bh: box.h }));
   }
-  const { gridSize, blockSpacing, minHeight, maxHeight, buildingWidthMin, buildingWidthMax } = {
-    ...DEFAULT_CITY_OPTIONS,
-    ...options,
-  };
-  const random = layoutRandom(spec);
-  const half = gridSize / 2;
-  const buildings: BuildingFootprint[] = [];
-
-  for (let gx = -half; gx < half; gx++) {
-    for (let gz = -half; gz < half; gz++) {
-      buildings.push({
-        cx: gx * blockSpacing,
-        cz: gz * blockSpacing,
-        bw: buildingWidthMin + random() * (buildingWidthMax - buildingWidthMin),
-        bd: buildingWidthMin + random() * (buildingWidthMax - buildingWidthMin),
-        bh: minHeight + random() * (maxHeight - minHeight),
-      });
-    }
-  }
-
-  return buildings;
+  return generateSeededBuildingLayout(spec, options);
 }
 
 export function overlapsBuildingFootprint(

@@ -1,4 +1,4 @@
-import {createCaseGrip,disposeCaseGrip} from '../../src/prototype/CaseGrip';
+import {createCaseGrip,disposeCaseGrip} from '../../src/presentation/CaseGrip';
 import {expect,it,vi} from 'vitest';
 import * as THREE from 'three';
 import * as C from 'cannon-es';

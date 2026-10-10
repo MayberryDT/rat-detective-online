@@ -1,3 +1,4 @@
+/** Legacy carrier-ping presentation, retained for compatibility and historical fixtures. The live game uses physical evidence and does not construct this class. */
 import * as THREE from 'three';
 import {freezeStatic} from '../utils/freezeStatic';
 import {RigidBatch} from '../utils/RigidMeshBatch';
