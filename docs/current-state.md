@@ -2,6 +2,10 @@
 
 Verified from source and production through **2026-10-09** (protocol 39). Prior gameplay receipts remain **2026-09-17**. Deployment details live in [live-service.md](live-service.md).
 
+## Softer bots — 9 October production
+
+Tyler approved and shipped 20% longer reaction and tracking delays: base reaction 288–576 ms, gremlin 312–600 ms, all archetypes tracking 156–252 ms. Personalities and gameplay behavior remain; burst pauses and attention changes wait for playtesting. Worker `652e3479-4485-4c42-9b3c-f8f809f00ea5`, build `production-2026-10-10-8aafdad`, source `8aafdad`, protocol 43, layout 7, mindVersion 21, era `softer-bots`. Build date is UTC (still 9 October locally). [Receipt](verification/bot-softening-2026-10-09.md).
+
 ## Case papers and smooth play — 9 October production
 
 Production Worker `e92c8831-e6e3-4f7e-a8cc-c2e23ba6880b`, build `production-2026-10-09-648ff6e`, client `index-DbIC0R2D.js`, **protocol 39**, layout 7 / mindVersion 16, era `case-papers` ([receipt](verification/smooth-play-release-2026-10-09.md)).

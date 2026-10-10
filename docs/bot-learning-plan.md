@@ -4,7 +4,7 @@ Status (30 September 2026): release A (L1 and L2) is live in production (build `
 
 ## Softer combat — 9 October 2026
 
-Tyler approved the first softer-bot pass: increase reaction and tracking delays by 20%, keeping the human behavior and archetypes. Implemented as mindVersion 21; not deployed.
+Tyler approved the first softer-bot pass: increase reaction and tracking delays by 20%, keeping the human behavior and archetypes. Live as mindVersion 21, build `production-2026-10-10-8aafdad` (Worker `652e3479-4485-4c42-9b3c-f8f809f00ea5`).
 
 - Base reaction: 240–480 ms → 288–576 ms.
 - Gremlin reaction override: 260–500 ms → 312–600 ms.

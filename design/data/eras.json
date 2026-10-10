@@ -726,7 +726,7 @@
       "environment": "production",
       "build": "production-2026-10-09-45dcd91",
       "from": "2026-10-09T07:30:19Z",
-      "to": null,
+      "to": "2026-10-10T00:37:53.259Z",
       "layout": 7,
       "mindVersion": 20,
       "protocol": 43,
@@ -739,6 +739,31 @@
       "receipt": "docs/verification/chaos-evidence-release-2026-10-09.md",
       "notes": "Exact BUILD membership is authoritative. Boundary is the observed end of the deploy command. Facts now carry room public-live-v3; v2's history was copied into v3's aggregates and events, so per-room filters must take both. Ping fell from about 83 ms to 23 ms median for Kansas City players, so hit rates and fight measures are not comparable with case-papers without that caveat.",
       "predictions": []
+    },
+    {
+      "id": "softer-bots",
+      "environment": "production",
+      "build": "production-2026-10-10-8aafdad",
+      "from": "2026-10-10T00:37:53.259Z",
+      "to": null,
+      "layout": 7,
+      "mindVersion": 21,
+      "protocol": 43,
+      "worker": "652e3479-4485-4c42-9b3c-f8f809f00ea5",
+      "commits": [
+        "8aafdad"
+      ],
+      "change": "20% longer reaction and tracking delays, retaining archetypes and human motor behavior.",
+      "baseline": "chaos-evidence",
+      "receipt": "docs/verification/bot-softening-2026-10-09.md",
+      "notes": "Final identical repeat deployment boundary; first deployment shortly preceded it. No human playtest yet. Exclude agents and admin-touched rounds.",
+      "predictions": [
+        {
+          "says": "About 20% less bot damage against humans per encounter; players have more breathing room",
+          "measure": "bot damage against humans per encounter",
+          "expect": "down"
+        }
+      ]
     }
   ]
 }
