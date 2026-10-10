@@ -2,7 +2,7 @@ import {emitWorldSound} from '../audio/WorldSoundEvents';
 import * as THREE from 'three';
 import type * as CANNON from 'cannon-es';
 import { RatEntity } from '../entities/RatEntity';
-import { RatOptions } from '../utils/RatModel';
+import { RatOptions } from '../rat/RatModel';
 import { PRESSURE_LAUNCH, type ChaosState } from '../shared/chaosState';
 import { RatBody, noControls, turnFacing } from '../shared/rat/ratBody';
 import { ControlTally } from '../shared/rat/controlTally';

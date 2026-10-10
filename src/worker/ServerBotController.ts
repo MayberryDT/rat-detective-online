@@ -10,7 +10,7 @@ import { sharedGrayboxBoxes } from '../shared/sharedLayout';
 import {DISPATCH_STATIONS,LAUNCH_MACHINES,MAX_LAUNCH_EVENTS,type ChaosState} from '../shared/chaosState';
 import {heldWeapon,jumpBlocked,legScale} from '../shared/pickups';
 import {RAT_BODY,RAT_MOVEMENT,RatBody,addRatShapes,lookHeading,muzzleReach,ratMuzzle,turnFacing,type RatControls} from '../shared/rat/ratBody';
-import {FEEL} from '../feel/feelTuning';
+import {LAUNCH_HANG} from '../shared/rat/launchTuning';
 import type {PlayerData,Vec3Data} from '../shared/networkProtocol';
 import {ARCHETYPE_SKILL,BASE_SKILL,type Decision,type Mind,type Personality} from '../shared/bots/intent';
 import type {GoalContext} from '../shared/bots/goals';
@@ -197,7 +197,7 @@ export class ServerBotController {
             if(!bot?.alive||launch.at<bot.lastLaunchAt||now-launch.at>1500||launch.at>now+100)continue;
             bot.lastLaunchAt=launch.at;bot.strandedSince=0;bot.progressAt=now;bot.launchedUntil=now+150;
             // A player's throw: the same flight damping, drift and floaty apex.
-            bot.rat.launch(launch.velocity,FEEL.launchFlight.params.hang,FEEL.launchFlight.params.hangLift);
+            bot.rat.launch(launch.velocity,LAUNCH_HANG.hang,LAUNCH_HANG.hangLift);
         }
         for(const shove of chaos?.pressure?.shoves??[]){
             if(this.launchesSeen.has(shove.id))continue;

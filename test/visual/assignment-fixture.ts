@@ -2,9 +2,9 @@ import { JURISDICTION_ZONES, isJurisdictionZoneId } from '../../src/shared/juris
 import * as THREE from 'three';
 import '../../src/style.css';
 import { createStage } from '../../src/session/createStage';
-import { Neighborhood } from '../../src/prototype/Neighborhood';
+import { Neighborhood } from '../../src/presentation/Neighborhood';
 import { RatController } from '../../src/player/RatController';
-import { ChaosView } from '../../src/prototype/ChaosView';
+import { ChaosView } from '../../src/presentation/ChaosView';
 import { ChaosSimulation } from '../../src/shared/ChaosSimulation';
 import { GameHud } from '../../src/ui/GameHud';
 import { createPlayer } from '../../src/worker/gameState';

@@ -1,8 +1,8 @@
 import {describe,it,expect} from 'vitest';
 import {PerspectiveCamera,Vector3} from 'three';
-import {assignmentGuidance} from '../../src/prototype/assignmentGuidance';
+import {assignmentGuidance} from '../../src/presentation/assignmentGuidance';
 import {SEWER_PIPE_ENTRANCES,sewerPipePoint} from '../../src/shared/sewerLayout';
-import {locateCase} from '../../src/prototype/caseLocator';
+import {locateCase} from '../../src/presentation/caseLocator';
 import {createAssignment,ASSIGNMENT_DESTINATIONS,CHAIN_ROUTE} from '../../src/shared/assignments';
 
 function state(){const a=createAssignment('chain-of-custody',0);a.phase='active';a.destinations=[...CHAIN_ROUTE];return a;}

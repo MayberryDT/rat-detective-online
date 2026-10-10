@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import {createStage} from '../../src/session/createStage';
-import {Neighborhood} from '../../src/prototype/Neighborhood';
+import {Neighborhood} from '../../src/presentation/Neighborhood';
 import {loadCameos,warmCameoBuffers} from '../../src/cameos/loadCameos';
 import {CAMEO_LAYOUT,type CameoKind} from '../../src/cameos/cameoLayout';
 import {CameoAnimator} from '../../src/cameos/CameoAnimator';

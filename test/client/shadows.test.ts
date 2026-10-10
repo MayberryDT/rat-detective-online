@@ -5,11 +5,11 @@ import {ContactShadows,StaticMoonShadow,attachContactShadows,fitMoonShadow} from
 import {StaticCityBroadphase,addCityBody} from '../../src/shared/StaticCityBroadphase';
 import {CITY_BOUNDS} from '../../src/shared/grayboxLayout';
 import {RatEntity} from '../../src/entities/RatEntity';
-import {ChaosView} from '../../src/prototype/ChaosView';
+import {ChaosView} from '../../src/presentation/ChaosView';
 import type {ChaosState,CorpseState} from '../../src/shared/chaosState';
 import {DEFAULT_APPEARANCE} from '../../src/shared/ratAppearance';
 
-vi.mock('../../src/prototype/DispatchHud',()=>({DispatchHud:class{update(){} setScores(){} dispose(){}}}));
+vi.mock('../../src/presentation/DispatchHud',()=>({DispatchHud:class{update(){} setScores(){} dispose(){}}}));
 
 function caster(name:string):THREE.Mesh {const mesh=new THREE.Mesh(new THREE.BoxGeometry(),new THREE.MeshBasicMaterial());mesh.name=name;mesh.castShadow=true;return mesh;}
 

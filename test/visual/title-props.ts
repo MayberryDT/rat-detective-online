@@ -1,7 +1,7 @@
 /** Title scene props: paper printed in 2D canvas, pushpins, string and the desk clutter. Every material
  * is Standard/Physical so the path tracer and the raster preview see the same scene. */
 import * as THREE from 'three';
-import {createRatMesh,type RatOptions} from '../../src/utils/RatModel';
+import {createRatMesh,type RatOptions} from '../../src/rat/RatModel';
 
 const loader=new THREE.TextureLoader();
 /** All path-traced textures share one wrap and filter mode. */

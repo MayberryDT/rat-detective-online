@@ -2,13 +2,13 @@
 import * as THREE from 'three';
 import '../../src/style.css';
 import {GameHud} from '../../src/ui/GameHud';
-import {DispatchHud} from '../../src/prototype/DispatchHud';
+import {DispatchHud} from '../../src/presentation/DispatchHud';
 import {INCIDENTS, type IncidentId} from '../../src/shared/incidentCatalog';
 import type {ChaosState} from '../../src/shared/chaosState';
 import {createStage} from '../../src/session/createStage';
 import {DEFAULT_CITY_OPTIONS,createWorldSpec} from '../../src/shared/worldSpec';
 import {CityGenerator} from '../../src/world/CityGenerator';
-import {createRatMesh} from '../../src/utils/RatModel';
+import {createRatMesh} from '../../src/rat/RatModel';
 
 const params=new URLSearchParams(location.search);
 const hud=new GameHud();hud.enterPlaying();

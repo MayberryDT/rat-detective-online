@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { createRatMesh } from '../../../src/utils/RatModel';
+import { createRatMesh } from '../../../src/rat/RatModel';
 import { disposeMeshResources } from '../../../src/utils/disposeMeshResources';
 
 export type CameoKind = 'spider' | 'bat';

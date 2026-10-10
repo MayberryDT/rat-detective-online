@@ -3,7 +3,7 @@ import {RoundedBoxGeometry} from 'three/addons/geometries/RoundedBoxGeometry.js'
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 import {TRAP_SCALE,TRAP_TALL,type WeaponKind} from '../shared/pickups';
 import {MUZZLE_REACH} from '../shared/rat/ratBody';
-import {metalReflection} from './metalReflection';
+import {metalReflection} from '../utils/metalReflection';
 
 /** The arsenal's finishes. Brass, cheese, pine and the laser's coil carry a little light of their own so a weapon
  * reads across a street at night: emissive surfaces only, never a light. */

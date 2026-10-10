@@ -20,7 +20,7 @@ it shows the stills and puts live HTML on them (`src/ui/title.css`).
 | Leather037 | the desk blotter |
 
 Everything else (the newspaper, mugshots, map, notes, rain on the glass, the skyline) is drawn in canvas
-by `title-props.ts`. The mugshots are the game's own rats (`src/utils/RatModel.ts`).
+by `title-props.ts`. The mugshots are the game's own rats (`src/rat/RatModel.ts`).
 
 ## Rendering
 

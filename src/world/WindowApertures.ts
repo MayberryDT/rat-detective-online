@@ -1,4 +1,4 @@
-import type {SpillSource} from '../prototype/StreetReadability';
+import type {SpillSource} from '../presentation/StreetReadability';
 import {footprintOutline} from '../shared/skyline';
 import type {BuildingFootprint} from '../shared/worldSpec';
 

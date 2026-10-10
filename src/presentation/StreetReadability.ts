@@ -5,7 +5,7 @@ import type {GrayboxBox} from '../shared/grayboxLayout';
 import {beyondCut,footprintBlocks,isCentralBuilding} from '../shared/skyline';
 import {boxHalfExtents,fromBoxLocal} from '../shared/boxFrame';
 import type {OverheadLight} from './StreetLightPool';
-import {FacadeBeams,windowBrightness} from './FacadeBeams';
+import {FacadeBeams} from './FacadeBeams';
 import {STREET_LAMPS} from '../shared/grayboxLayout';
 import {generatedStreetLamps} from '../shared/streetLampLayout';
 import type {FacadeMass} from '../world/WindowApertures';
@@ -14,12 +14,9 @@ import {kitCity} from '../shared/city/kit/city';
 import type {SpillBake} from './CityBakeCache';
 import {freezeStatic} from '../utils/freezeStatic';
 
-export interface SpillSource {
-    x:number; z:number; y:number; nx:number; nz:number;
-    kind:'window'|'door'|'sign'; color:number; reach:number;
-    width?:number;height?:number;powerShare?:number;occupancy?:{value:number};
-}
-export interface SpillBlocker {x:number;z:number;w:number;d:number}
+import { blocked, sampleStreetSpill, windowBrightness, type SpillSource, type SpillBlocker } from './streetSpill';
+export { blocked, sampleStreetSpill } from './streetSpill';
+export type { SpillSource, SpillBlocker } from './streetSpill';
 const SIZE=512, MIN=-200, SPAN=376, MAX_LIGHT=.35;
 /** Bytes in the spill atlas (RGBA). */
 export const SPILL_ATLAS_BYTES=SIZE*SIZE*4;
@@ -71,34 +68,6 @@ function yawedCover(b:GrayboxBox):FacadeMass[] {
         const {hx,hy,hz}=boxHalfExtents({...b,...p,w:alongW?b.w/n:b.w,d:alongW?b.d:b.d/n});
         return {x:p.x,y:p.y,z:p.z,w:hx*2,h:hy*2,d:hz*2};
     });
-}
-
-/** Segment/AABB clipping in the street plane. Used only during the one-time bake. */
-export function blocked(ax:number,az:number,bx:number,bz:number,boxes:readonly SpillBlocker[]):boolean {
-    // Runs millions of times in the bake: no per-box allocation.
-    const dx=bx-ax,dz=bz-az;
-    for(const b of boxes){
-        let lo=0,hi=1;
-        const minX=b.x-b.w/2,maxX=b.x+b.w/2,minZ=b.z-b.d/2,maxZ=b.z+b.d/2;
-        if(Math.abs(dx)<1e-8){if(ax<minX||ax>maxX)continue;}
-        else{const t1=(minX-ax)/dx,t2=(maxX-ax)/dx;lo=Math.max(lo,Math.min(t1,t2));hi=Math.min(hi,Math.max(t1,t2));}
-        if(Math.abs(dz)<1e-8){if(az<minZ||az>maxZ)continue;}
-        else{const t1=(minZ-az)/dz,t2=(maxZ-az)/dz;lo=Math.max(lo,Math.min(t1,t2));hi=Math.min(hi,Math.max(t1,t2));}
-        if(lo<=hi&&hi>.001&&lo<.999)return true;
-    }
-    return false;
-}
-
-export function sampleStreetSpill(s:SpillSource,x:number,z:number,blockers:readonly SpillBlocker[]):number {
-    const dx=x-s.x,dz=z-s.z,depth=dx*s.nx+dz*s.nz;
-    if(depth<0||depth>=s.reach)return 0;
-    const across=Math.abs(dx*s.nz-dz*s.nx),width=(s.width??(s.kind==='door'?1.7:1.35))/2+depth*.22;
-    if(across>=width||blocked(s.x,s.z,x,z,blockers))return 0;
-    const edge=1-across/width;
-    // The pool is where the downward beam meets the ground, not a stripe
-    // projected from the building's footprint onto every vertical surface.
-    const landing=s.y/.85,along=Math.max(0,1-Math.abs(depth-landing)/(2+(s.height??.85)/.85));
-    return .14*edge*edge*along*along*(1-depth/(s.reach+4));
 }
 
 /** Fixed, occluded street spill in one 1 MiB atlas. The same visible fixtures

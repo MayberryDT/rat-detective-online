@@ -1,6 +1,6 @@
 import {afterEach,beforeEach,describe,it,expect,vi} from 'vitest';
 import {MUNICIPAL_QUIPS} from '../../src/ui/municipalQuips';
-import {DispatchHud,INCIDENT_TITLE_MS} from '../../src/prototype/DispatchHud';
+import {DispatchHud,INCIDENT_TITLE_MS} from '../../src/presentation/DispatchHud';
 import {headlines} from '../../src/ui/Headlines';
 import {incidentInfo} from '../../src/shared/incidentCatalog';
 import type {ChaosState} from '../../src/shared/chaosState';

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import {createRatMesh, type RatOptions} from '../../../src/utils/RatModel';
+import {createRatMesh, type RatOptions} from '../../../src/rat/RatModel';
 import {createRatMesh as createOriginalRat} from './OriginalRatModel';
 import {disposeMeshResources} from '../../../src/utils/disposeMeshResources';
 

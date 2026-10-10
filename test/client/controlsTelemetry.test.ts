@@ -31,6 +31,7 @@ it('sends taps shorter than one send, at once, even while the rat holds still', 
     gun.authoritative = true; gun.setPlayer(camera, rat.entity);
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => { frames.push(callback); return frames.length; });
     const session = Object.assign(Object.create(GameSession.prototype), {
+        results: {presentVictory() {}, presentResults() {}, lineupPending: false},
         disposed: false, previousTime: 0, stats: null, bots: null, chaos: null, rat, gun, remotes,
         title: {}, roundWon: false, myId: 'keys', lastMovementAt: 0, lastMovement: [], direction: new THREE.Vector3(), aim: new THREE.Vector3(), input: {keys},
         stage: {syncViewport: () => false, scene, world, camera, renderer: {render() {}}, flashlight: new THREE.SpotLight()},

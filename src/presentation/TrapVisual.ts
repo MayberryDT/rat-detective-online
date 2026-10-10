@@ -5,7 +5,7 @@ import {playerPreferences} from '../settings/PlayerPreferences';
 import {MAX_TRAPS,type TrapState} from '../shared/chaosState';
 import {TRAP_SCALE,TRAP_TALL,WEAPON_TUNING} from '../shared/pickups';
 import {kickDust} from '../feel/Dust';
-import {PartKit,TRAP_PIECES,TRAP_PIVOTS,mousetrap,weaponFinish,type TrapPiece,type WeaponFinish} from '../utils/WeaponModel';
+import {PartKit,TRAP_PIECES,TRAP_PIVOTS,mousetrap,weaponFinish,type TrapPiece,type WeaponFinish} from '../rat/WeaponModel';
 
 /** What a placed trap just did, for sounds: set down, snapped on a rat, took a hit, broke. */
 export type TrapEvent='launch'|'set'|'snap'|'hit'|'break';

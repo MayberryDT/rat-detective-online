@@ -1,14 +1,12 @@
 import * as THREE from 'three';
-import {sampleStreetSpill,type SpillSource,type SpillBlocker} from './StreetReadability';
+import {sampleStreetSpill,type SpillSource,type SpillBlocker} from './streetSpill';
 import {AUTHORED_LIGHT_GAIN} from '../session/lightingTuning';
 import {restoreGeometry,type SpillBake} from './CityBakeCache';
 import {freezeStatic} from '../utils/freezeStatic';
 
 interface Box {x:number;y:number;z:number;w:number;h:number;d:number}
 type Point={x:number;y:number;z:number};
-export function windowBrightness(source:SpillSource):number {
-    return source.occupancy?THREE.MathUtils.smoothstep(source.occupancy.value,.04,1):1;
-}
+export {windowBrightness} from './streetSpill';
 
 /** Clip the full shaft against real 3D building/room bounds, not an infinite
  * ground footprint. All samples start at the visible aperture. */

@@ -4,7 +4,7 @@
  * hidden and counted runs interleaved. Static measurement, not gameplay. */
 import * as THREE from 'three';
 import {createStage} from '../../src/session/createStage';
-import {Neighborhood} from '../../src/prototype/Neighborhood';
+import {Neighborhood} from '../../src/presentation/Neighborhood';
 const stage=createStage(new THREE.WebGLRenderer({antialias:true}));
 stage.renderer.setPixelRatio(1);stage.renderer.setSize(1280,720);stage.camera.aspect=1280/720;stage.camera.updateProjectionMatrix();
 const city=new Neighborhood(stage.scene,stage.world);

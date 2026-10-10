@@ -1,17 +1,17 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
-import { Neighborhood } from '../../src/prototype/Neighborhood';
+import { Neighborhood } from '../../src/presentation/Neighborhood';
 import { LANDMARK_INTERIORS } from '../../src/shared/landmarkLayout';
 import { STREET_LAMPS } from '../../src/shared/grayboxLayout';
 import { SEWER_MANHOLE, SEWER_PIPE_ENTRANCES, sewerPipePoint } from '../../src/shared/sewerLayout';
-import { SEWER_PORTAL_LIGHTS, sewerLightingActive } from '../../src/prototype/SewerLighting';
+import { SEWER_PORTAL_LIGHTS, sewerLightingActive } from '../../src/presentation/SewerLighting';
 
 // Isolate the prototype's real hall geometry and lighting from unrelated city decoration.
 vi.mock('../../src/world/CityGenerator', () => ({
   CityGenerator: class { generate() {} *generateSteps() {} update() {} dispose() {} },
 }));
-vi.mock('../../src/utils/RatModel', async () => {
+vi.mock('../../src/rat/RatModel', async () => {
   const THREE = await import('three');
   return { createRatMesh: () => new THREE.Group() };
 });

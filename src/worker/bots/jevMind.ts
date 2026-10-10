@@ -1,7 +1,7 @@
 import type {GoalContext} from '../../shared/bots/goals';
 import {DECIDE,STANCES,type Goal,type GoalScores,type Mind,type MindAnswer} from '../../shared/bots/intent';
 import {JEV_DOLLARS_PER_TOKEN,type JevAnswer,type JevClient,type JevQuestion} from './jevClient';
-import {perceive,type RatView} from './perception';
+import {perceive,type RatView} from './describeSituation';
 
 /** How long an answer stays playable after its situation was sent; the shortest gap between one rat's requests
  * (the bot learning plan, L4: a rat asks only at its decision moments, never twice within 3 s); the room's

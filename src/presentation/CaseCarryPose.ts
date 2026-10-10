@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { CASE_HAND, CASE_CARRY_ROTATION } from '../shared/chaosState';
-import { RAT_CARRY_SHOULDER } from '../utils/RatAnimator';
+import { RAT_CARRY_SHOULDER } from '../rat/RatAnimator';
 
 const rotation = new THREE.Quaternion(CASE_CARRY_ROTATION.x, CASE_CARRY_ROTATION.y,
     CASE_CARRY_ROTATION.z, CASE_CARRY_ROTATION.w);

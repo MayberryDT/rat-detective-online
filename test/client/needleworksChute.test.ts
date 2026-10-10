@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
-import { Neighborhood } from '../../src/prototype/Neighborhood';
+import { Neighborhood } from '../../src/presentation/Neighborhood';
 import { RatController } from '../../src/player/RatController';
 import { StaticCityBroadphase } from '../../src/shared/StaticCityBroadphase';
 import { ChaosSimulation } from '../../src/shared/ChaosSimulation';

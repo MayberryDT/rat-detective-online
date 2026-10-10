@@ -1,8 +1,8 @@
 import * as THREE from 'three';
-import {createRatArm} from '../utils/RatArmModel';
+import {createRatArm} from '../rat/RatArmModel';
 import type { RatEntity } from '../entities/RatEntity';
 import { CASE_HAND } from '../shared/chaosState';
-import { getRatCarryAnchor, RAT_CARRY_SHOULDER } from '../utils/RatAnimator';
+import { getRatCarryAnchor, RAT_CARRY_SHOULDER } from '../rat/RatAnimator';
 
 /** Floating sleeve and cuff, created only while a case is equipped. */
 export function createCaseGrip(entity:RatEntity):THREE.Group {

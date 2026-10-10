@@ -3,7 +3,7 @@ import {beyondCut,buildingColliders,chamferFace,footprintBlocks,isCentralBuildin
 import { WindowLightCycle } from './WindowLightCycle';
 import {windowApertures,uncoveredWindowApertures,facadeWalls,wallApertures,type FacadeWall,type WindowPane,type FacadeMass} from './WindowApertures';
 import {cornerEntrances,type CornerEntrance} from './cornerShops';
-import type {SpillSource} from '../prototype/StreetReadability';
+import type {SpillSource} from '../presentation/StreetReadability';
 import {CITY_STREETS} from '../shared/cityPlan';
 import { STREET_LAMPS, originalCityBuildingAllowed, isRampOpening } from '../shared/grayboxLayout';
 import { generatedStreetLamps,STREET_LAMP_HEIGHT } from '../shared/streetLampLayout';

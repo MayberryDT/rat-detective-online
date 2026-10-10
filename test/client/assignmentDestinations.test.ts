@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import {afterEach,expect,it,vi} from 'vitest';
-import {AssignmentDestinations} from '../../src/prototype/AssignmentDestinations';
+import {AssignmentDestinations} from '../../src/presentation/AssignmentDestinations';
 import {ASSIGNMENT_DESTINATIONS,createAssignment} from '../../src/shared/assignments';
 
 afterEach(()=>vi.unstubAllGlobals());

@@ -1,9 +1,9 @@
 import {expect,it,vi} from 'vitest';
 import * as THREE from 'three';
 import * as C from 'cannon-es';
-import {RatActing,RAT_REACTIONS} from '../../src/utils/RatActing';
-import {RatAnimator} from '../../src/utils/RatAnimator';
-import {createRatMesh} from '../../src/utils/RatModel';
+import {RatActing,RAT_REACTIONS} from '../../src/rat/RatActing';
+import {RatAnimator} from '../../src/rat/RatAnimator';
+import {createRatMesh} from '../../src/rat/RatModel';
 import {disposeMeshResources} from '../../src/utils/disposeMeshResources';
 import {SubtleRatActing} from '../visual/reference/SubtleRatActing';
 import {MovementRatAnimator} from '../visual/reference/MovementRatAnimator';

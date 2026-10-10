@@ -1,6 +1,6 @@
 import {it,expect,vi,afterEach} from 'vitest';
 import * as THREE from 'three';
-import {DispatchPillars} from '../../src/prototype/DispatchPillars';
+import {DispatchPillars} from '../../src/presentation/DispatchPillars';
 import {DispatchAudio} from '../../src/audio/DispatchAudio';
 import {DISPATCH_STATIONS,type ChaosState} from '../../src/shared/chaosState';
 

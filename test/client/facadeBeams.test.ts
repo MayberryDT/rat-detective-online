@@ -1,8 +1,8 @@
 import {expect,it,vi} from 'vitest';
 import * as THREE from 'three';
 import {windowApertures,uncoveredWindowApertures} from '../../src/world/WindowApertures';
-import {beamReach,FacadeBeams,windowBrightness} from '../../src/prototype/FacadeBeams';
-import type {SpillSource} from '../../src/prototype/StreetReadability';
+import {beamReach,FacadeBeams,windowBrightness} from '../../src/presentation/FacadeBeams';
+import type {SpillSource} from '../../src/presentation/StreetReadability';
 
 const source:SpillSource={x:0,y:5,z:0,nx:0,nz:1,width:1,height:1,color:0xffcf96,kind:'window',reach:10};
 it('projects pane UVs onto all four actual wall faces with the same occupancy uniforms',()=>{

@@ -1,3 +1,6 @@
+import {InteractionPresentation,type InteractionCandidate} from './InteractionPresentation';
+import {createShotDraws} from './shotDraws';
+import {SupplyPresentation} from './SupplyPresentation';
 import {SafeField,type SafeEvent} from './SafeVisual';
 import type {SafeState} from '../shared/safes';
 import {CaseFiles} from './CaseFiles';
@@ -5,19 +8,15 @@ import { effectsOutput, type VoiceRoute } from '../audio/PlayerAudioMix';
 import { JurisdictionZones } from './JurisdictionZones';
 import type {FoleyWorld} from '../audio/FoleyWorld';
 import { createCaseGrip, disposeCaseGrip } from './CaseGrip';
-import {fly, leave} from '../ui/motion';
-import {headlines} from '../ui/Headlines';
 import { ExtraCaseVisual } from './ExtraCaseVisual';
 import * as THREE from 'three';
 import type { CaseState, ChaosState, CorpseState, LaunchMachine, SurgeVent, TrapState } from '../shared/chaosState';
 import { CHAOS_TUNING, CASE_LOOSE_SCALE } from '../shared/chaosState';
 import { BALL_RADIUS } from '../shared/ballTuning';
-import { createRatMesh, ratAccessory } from '../utils/RatModel';
-import { RatAnimator } from '../utils/RatAnimator';
+import { createRatMesh, ratAccessory } from '../rat/RatModel';
+import { RatAnimator } from '../rat/RatAnimator';
 import { batchRigidMeshes } from '../utils/RigidMeshBatch';
 import { disposeMeshResources } from '../utils/disposeMeshResources';
-import { instanceGeometry } from '../utils/instanceGeometry';
-import { createCheeseBallGeometry, createCheeseBallMaterial } from '../weapons/CheeseProjectileModel';
 import { CheeseImpactEffects } from '../weapons/CheeseImpactEffects';
 import { bindIncidentAudio, disposeIncidentAudio, playSynth, startCaseBuzz } from '../audio/IncidentAudio';
 import type { RatEntity } from '../entities/RatEntity';
@@ -29,10 +28,8 @@ import { ASSIGNMENT_DESTINATIONS, activeDestination } from '../shared/assignment
 import { activeZone } from '../shared/jurisdiction';
 import { JURISDICTION_ZONES } from '../shared/jurisdictionZones';
 import type { FeedbackCue } from '../audio/FeedbackAudio';
-import type { Vec3Data, ServerMessage, ShotDescriptor, PickupTarget } from '../shared/networkProtocol';
-import { locateCase } from './caseLocator';
+import type { Vec3Data, ServerMessage, ShotDescriptor } from '../shared/networkProtocol';
 import { PressureMachine } from './PressureMachine';
-import { CarrierPingFlash } from './CarrierPingFlash';
 import { DispatchPillars, type DispatchStation } from './DispatchPillars';
 import { reactToLandmarkImpact } from './LandmarkReactions';
 import { addLeatherBriefcase } from './CaseModel';
@@ -45,12 +42,9 @@ import {heatStreak} from './CrossfireFlames';
 import {badRound} from '../shared/shotPattern';
 import {BAD_AMMO} from '../shared/shotBallistics';
 import { ChaosPresentation, copyPresentationPose, type PresentationPose } from '../shared/ChaosPresentation';
-import { PickupVisual } from './PickupVisual';
-import {faultyCard, heldCard, hotCaseCard, pickupArtwork, powerupCard} from './pickupArtwork';
 import {CASE_RED} from './caseRed';
-import { BUFF_FIELD, BUFF_MS, FAULTY_MS, PICKUP_TUNING, TIMED_PICKUPS, WEAPON_KINDS, WEAPON_MS, WEAPON_TUNING, activeBuffs, entryWeapon, heldWeapon, isTimedPickup, type BuffMap, type FaultyKind, type PickupKind, type TimedPickup, type WeaponKind } from '../shared/pickups';
+import {WEAPON_TUNING, heldWeapon, type PickupKind} from '../shared/pickups';
 import {TrapField,type TrapEvent} from './TrapVisual';
-import {closestPointOnSegment} from '../shared/netplay';
 
 import { slipCaseCarryPose, updateCaseCarryPose } from './CaseCarryPose';
 import { CaseMotion } from './CaseMotion';
@@ -59,7 +53,7 @@ import {RatReactionEvents} from './RatReactionEvents';
 import {FlyingHat} from '../entities/FlyingHat';
 import {contactShadowsOf} from '../session/shadows';
 import {cityImpact} from '../feel/CityReactions';
-import type {DeathStyle} from '../utils/RatAnimator';
+import type {DeathStyle} from '../rat/RatAnimator';
 import {feelState} from '../feel/feelState';
 import {FEEL} from '../feel/feelTuning';
 import {freezeStatic} from '../utils/freezeStatic';
@@ -69,14 +63,8 @@ const CORPSE_CENTRE=new THREE.Vector3(0,.95,0);
 /** Grip feedback: radians of swing and units of sag per hit taken, and the jolt's peak swing. */
 const GRIP_SWING=.34,GRIP_SAG=.05,GRIP_JOLT=.3;
 
-export interface InteractionCandidate {
-    target:PickupTarget;targetId:string;generation:number;pickup?:import('../shared/pickups').PickupKind;
-}
+export type {InteractionCandidate} from './InteractionPresentation';
 
-/** U9: a pickup card drops away instead of vanishing. */
-const CARD_EXIT:Keyframe[]=[{opacity:1,transform:'none'},{opacity:0,transform:'translateY(46px) rotate(6deg) scale(.9)'}];
-/** C1: a claimed supply this far (units) from your rat is the prop its card artwork flies from; otherwise it flies from your rat. */
-const CLAIM_REACH=5;
 /** Clarity batch (protocol 29): another rat's ball that is not coming at you draws at `dim` brightness (body, rim and
  * trail), so the ones that are stand out. A threat is within `near` units of your chest, or within `range` and heading
  * to pass within `miss` of it. Your own balls always draw full. */
@@ -115,42 +103,17 @@ function replayPose(samples:readonly CorpseSample[],time:number,out:Presentation
 /** A body's twitch seed from its id, the same on every play of a clip. */
 function seedOf(id:string):number {let h=7;for(let i=0;i<id.length;i++)h=(h*31+id.charCodeAt(i))%997;return h;}
 
-/** Instanced shot draws: balls, Crossfire balls and glows, danger rims and trails, the case
- * missile's trail. Instance colours exist from the start, as play will need them, so the
- * programs never change. The title warm-up builds a one-instance set as a stand-in; the
- * welcome's full set then links nothing. */
-export function createShotDraws(capacity:number){
-    const ballGeometry=createCheeseBallGeometry(),glowGeometry=new THREE.SphereGeometry(.17,24,16);
-    const glow=(color:number,opacity:number)=>new THREE.MeshBasicMaterial({color,side:THREE.BackSide,transparent:true,opacity,blending:THREE.AdditiveBlending,depthWrite:false,toneMapped:false});
-    const trail=(radius:number,segments:number,rings:number,color:number,opacity:number,count:number)=>
-        new THREE.InstancedMesh(new THREE.SphereGeometry(radius,segments,rings),new THREE.MeshBasicMaterial({color,transparent:true,opacity,toneMapped:false,depthWrite:false}),count);
-    // The second pool of each shape draws a geometry view of its own over the same buffers (see instanceGeometry).
-    const draws={root:new THREE.Group(),
-        bullets:new THREE.InstancedMesh(ballGeometry,createCheeseBallMaterial(),capacity),
-        chargedBullets:new THREE.InstancedMesh(instanceGeometry(ballGeometry),createCheeseBallMaterial(true),capacity),
-        // White: each Crossfire glow takes its heat's colour per instance.
-        chargedGlow:new THREE.InstancedMesh(glowGeometry,glow(0xffffff,.96),capacity),
-        dangerGlow:new THREE.InstancedMesh(instanceGeometry(glowGeometry),glow(0xff4822,.9),capacity),
-        dangerTrails:trail(.1,8,6,0xffffff,.65,capacity),
-        missileTrail:trail(.18,8,8,0xff2a12,.42,12),
-        dispose(){draws.root.removeFromParent();disposeMeshResources(draws.root);for(const mesh of meshes)mesh.dispose();}};
-    const meshes=[draws.bullets,draws.chargedBullets,draws.chargedGlow,draws.dangerGlow,draws.dangerTrails,draws.missileTrail];
-    const names=['cheese-balls','crossfire-balls','crossfire-glow','danger-cheese-rims','danger-cheese-trails','case-missile-trail'];
-    meshes.forEach((mesh,i)=>{mesh.count=0;mesh.frustumCulled=false;mesh.name=names[i]!;draws.root.add(mesh);});
-    // Every ball pool carries instance colours from the start (the clarity batch dims non-threats through them).
-    for(const mesh of [draws.bullets,draws.chargedBullets,draws.chargedGlow,draws.dangerGlow,draws.dangerTrails])mesh.setColorAt(0,new THREE.Color(1,1,1));
-    return draws;
-}
-
+export {createShotDraws} from './shotDraws';
 export class ChaosView {
     private readonly reactions:RatReactionEvents;
+    private readonly supplies:SupplyPresentation;
+    private readonly interactions:InteractionPresentation;
     private readonly root=new THREE.Group();
     private readonly caseRoot=new THREE.Group();
     private readonly caseMotion:CaseMotion;
     /** The carried case's red-hot look, its cuff and chain, and its carrier's (direct sight). */
     private readonly hotLook:HotCaseLook;
     private readonly extraCases=new Map<string,ExtraCaseVisual>();
-    private readonly pickups=new Map<string,PickupVisual>();
     /** Placed Mousetraps, pooled. */
     private readonly traps=new TrapField(this.root,true);
     /** The penthouse safes. */
@@ -158,40 +121,18 @@ export class ChaosView {
     /** A placed trap set down, snapped, hit or broke (after the view's first state), for sounds and the SNAP. */
     onTrap?:(event:TrapEvent,trap:TrapState)=>void;
     onSafe?:(event:SafeEvent,safe:SafeState)=>void;
-    /** Rats shown holding a special weapon. */
-    private readonly armed=new Set<string>();
-    private readonly buffBar?:HTMLElement;
-    private readonly buffCards=new Map<PickupKind,HTMLElement>();
-    private healingUntil=0;
-    /** C1: your claim waiting for this frame's card, and the pooled card-artwork chip per supply that flies into it. */
-    private claimed?:PickupKind;
-    private readonly claimChips=new Map<PickupKind,HTMLElement>();
-    private readonly claimAt=new THREE.Vector3();
-    private readonly claimFrom={x:0,y:0};
+
     /** Your own supply claim (not other rats'), raised once the card is up. Legacy lockMs is always zero. */
     onClaim?:(kind:PickupKind,camera:THREE.Camera,lockMs:number)=>void;
-    private readonly localBuffs:Record<TimedPickup,number>={ironclad:0,hustle:0,stakeout:0};
-    private buffsSeen=false;
-    /** Your special weapon and its deadline as last seen, so a new claim (or a refresh) is announced once. */
-    private localWeapon?:WeaponKind;
+
     /** The police scanner's calls on screen (not in replays). */
     private scanner?:PoliceScannerFeed;
-    private localWeaponUntil=0;
-    /** Your Code Violation dud's deadline as last seen (so a new one is announced once), and its card. */
-    private dud?:{kind:FaultyKind;card:HTMLElement};
-    /** HELD: another rat's Mousetrap has you, until it lets go. */
-    private held?:HTMLElement;
-    /** K3: the HOT CASE card while you carry the buffed case. */
-    private hotCase?:HTMLElement;
+
     /** K3, each frame: the buffed hot case you carry (null when you do not or are dead), the server time `now` and how
      * near it is to scoring (`caseUrgency`), for the carrier's ping pulse and heartbeat. */
     onCarry?:(mine:CaseState|null,now:number,urgency:number)=>void;
-    private readonly pendingInteractions=new Map<string,InteractionCandidate>();
     readonly caseFiles=new CaseFiles();
-    private readonly acceptedPickups=new Map<string,{generation:number;tick:number;epoch:string}>();
-    private anticipatedCase:{acceptedTick?:number;epoch?:string}|null=null;
-    /** Someone else's carrier flashing red through walls at each heartbeat ping. */
-    private readonly carrierFlash:CarrierPingFlash;
+
     private readonly pillars:DispatchPillars;
     private readonly pressureMachine:PressureMachine;
     private readonly hud?:DispatchHud;
@@ -295,7 +236,6 @@ export class ChaosView {
         // The root and the shot draws (moved by instance) stay put; corpses added later keep updating.
         this.root.name='records-chaos';freezeStatic(this.root);scene.add(this.root);scene.add(this.caseRoot);
         this.caseRoot.name='hot-case';
-        this.carrierFlash=new CarrierPingFlash(scene);
         this.hotLook=new HotCaseLook(scene,this.caseRoot,addLeatherBriefcase(this.caseRoot));this.caseMotion=new CaseMotion(this.caseRoot);
         this.caseRoot.userData.aimTarget=true;
         this.pressureMachine=new PressureMachine(scene,this.audio,replay?.route);
@@ -305,66 +245,25 @@ export class ChaosView {
             this.hud=new DispatchHud(frequency=>this.feedback?this.feedback('tick'):this.bell(frequency),this.feedback);
             this.scanner=new PoliceScannerFeed(document,()=>this.synth('radio',undefined,.97+Math.random()*.06,.32));
             this.assignmentDestinations=new AssignmentDestinations();
-            const bar=this.buffBar=document.createElement('div');
-            bar.className='pickup-buffs';bar.style.display='none';
-            document.body.appendChild(bar);
+
         }
-        this.impacts=new CheeseImpactEffects(scene);this.crossfire=new CrossfireVisual(scene,this.synth);
+        this.impacts=new CheeseImpactEffects(scene);
+        this.supplies=new SupplyPresentation(scene,resolveRat,this.clock,this.feedback,this.impacts,{state:()=>this.state,id:()=>this.myId,xray:()=>this.fixXray,pending:(target,id)=>this.interactions.pendingTarget(target,id),trapPending:()=>this.traps.pending,claim:(kind,camera)=>this.onClaim?.(kind,camera,0)},!!replay);
+        this.interactions=new InteractionPresentation(this.supplies,()=>this.state,this.clock,()=>this.receivedAt);
+        this.crossfire=new CrossfireVisual(scene,this.synth);
         this.beams=new LaserBeamVisual(scene,(cue,at,local)=>{if(!local||!feelState().on('heavyCheese'))this.feedback?.(cue,at);});
         this.traps.onEvent=(event,p)=>this.onTrap?.(event,p);
         this.safes.onEvent=(event,safe)=>this.onSafe?.(event,safe);
     }
-    /** Only the authoritative heal event confirms this instant pickup. */
-    showHealing():void {
-        this.healingUntil=this.clock()+3200;
-        const healing=this.buffCards.get('quick-fix');if(healing)leave(healing,'paperSlide',CARD_EXIT);this.buffCards.delete('quick-fix');
-        this.pickupFeedback('quick-fix');
-    }
-    private pickupFeedback(kind:PickupKind):void {
-        this.feedback?.('pickup-slap');this.feedback?.(`pickup-${kind}`);this.claimed=kind;
-    }
-    /** C1/C3: your claim's card artwork flies from the claimed prop (or your rat) into its card; Ironclad throws silver sparks. */
-    private claim(kind:PickupKind,camera:THREE.Camera):void {
-        const self=this.resolveRat(this.myId);
-        if(!self||self.dead)return;
-        const me=self.mesh.position;let best=CLAIM_REACH*CLAIM_REACH;
-        this.claimAt.set(me.x,me.y+1.2,me.z);
-        for(const pickup of this.state?.pickups??[]){
-            const d=(pickup.x-me.x)**2+(pickup.y-me.y)**2+(pickup.z-me.z)**2;
-            // The claimed site has already rolled its next pickup, so it is the nearest empty one (or still of this kind).
-            if((pickup.kind===kind||(pickup.availableAt??0)>(this.state?.time??0))&&d<best){best=d;this.claimAt.set(pickup.x,pickup.y,pickup.z);}
-        }
-        const card=this.buffCards.get(kind);
-        if(card){
-            let chip=this.claimChips.get(kind);
-            if(!chip){chip=document.createElement('div');chip.className=`claim-fly powerup-${kind}`;chip.innerHTML=pickupArtwork(kind);chip.setAttribute('aria-hidden','true');this.claimChips.set(kind,chip);}
-            this.impactPoint.copy(this.claimAt).project(camera);
-            const behind=this.impactPoint.z>1;
-            this.claimFrom.x=(behind?.5:Math.min(1,Math.max(0,(this.impactPoint.x+1)/2)))*innerWidth;
-            this.claimFrom.y=(behind?.6:Math.min(1,Math.max(0,(1-this.impactPoint.y)/2)))*innerHeight;
-            fly(document,chip,this.claimFrom,card,'claimMoment',FEEL.claimMoment.params.flight);
-        }
-        if(kind==='ironclad'&&feelState().on('claimIronclad'))for(let i=0;i<FEEL.claimIronclad.params.sparks;i++){
-            const angle=i*2.4+Math.random();
-            this.impacts.spark(this.impactPoint.set(me.x+Math.cos(angle)*.35,me.y+1.1+i*.25,me.z+Math.sin(angle)*.35),this.impactNormal.set(Math.cos(angle),.8,Math.sin(angle)));
-        }
-        this.onClaim?.(kind,camera,0);
-    }
-    private clearPickupCards():void {
-        this.healingUntil=0;this.claimed=undefined;for(const kind of TIMED_PICKUPS)this.localBuffs[kind]=0;this.localWeapon=undefined;this.localWeaponUntil=0;
-        for(const card of this.buffCards.values())leave(card,'paperSlide',CARD_EXIT);
-        if(this.dud){leave(this.dud.card,'paperSlide',CARD_EXIT);this.dud=undefined;}
-        if(this.held){leave(this.held,'paperSlide',CARD_EXIT);this.held=undefined;}
-        if(this.hotCase){leave(this.hotCase,'paperSlide',CARD_EXIT);this.hotCase=undefined;}
-        this.buffCards.clear();if(this.buffBar)this.buffBar.style.display=this.buffBar.childElementCount?'flex':'none';
-    }
+    showHealing():void {this.supplies.showHealing();}
+
     resetProjectiles():void{
         this.caseFiles.clear();
-        this.localShots.clear();this.beams.clear();this.presentation.clear();this.landings.length=0;this.clearPickupCards();this.clearInteractions();this.reactions.reset();
+        this.localShots.clear();this.beams.clear();this.presentation.clear();this.landings.length=0;this.supplies.clearPickupCards();this.clearInteractions();this.reactions.reset();
         // gameReset precedes the new chaos snapshot. Do not render or interact
         // with the previous round's confirmed carrier during that gap.
         this.state=null;this.setCarrier(null);this.hotLook.clear();this.root.visible=false;
-        this.caseRoot.visible=false;this.carrierFlash.hide();
+        this.caseRoot.visible=false;
         for(const visual of this.extraCases.values())visual.dispose();this.extraCases.clear();
         this.assignmentDestinations?.clear();this.jurisdictionZones.clear();
     }
@@ -375,10 +274,8 @@ export class ChaosView {
         const contacts=contactShadowsOf(this.scene);
         for(const c of this.corpses.values()){c.hat?.dispose();this.root.remove(c.mesh);contacts?.remove(c.mesh);disposeMeshResources(c.mesh);}
         this.corpses.clear();this.deathStyles.clear();this.replayTick=-Infinity;this.replayJolts.length=0;
-        for(const id of this.armed)this.resolveRat(id)?.setWeapon(undefined);this.armed.clear();
-        // Supply sites remember what they last showed (their claim and restock bursts): they start the clip afresh,
-        // keeping their built props (rebuilding every site's was a quarter of each loop's restart).
-        for(const visual of this.pickups.values())visual.restart();
+
+        this.supplies.restart();
         this.traps.clear();this.safes.clear();this.impacts.clear();this.crossfire.clear();
         this.gripSwing=0;this.gripHitAt=-Infinity;
     }
@@ -402,12 +299,7 @@ export class ChaosView {
     private lastHitPoint=false;
     /** From two hit points Quick Fix kits glow green through walls. */
     private fixXray=false;
-    /** Screen beacons for Quick Fix kits at low health. DOM, so the black-and-white
-     * city never turns them grey. */
-    private readonly fixBeacons:HTMLElement[]=[];
-    /** Scratch for `updateFixBeacons`: the nearest ready kits and their squared distances, nearest first. */
-    private readonly nearestFixes:PickupVisual[]=[];
-    private readonly nearestFixDistances:number[]=[];
+
     setLastHitPoint(on:boolean):void {
         if(on===this.lastHitPoint)return;
         this.lastHitPoint=on;
@@ -416,8 +308,7 @@ export class ChaosView {
     setFixXray(on:boolean):void {
         if(on===this.fixXray)return;
         this.fixXray=on;
-        for(const visual of this.pickups.values())visual.setXray(on);
-        if(!on)for(const beacon of this.fixBeacons)beacon.style.display='none';
+        this.supplies.setXray(on);
     }
     corpseOf(victimId:string):THREE.Vector3|undefined {
         // Newest matching corpse only; an older body of the same rat may still be lying elsewhere.
@@ -433,69 +324,17 @@ export class ChaosView {
         this.deathStyles.set(victimId,{style,headshot,at:this.clock()});
         if(this.deathStyles.size>32)this.deathStyles.delete(this.deathStyles.keys().next().value!);
     }
-    shotResult(message:Extract<ServerMessage,{type:'shotResult'}>):void {if(message.outcome==='rejected'){this.traps.reject(message.shotId);if(this.state)this.syncWeapons(this.state);}this.localShots.result(message);this.reactions.shotResult(message);}
+    shotResult(message:Extract<ServerMessage,{type:'shotResult'}>):void {if(message.outcome==='rejected'){this.traps.reject(message.shotId);if(this.state)this.supplies.syncWeapons(this.state);}this.localShots.result(message);this.reactions.shotResult(message);}
     /** Use the exact segment crossed this display frame so high-speed movement
      * cannot step over a small pickup between render samples. */
-    interaction(from:Vec3Data,to:Vec3Data,fullHealth:boolean):InteractionCandidate|undefined {
-        const state=this.state;if(!state)return;
-        const now=state.time+Math.min(80,Math.max(0,this.clock()-this.receivedAt));
-        let best:InteractionCandidate|undefined,bestDistance=Infinity;
-        const consider=(candidate:InteractionCandidate,p:Vec3Data,radius:number)=>{
-            const closest=closestPointOnSegment(from,to,p),distance=Math.hypot(closest.x-p.x,closest.y-p.y,closest.z-p.z);
-            if(distance<=radius&&distance<bestDistance){best=candidate;bestDistance=distance;}
-        };
-        const c=state.case;
-        const classicWeaponized=state.dispatch.phase==='active'&&incidentInfo(state.dispatch.incident).id==='evidence-tampering';
-        if(!this.anticipatedCase&&!c.owner&&!c.returningUntil&&!c.missileOwner&&!classicWeaponized&&state.assignment?.phase!=='closed'&&
-            Math.hypot(c.v.x,c.v.y,c.v.z)<=CHAOS_TUNING.casePickupMaxSpeed&&now>=c.pickupAfter)
-            // Interaction runs before update(): the rendered prop may still be
-            // in yesterday's paw after a delivery/drop/reset snapshot. Use the
-            // current authoritative pickup position, never that stale mesh.
-            consider({target:'case',targetId:'primary',generation:c.pickupAfter},c.p,CHAOS_TUNING.pickupRadius);
-        for(const pickup of state.pickups??[]){
-            if((pickup.availableAt??0)>now||this.pendingTarget('pickup',pickup.id)||fullHealth&&pickup.kind==='quick-fix')continue;
-            consider({target:'pickup',targetId:pickup.id,generation:pickup.availableAt??0,pickup:pickup.kind},pickup,PICKUP_TUNING.claimRadius);
-        }
-        return best;
-    }
-    private pendingTarget(target:PickupTarget,targetId:string):boolean {
-        return [...this.pendingInteractions.values()].some(candidate=>candidate.target===target&&candidate.targetId===targetId);
-    }
-    anticipateInteraction(interactionId:string,candidate:InteractionCandidate):void {
-        this.pendingInteractions.set(interactionId,candidate);
-        if(candidate.target==='pickup')this.pickups.get(candidate.targetId)?.setPending(true);
-        else this.anticipatedCase={};
-    }
-    resolveInteraction(message:Extract<ServerMessage,{type:'pickupResult'}>):void {
-        const candidate=this.pendingInteractions.get(message.interactionId);this.pendingInteractions.delete(message.interactionId);
-        if(message.target==='pickup'){
-            if(message.accepted)this.acceptedPickups.set(message.targetId,{generation:candidate?.generation??0,tick:message.tick,epoch:message.epoch});
-            else this.pickups.get(message.targetId)?.setPending(false);
-        }else if(candidate){
-            // A cancelled/previous-round claim cannot resurrect a carried case.
-            const superseded=this.state?.epoch!==message.epoch||
-                this.state.tick!==undefined&&this.state.tick>message.tick;
-            this.anticipatedCase=message.accepted&&!superseded?{acceptedTick:message.tick,epoch:message.epoch}:null;
-        }
-    }
-    clearInteractions():void {
-        this.pendingInteractions.clear();this.acceptedPickups.clear();this.anticipatedCase=null;
-        for(const visual of this.pickups.values())visual.setPending(false);
-    }
-    cancelInteraction(interactionId:string):void {
-        const candidate=this.pendingInteractions.get(interactionId);this.pendingInteractions.delete(interactionId);
-        if(candidate?.target==='pickup')this.pickups.get(candidate.targetId)?.setPending(false);
-        else if(candidate)this.anticipatedCase=null;
-    }
+    interaction(from:Vec3Data,to:Vec3Data,fullHealth:boolean):InteractionCandidate|undefined {return this.interactions.interaction(from,to,fullHealth);}
+    anticipateInteraction(id:string,candidate:InteractionCandidate):void {this.interactions.anticipateInteraction(id,candidate);}
+    resolveInteraction(message:Extract<ServerMessage,{type:'pickupResult'}>):void {this.interactions.resolveInteraction(message);}
+    clearInteractions():void {this.interactions.clearInteractions();}
+    cancelInteraction(id:string):void {this.interactions.cancelInteraction(id);}
     apply(state:ChaosState){
         const previous=this.state;
-        if(previous&&(previous.epoch!==state.epoch||previous.assignment?.roundId!==state.assignment?.roundId))this.clearInteractions();
-        else if(state.case.owner||previous&&((state.assignment?.deliverySerial??0)>(previous.assignment?.deliverySerial??0))){
-            // Ownership and a delivery are authoritative even if a claim result
-            // is still pending. Never keep an old grip across case relocation.
-            this.anticipatedCase=null;
-            for(const [id,candidate] of this.pendingInteractions)if(candidate.target==='case')this.pendingInteractions.delete(id);
-        }
+        this.interactions.reconcile(previous,state);
         const grip=state.case.owner?state.case.grip??0:0;
         if(grip>(previous?.case.owner===state.case.owner?previous?.case.grip??0:0)){
             this.gripHitAt=this.clock();this.caseMotion.kick();this.feedback?.(grip>=2?'case-grip-2':'case-grip-1',state.case.p);
@@ -509,8 +348,7 @@ export class ChaosView {
         this.foley?.apply(state);
         this.state=state;this.root.visible=true;this.receivedAt=this.replay?state.time:this.clock();
         if(this.replay&&!Number.isFinite(this.replayTick))this.replayTick=Math.floor(state.time/(this.replay.corpseStep*1000))*this.replay.corpseStep*1000;
-        if(this.anticipatedCase?.acceptedTick!==undefined&&state.epoch===this.anticipatedCase.epoch&&(state.tick??0)>=this.anticipatedCase.acceptedTick)
-            this.anticipatedCase=null;
+        this.interactions.applied(state);
         if(this.extrapolate){this.presentation.apply(state,this.receivedAt);this.localShots.apply(state,this.receivedAt);}
         this.beams.apply(state.beams);
         const extraIds=new Set((state.extraCases??[]).map(c=>c.id));
@@ -520,11 +358,11 @@ export class ChaosView {
             if(!visual){visual=new ExtraCaseVisual(this.scene,extra.id,this.resolveRat,this.extrapolate);this.extraCases.set(extra.id,visual);}
             visual.apply(state,extra,this.receivedAt);
         }
-        this.syncPickups(state);
-        this.syncWeapons(state);
+        this.supplies.syncPickups(state);
+        this.supplies.syncWeapons(state);
         this.traps.apply(state.traps,previous!==undefined,state.time);
         this.safes.apply(state.safes,previous!==undefined);
-        this.noteLocalBuffs(state);
+        this.supplies.noteLocalBuffs(state);
         for(const hit of state.impacts){
             if(!hit.audioOnly)this.impacts.emit(this.impactPoint.set(hit.p.x,hit.p.y,hit.p.z),this.impactNormal.set(hit.n.x,hit.n.y,hit.n.z),hit.surface,hit.scale??1);
             if(hit.cue==='thud')this.synth('thud',hit.p);
@@ -574,99 +412,6 @@ export class ChaosView {
         }
     }
     /** Pickups are static world props: build and place on the snapshot, animate each frame. */
-    private syncPickups(state:ChaosState):void{
-        const live=new Set((state.pickups??[]).map(p=>p.id));
-        for(const [id,visual] of this.pickups)if(!live.has(id)){visual.dispose();this.pickups.delete(id);}
-        for(const pickup of state.pickups??[]){
-            let visual=this.pickups.get(pickup.id);
-            // A site rolls its next pickup on each claim and round: rebuild its prop once the claim pop has played.
-            if(visual&&visual.kind!==pickup.kind&&visual.settled){visual.dispose();this.pickups.delete(pickup.id);visual=undefined;}
-            if(!visual){visual=new PickupVisual(this.scene,pickup.kind);visual.setXray(this.fixXray);this.pickups.set(pickup.id,visual);}
-            visual.setPosition(pickup.x,pickup.y,pickup.z);
-            visual.setAvailableAt(pickup.availableAt??0);
-            const accepted=this.acceptedPickups.get(pickup.id);
-            if(accepted&&state.epoch===accepted.epoch&&(state.tick??0)>=accepted.tick&&(pickup.availableAt??0)!==accepted.generation)
-                this.acceptedPickups.delete(pickup.id);
-            visual.setPending(this.pendingTarget('pickup',pickup.id)||this.acceptedPickups.has(pickup.id));
-        }
-    }
-    /** Every rat shows the special weapon it holds; one that holds none any more gets its pistol back. */
-    private syncWeapons(state:ChaosState):void{
-        for(const id of this.armed)if(!heldWeapon(state.buffs,id,state.time)){this.resolveRat(id)?.setWeapon(undefined);this.armed.delete(id);}
-        for(const id in state.buffs){
-            const weapon=heldWeapon(state.buffs,id,state.time);
-            // A new weapon is shown immediately; acquisition does not lock the trigger.
-            if(weapon){if(id===this.myId&&weapon==='mousetrap'&&this.traps.pending)continue;this.resolveRat(id)?.setWeapon(weapon);this.armed.add(id);}
-        }
-    }
-    /** Announce a claim locally when the authoritative buff first appears; a new view's first state (a reconnect
-     * with a buff running) is only the baseline. */
-    private noteLocalBuffs(state:ChaosState):void{
-        if(!this.myId)return;
-        const mine=state.buffs?.[this.myId],seen=this.buffsSeen;this.buffsSeen=true;
-        for(const kind of TIMED_PICKUPS){
-            const until=mine?.[BUFF_FIELD[kind]]??0;
-            if(seen&&until!==this.localBuffs[kind]&&until>state.time)this.pickupFeedback(kind);
-            this.localBuffs[kind]=until;
-        }
-        const weapon=entryWeapon(mine,state.time),until=mine?.weaponUntil??0;
-        if(seen&&weapon&&(weapon!==this.localWeapon||until!==this.localWeaponUntil)){this.pickupFeedback(weapon);}
-        // W3: the trap is up in your paws: the next press launches it.
-        this.localWeapon=weapon;this.localWeaponUntil=until;
-    }
-    private updateBuffs(buffs:BuffMap|undefined,now:number):void{
-        if(this.resolveRat(this.myId)?.dead){this.clearPickupCards();return;}
-        const mine=activeBuffs(buffs,this.myId,now);
-        if(!this.buffBar||typeof this.buffBar.replaceChildren!=='function')return;
-        for(const kind of TIMED_PICKUPS)this.showCard(kind,mine[BUFF_FIELD[kind]],now);
-        // One special weapon at most: a timed one has a clock like a supply, the Mousetrap is held until thrown.
-        for(const kind of WEAPON_KINDS)this.showCard(kind,mine.weapon===kind?mine.weaponUntil??Infinity:undefined,now);
-        const healing=this.buffCards.get('quick-fix');
-        if(this.clock()<this.healingUntil){
-            if(!healing){const card=powerupCard('quick-fix');card.setAttribute('role','status');
-                this.buffCards.set('quick-fix',card);this.buffBar.appendChild(card);}
-        }else {if(healing)leave(healing,'paperSlide',CARD_EXIT);this.buffCards.delete('quick-fix');}
-        // Code Violation's dud: its own condemned card, saying what it does to you (the first time), until it wears off.
-        if(this.dud&&this.dud.kind!==mine.faulty){leave(this.dud.card,'paperSlide',CARD_EXIT);this.dud=undefined;}
-        if(mine.faulty&&mine.faultyUntil!==undefined){
-            if(!this.dud){
-                this.dud={kind:mine.faulty,card:faultyCard(mine.faulty)};this.buffBar.appendChild(this.dud.card);
-                this.dud.card.classList.toggle('explained',!headlines.firstTime(`dud-${mine.faulty}`));
-            }
-            this.tickCard(this.dud.card,mine.faultyUntil-now,FAULTY_MS[mine.faulty]);
-        }
-        // A Mousetrap's hold: the HELD card (what it means the first time) and its clock until the trap lets go.
-        if(mine.trappedUntil!==undefined){
-            if(!this.held){this.held=heldCard();this.held.classList.toggle('explained',!headlines.firstTime('held'));this.buffBar.appendChild(this.held);}
-            this.tickCard(this.held,mine.trappedUntil-now,WEAPON_TUNING.trapHoldMs);
-        }else if(this.held){leave(this.held,'paperSlide',CARD_EXIT);this.held=undefined;}
-        // K3: the HOT CASE card for as long as you carry the buffed case (it replaced the first-time explanation).
-        const s=this.state,carrying=!!s&&s.case.owner===this.myId&&s.assignment?.phase==='active';
-        if(carrying&&!this.hotCase){this.hotCase=hotCaseCard();this.buffBar.appendChild(this.hotCase);}
-        else if(!carrying&&this.hotCase){leave(this.hotCase,'paperSlide',CARD_EXIT);this.hotCase=undefined;}
-        this.buffBar.style.display=this.buffBar.childElementCount?'flex':'none';
-    }
-    /** Show, tick or drop the card of an effect running until `until` (Infinity: held until used). */
-    private showCard(kind:TimedPickup|WeaponKind,until:number|undefined,now:number):void{
-        if(!this.buffBar)return;
-        let card=this.buffCards.get(kind);
-        if(!until){if(card)leave(card,'paperSlide',CARD_EXIT);this.buffCards.delete(kind);return;}
-        if(!card){
-            card=powerupCard(kind);this.buffCards.set(kind,card);this.buffBar.appendChild(card);
-            // Ironclad (cheese bounces off you, traps still hold you) and Stakeout are explained the first time.
-            if(kind==='ironclad'||kind==='stakeout')headlines.explain(kind);
-        }
-        const duration=isTimedPickup(kind)?BUFF_MS[kind]:WEAPON_MS[kind];
-        if(duration!==undefined)this.tickCard(card,until-now,duration);
-    }
-    /** A timed card's seconds clock and gauge, `remaining` of `duration` ms; it flickers through its last three seconds. */
-    private tickCard(card:HTMLElement,remaining:number,duration:number):void{
-        remaining=Math.max(0,remaining);
-        const seconds=String(Math.ceil(remaining/1000)),clock=card.querySelector('b')!;
-        if(clock.textContent!==seconds)clock.textContent=seconds;
-        card.style.setProperty('--remaining',String(Math.min(1,remaining/duration)));
-        card.classList.toggle('powerup-expiring',remaining<=3000);
-    }
 
     private setCarrier(entity:RatEntity|null){
         if(this.carrier===entity)return;
@@ -692,7 +437,7 @@ export class ChaosView {
         // The solo preview already stepped physics this frame. Extrapolating it
         // again counted CPU/render preparation time as extra ball travel.
         const elapsed=this.extrapolate?Math.min((renderTime-this.receivedAt)/1000,.08):0,now=s.time+elapsed*1000;
-        const predictedOwner=this.anticipatedCase&&!s.case.owner?this.resolveRat(this.myId):undefined;
+        const predictedOwner=this.interactions.caseAnticipated&&!s.case.owner?this.resolveRat(this.myId):undefined;
         const owner=s.case.owner?this.resolveRat(s.case.owner):predictedOwner;
         this.setCarrier(owner&&!owner.dead?owner:null);
         this.caseRoot.scale.setScalar(owner?1:CASE_LOOSE_SCALE);
@@ -725,18 +470,18 @@ export class ChaosView {
         this.caseFiles.marks.pigeons.self=this.myId;this.caseFiles.update(s.clues??[],now,camera,dt,this.resolveRat(this.myId)?.mesh.position,s.prints??[],s);
         this.hotLook.update(camera,renderTime,s.case,now,this.carrier,this.arm?.parent??null);
         // Physical evidence replaces the primary case's through-wall and screen locators.
-        this.carrierFlash.hide();
+
         for(const visual of this.extraCases.values())visual.update(camera,renderTime,now);
-        for(const visual of this.pickups.values())visual.update(now,camera);
+        this.supplies.updateProps(now,camera);
         this.safes.update(dt,now,camera);
-        if(this.buffBar)this.updateBuffs(s.buffs,now);
+        this.supplies.updateCards(s.buffs,now);
         if(this.onCarry){
             const self=this.resolveRat(this.myId),mine=s.case.owner===this.myId&&s.assignment?.phase==='active'&&!!self&&!self.dead;
             this.onCarry(mine?s.case:null,now,mine?this.caseUrgency(s):0);
         }
-        if(this.claimed){const kind=this.claimed;this.claimed=undefined;this.claim(kind,camera);}
+        this.supplies.presentClaim(camera);
 
-        if(this.fixXray)this.updateFixBeacons(camera,now);
+        if(this.fixXray)this.supplies.updateFixBeacons(camera,now);
         this.bullets.count=0;this.chargedBullets.count=0;this.chargedGlow.count=0;this.missileTrail.count=0;this.dangerGlow.count=0;this.dangerTrails.count=0;
         const active=s.dispatch.phase==='active'?incidentInfo(s.dispatch.incident).id:undefined,crossfire=active==='crossfire';
         // Bad Ammunition: each ball's personality shows in its look as well as its path (the path itself is real): a
@@ -897,35 +642,7 @@ export class ChaosView {
         const along=rx*v.x+ry*v.y+rz*v.z,speed2=v.x*v.x+v.y*v.y+v.z*v.z;
         return along>0&&speed2>0&&d2-along*along/speed2<THREAT.miss*THREAT.miss;
     }
-    private updateFixBeacons(camera:THREE.Camera,now:number){
-        // The three nearest ready kits, kept sorted by insertion; equal distances keep pickup order.
-        const nearest=this.nearestFixes,distances=this.nearestFixDistances;
-        let found=0;
-        for(const visual of this.pickups.values()){
-            if(!visual.readyQuickFix(now))continue;
-            const d=visual.root.position.distanceToSquared(camera.position);
-            if(found===3&&!(d<distances[2]))continue;
-            let i=found<3?found++:2;
-            for(;i>0&&distances[i-1]>d;i--){distances[i]=distances[i-1];nearest[i]=nearest[i-1];}
-            distances[i]=d;nearest[i]=visual;
-        }
-        for(let i=0;i<3;i++){
-            let beacon=this.fixBeacons[i];
-            const visual=i<found?nearest[i]:undefined;
-            if(!visual){if(beacon)beacon.style.display='none';continue;}
-            if(!beacon){
-                // Styled in dispatchHud.css; only its projected position changes per frame.
-                beacon=document.createElement('div');beacon.className='quick-fix-beacon';beacon.setAttribute('aria-hidden','true');
-                beacon.textContent='+';document.body.appendChild(beacon);this.fixBeacons[i]=beacon;
-            }
-            this.p.copy(visual.root.position);this.p.y+=1.3;
-            const location=locateCase(this.p,camera,window.innerWidth,window.innerHeight);
-            beacon.style.display='block';
-            beacon.style.transform=`translate(${location.x-20}px,${location.y-20}px) scale(${(1+Math.sin(now*.006)*.08)*(i===0?1:.8)})`;
-            beacon.style.opacity=i===0?'1':'.7';
-        }
-    }
-    /** The marker's inline opacity while it shows a ping (-1: the stylesheet's). */
+
     /** How near a carried case is to where it scores (the Paper Chase drop-off or the active Jurisdiction zone): 0 from
      * `CASE_TARGET_FAR` units or with no target, 1 there: the hot case heartbeat quickens with it. */
     caseUrgency(s:ChaosState):number {
@@ -947,18 +664,17 @@ export class ChaosView {
     getDiagnostics(){return {clues:this.caseFiles.visibleIds,receivedShots:this.state?.shots.length??0,renderedBalls:this.bullets.count+this.chargedBullets.count,corpses:this.corpses.size,snapshotAgeMs:this.receivedAt?performance.now()-this.receivedAt:null,presentation:this.extrapolate?this.presentation.diagnostics():null};}
     dispose(){
         this.caseFiles.dispose();
-        for(const beacon of this.fixBeacons)beacon.remove();
+
         for(const c of this.corpses.values())c.hat?.dispose();
-        this.clearPickupCards();this.buffBar?.remove();for(const chip of this.claimChips.values())chip.remove();
+        this.supplies.dispose();
         this.clearInteractions();
         this.localShots.clear();
         this.pillars.dispose();this.assignmentDestinations?.dispose();this.jurisdictionZones.dispose();
         this.presentation.clear();
         for(const visual of this.extraCases.values())visual.dispose();this.extraCases.clear();
-        // Supply sites live at the scene root: a reconnect's new view would otherwise draw over stale ones.
-        for(const visual of this.pickups.values())visual.dispose();this.pickups.clear();
-        this.traps.dispose();this.safes.dispose();for(const id of this.armed)this.resolveRat(id)?.setWeapon(undefined);this.armed.clear();
-        this.pressureMachine.dispose();this.carrierFlash.dispose();this.setCarrier(null);this.hotLook.dispose();this.hud?.dispose();this.scanner?.dispose();this.root.removeFromParent();this.caseRoot.removeFromParent();
+
+        this.traps.dispose();this.safes.dispose();
+        this.pressureMachine.dispose();this.setCarrier(null);this.hotLook.dispose();this.hud?.dispose();this.scanner?.dispose();this.root.removeFromParent();this.caseRoot.removeFromParent();
         const contacts=contactShadowsOf(this.scene);contacts?.remove(this.caseRoot);for(const c of this.corpses.values())contacts?.remove(c.mesh);
         disposeMeshResources(this.caseRoot);
         // The incident sounds are the live view's (module-wide); a replay's own voices end with its bus.

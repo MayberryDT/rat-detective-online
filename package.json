@@ -27,7 +27,8 @@
     "smoke:gameplay": "SMOKE_GAMEPLAY=1 node scripts/smoke-browser.mjs",
     "benchmark:local": "node scripts/benchmark-local.mjs",
     "benchmark:prepare-hosted": "node scripts/prepare-hosted-capacity.mjs",
-    "benchmark:hosted": "node scripts/benchmark-hosted.mjs"
+    "benchmark:hosted": "node scripts/benchmark-hosted.mjs",
+    "check:repository": "node scripts/check-repository.mjs"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.22.0",

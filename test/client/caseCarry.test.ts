@@ -1,16 +1,16 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three';
-import { ChaosView } from '../../src/prototype/ChaosView';
+import { ChaosView } from '../../src/presentation/ChaosView';
 import { ChaosSimulation } from '../../src/shared/ChaosSimulation';
 import { CASE_HOME, CASE_SIZE, CHAOS_TUNING } from '../../src/shared/chaosState';
 import type { PlayerData } from '../../src/shared/networkProtocol';
 import type { RatEntity } from '../../src/entities/RatEntity';
-import { createRatMesh } from '../../src/utils/RatModel';
-import { RatAnimator } from '../../src/utils/RatAnimator';
+import { createRatMesh } from '../../src/rat/RatModel';
+import { RatAnimator } from '../../src/rat/RatAnimator';
 import { createAssignment, destinationPoint, activeDestination, ASSIGNMENT_TUNING } from '../../src/shared/assignments';
 import { ChaosEncoder, ChaosDecoder } from '../../src/shared/chaosWire';
 
-vi.mock('../../src/prototype/DispatchHud',()=>({DispatchHud:class{update(){} setScores(){} dispose(){}}}));
+vi.mock('../../src/presentation/DispatchHud',()=>({DispatchHud:class{update(){} setScores(){} dispose(){}}}));
 
 // This is a held-case transform/deflection check, not a city geometry test.
 vi.mock('../../src/shared/grayboxLayout', () => ({

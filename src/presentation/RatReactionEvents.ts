@@ -1,7 +1,7 @@
 import type {ChaosState} from '../shared/chaosState';
 import type {ServerMessage} from '../shared/networkProtocol';
 import type {RatEntity} from '../entities/RatEntity';
-import type {RatReaction} from '../utils/RatActing';
+import type {RatReaction} from '../rat/RatActing';
 
 /** Sideways speed (u/s) from which a shove reads as being knocked flying. */
 export const HARD_SHOVE=15;

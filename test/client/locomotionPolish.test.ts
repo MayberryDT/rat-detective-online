@@ -1,9 +1,9 @@
 import {feelState} from '../../src/feel/feelState';
 import {expect,it} from 'vitest';
 import * as THREE from 'three';
-import {RatAnimator} from '../../src/utils/RatAnimator';
-import {RatLocomotionFollowThrough} from '../../src/utils/RatLocomotionFollowThrough';
-import {createRatMesh} from '../../src/utils/RatModel';
+import {RatAnimator} from '../../src/rat/RatAnimator';
+import {RatLocomotionFollowThrough} from '../../src/rat/RatLocomotionFollowThrough';
+import {createRatMesh} from '../../src/rat/RatModel';
 import {disposeMeshResources} from '../../src/utils/disposeMeshResources';
 import {AcceptedRatAnimator} from '../visual/reference/AcceptedRatAnimator';
 import {locomotionStudy} from '../visual/locomotionStudy';

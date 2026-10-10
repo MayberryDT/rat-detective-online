@@ -4,7 +4,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { createStage } from '../../src/session/createStage';
 import { CLOTHING_PALETTE, HIGHLIGHT_PALETTE, FUR_PALETTE, DEFAULT_APPEARANCE, generateRandomAppearance } from '../../src/shared/ratAppearance';
 import type { RatAppearance } from '../../src/shared/networkProtocol';
-import type { Neighborhood } from '../../src/prototype/Neighborhood';
+import type { Neighborhood } from '../../src/presentation/Neighborhood';
 import { CITY_PREVIEW_SEED, GRAYBOX_VERSION } from '../../src/shared/grayboxLayout';
 import { disposeMeshResources } from '../../src/utils/disposeMeshResources';
 import { OutfitStudioSubject, type OffHandMode, type ModelStudy } from './OutfitStudioSubject';
@@ -167,7 +167,7 @@ async function setEnvironment(next:string){
         preparing=true;el('loading').hidden=false;
         cityPromise??=(async()=>{
             const before=new Set(scene.children);
-            const {Neighborhood}=await import('../../src/prototype/Neighborhood');
+            const {Neighborhood}=await import('../../src/presentation/Neighborhood');
             city=await Neighborhood.prepare(scene,world,{seed:CITY_PREVIEW_SEED,version:GRAYBOX_VERSION},abort.signal);
             cityObjects=scene.children.filter(o=>!before.has(o));
         })();

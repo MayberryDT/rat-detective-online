@@ -5,7 +5,7 @@ import {disposeMeshResources} from '../utils/disposeMeshResources';
 import {batchRigidMeshes} from '../utils/RigidMeshBatch';
 import {PickupRespawnVisual} from './PickupRespawnVisual';
 import {TRAP_SCALE,TRAP_TALL,type PickupKind} from '../shared/pickups';
-import {PartKit,mousetrap,rayGun,revolver,revolverCylinder,tommyGun,weaponFinish,type WeaponFinish} from '../utils/WeaponModel';
+import {PartKit,mousetrap,rayGun,revolver,revolverCylinder,tommyGun,weaponFinish,type WeaponFinish} from '../rat/WeaponModel';
 import {kickDust} from '../feel/Dust';
 import {supplyCue} from '../feel/supplyCues';
 import {freezeStatic} from '../utils/freezeStatic';

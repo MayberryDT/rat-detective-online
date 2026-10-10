@@ -1,7 +1,7 @@
 // Frozen approved movement pass, before the full acting pass.
 import * as THREE from 'three';
-import {updateGunSleeve,type GunSleeveRig} from '../../../src/utils/RatArmModel';
-import { RatLocomotionFollowThrough } from '../../../src/utils/RatLocomotionFollowThrough';
+import {updateGunSleeve,type GunSleeveRig} from '../../../src/rat/RatArmModel';
+import { RatLocomotionFollowThrough } from '../../../src/rat/RatLocomotionFollowThrough';
 
 const PARTS = ['rat-body', 'rat-head', 'rat-hat', 'rat-tail',
     'rat-eye-left', 'rat-eye-right', 'rat-ear-left', 'rat-ear-right', 'rat-arm', 'rat-pistol'] as const;

@@ -10,10 +10,10 @@
  */
 import * as THREE from 'three';
 import {createStage} from '../../src/session/createStage';
-import {Neighborhood} from '../../src/prototype/Neighborhood';
+import {Neighborhood} from '../../src/presentation/Neighborhood';
 import {FeelDirector} from '../../src/feel/FeelDirector';
 import {RatEntity} from '../../src/entities/RatEntity';
-import {SafeField} from '../../src/prototype/SafeVisual';
+import {SafeField} from '../../src/presentation/SafeVisual';
 import {SAFE} from '../../src/shared/safes';
 import {isIncidentId} from '../../src/shared/incidentCatalog';
 

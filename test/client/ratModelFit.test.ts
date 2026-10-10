@@ -2,7 +2,7 @@ import { expect, it } from 'vitest';
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import { RatEntity } from '../../src/entities/RatEntity';
-import type { HatType } from '../../src/utils/RatModel';
+import type { HatType } from '../../src/rat/RatModel';
 
 it('keeps the whole rear seam centered and outside the coat through walking, turning and firing',()=>{
     const rat=new RatEntity(new THREE.Scene(),new CANNON.World(),new THREE.Vector3(),'Seam');

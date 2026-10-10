@@ -1,14 +1,14 @@
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import { RemotePlayers } from '../session/RemotePlayers';
-import { ChaosView } from '../prototype/ChaosView';
+import { ChaosView } from '../presentation/ChaosView';
 import { CameraBlockers } from '../player/CameraBlockers';
 import { SHOULDER } from '../player/ShoulderCamera';
 import { REPLAY_ROUTE } from '../audio/PlayerAudioMix';
 import type { GunshotCue } from '../audio/GunshotAudio';
-import { isolateRagdollWorld } from '../utils/RatCorpseChain';
+import { isolateRagdollWorld } from '../rat/RatCorpseChain';
 import { Dust, registerDust } from '../feel/Dust';
-import type { DeathStyle } from '../utils/RatAnimator';
+import type { DeathStyle } from '../rat/RatAnimator';
 import type { SnapshotPose } from '../shared/SnapshotBuffer';
 import type { PlayerData, Vec3Data } from '../shared/networkProtocol';
 import type { ChaosState } from '../shared/chaosState';

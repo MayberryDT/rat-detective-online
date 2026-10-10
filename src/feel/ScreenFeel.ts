@@ -3,7 +3,7 @@ import {FEEL} from './feelTuning';
 import './feel.css';
 import {reducedMotion,replay,scrawl,uiMotion} from '../ui/motion';
 import {headlines} from '../ui/Headlines';
-import {CASE_RED} from '../prototype/caseRed';
+import {CASE_RED} from '../presentation/caseRed';
 
 const ARROWS=4;
 const CASE_RED_CSS=`#${CASE_RED.toString(16).padStart(6,'0')}`;

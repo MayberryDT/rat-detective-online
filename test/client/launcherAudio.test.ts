@@ -2,7 +2,7 @@ import {effectsOutput} from '../../src/audio/PlayerAudioMix';
 import {describe, expect, it, vi} from 'vitest';
 import * as THREE from 'three';
 import {LauncherAudio} from '../../src/audio/LauncherAudio';
-import {PressureMachine} from '../../src/prototype/PressureMachine';
+import {PressureMachine} from '../../src/presentation/PressureMachine';
 import {LAUNCH_MACHINES} from '../../src/shared/chaosState';
 import {worldSoundGain} from '../../src/audio/worldSoundGain';
 

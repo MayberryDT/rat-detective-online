@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vite
 import { MAX_HP, PROTOCOL_VERSION, type PlayerData, type ServerMessage } from '../../src/shared/networkProtocol';
 import type { ChaosState } from '../../src/shared/chaosState';
 import { createAssignment } from '../../src/shared/assignments';
-import {ChaosView} from '../../src/prototype/ChaosView';
+import {ChaosView} from '../../src/presentation/ChaosView';
 import {playerPreferences} from '../../src/settings/PlayerPreferences';
 import {MUNICIPAL_QUIPS} from '../../src/ui/municipalQuips';
 import { GRAYBOX_VERSION as version } from '../../src/shared/grayboxLayout';
@@ -214,10 +214,10 @@ vi.mock('../../src/ui/MatchScoreboard', () => ({ MatchScoreboard: harness.FakeSc
 vi.mock('../../src/weapons/CheeseGun', () => ({ CheeseGun: harness.FakeGun }));
 vi.mock('../../src/session/RemotePlayers', () => ({ RemotePlayers: harness.FakeRemotes }));
 vi.mock('../../src/world/CityGenerator', () => ({ CityGenerator: harness.FakeCity }));
-vi.mock('../../src/prototype/Neighborhood', () => ({ Neighborhood: class extends harness.FakeCity {
+vi.mock('../../src/presentation/Neighborhood', () => ({ Neighborhood: class extends harness.FakeCity {
     constructor(scene: unknown, world: unknown, spec: {seed:number;version:number}) { super(scene,world,undefined,spec); }
 } }));
-vi.mock('../../src/prototype/ChaosView', () => ({ ChaosView: class {
+vi.mock('../../src/presentation/ChaosView', () => ({ ChaosView: class {
     setObserving() {} setScores() {} setIncidentRoster() {} showHealing() {} dispose() {} apply() {} launch() {} fire() {} resetProjectiles() {} update() {}
 } }));
 vi.mock('../../src/player/RatController', () => ({ RatController: harness.FakeRat }));

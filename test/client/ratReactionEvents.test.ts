@@ -1,6 +1,6 @@
 import {expect,it,vi} from 'vitest';
 import * as THREE from 'three';
-import {RatReactionEvents} from '../../src/prototype/RatReactionEvents';
+import {RatReactionEvents} from '../../src/presentation/RatReactionEvents';
 import {ChaosSimulation} from '../../src/shared/ChaosSimulation';
 import type {RatEntity} from '../../src/entities/RatEntity';
 import {createAssignment} from '../../src/shared/assignments';

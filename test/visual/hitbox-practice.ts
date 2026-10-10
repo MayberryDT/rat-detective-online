@@ -1,13 +1,13 @@
 import {FeedbackAudio} from '../../src/audio/FeedbackAudio';
 import {HeldFire} from '../../src/session/HeldFire';
 import {WEAPON_TUNING} from '../../src/shared/pickups';
-import {LaserBeamVisual} from '../../src/prototype/LaserBeamVisual';
-import {TrapField} from '../../src/prototype/TrapVisual';
-import {PickupVisual} from '../../src/prototype/PickupVisual';
+import {LaserBeamVisual} from '../../src/presentation/LaserBeamVisual';
+import {TrapField} from '../../src/presentation/TrapVisual';
+import {PickupVisual} from '../../src/presentation/PickupVisual';
 import * as THREE from 'three';
 import * as C from 'cannon-es';
 import {createStage} from '../../src/session/createStage';
-import {Neighborhood} from '../../src/prototype/Neighborhood';
+import {Neighborhood} from '../../src/presentation/Neighborhood';
 import {RatController} from '../../src/player/RatController';
 import {InputState} from '../../src/session/InputState';
 import {bindPointerLockMenu} from '../../src/session/PointerLockMenu';

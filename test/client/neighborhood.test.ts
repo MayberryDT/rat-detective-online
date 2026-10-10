@@ -1,7 +1,7 @@
 import {expect,it} from 'vitest';
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
-import {Neighborhood,ENTRIES} from '../../src/prototype/Neighborhood';
+import {Neighborhood,ENTRIES} from '../../src/presentation/Neighborhood';
 import {RatController} from '../../src/player/RatController';
 import {CheeseGun} from '../../src/weapons/CheeseGun';
 import {GRAYBOX_SPAWNS} from '../../src/shared/grayboxLayout';

@@ -1,34 +1,21 @@
-import {SafeField} from '../prototype/SafeVisual';
-import {CaseFiles} from '../prototype/CaseFiles';
-import {NoirCity} from '../feel/NoirCity';
-import {HeavyCheese} from '../feel/HeavyCheese';
-import {TrapField} from '../prototype/TrapVisual';
+import {populateWarmStandIns} from './warmStandIns';
 import * as THREE from 'three';
 import {loadCameos,warmCameoBuffers} from '../cameos/loadCameos';
 import type {CameoView} from '../cameos/CameoView';
 import { GameSession } from './GameSession';
 import { createStage } from './createStage';
-import { Neighborhood } from '../prototype/Neighborhood';
-import { cityBakeKey, openCityBake } from '../prototype/CityBakeCache';
-import { streetReadabilityEnabled } from '../prototype/StreetReadability';
+import { Neighborhood } from '../presentation/Neighborhood';
+import { cityBakeKey, openCityBake } from '../presentation/CityBakeCache';
+import { streetReadabilityEnabled } from '../presentation/StreetReadability';
 import { CityGenerator } from '../world/CityGenerator';
 import { createWorldSpec, type WorldSpec } from '../shared/worldSpec';
 import { GRAYBOX_VERSION } from '../shared/grayboxLayout';
-import { DEFAULT_APPEARANCE } from '../shared/ratAppearance';
 import { RatEntity } from '../entities/RatEntity';
 import { yieldToPage } from './yieldToPage';
 import { checkPrograms, issuePrograms, shadowCasterProbes, uploadTextures, warmPrograms } from './warmPrograms';
 import { readLightingMode } from './lightingMode';
-import { PickupVisual } from '../prototype/PickupVisual';
-import { PickupRespawnVisual } from '../prototype/PickupRespawnVisual';
-import { addLeatherBriefcase } from '../prototype/CaseModel';
-import { HotCaseLook } from '../prototype/HotCaseLook';
-import { PICKUP_KINDS } from '../shared/pickups';
+import { PickupVisual } from '../presentation/PickupVisual';
 import { disposeMeshResources } from '../utils/disposeMeshResources';
-import { PressureMachine } from '../prototype/PressureMachine';
-import { DispatchPillars } from '../prototype/DispatchPillars';
-import { JurisdictionZones } from '../prototype/JurisdictionZones';
-import { createShotDraws } from '../prototype/ChaosView';
 import type { NetworkManager } from '../network/NetworkManager';
 import type { TitleScreen } from '../ui/TitleScreen';
 import type { TitleMusic } from '../ui/TitleMusic';
@@ -61,24 +48,7 @@ export async function createGame(title:TitleScreen,music:TitleMusic,transport:Ne
         // so the city's noir patch never reaches them.
         const early=spec.version===GRAYBOX_VERSION&&readLightingMode()==='pools';
         const scenery=new Set(stage.scene.children);
-        models.push(new RatEntity(stage.scene,stage.world,new THREE.Vector3(),'Preparation',DEFAULT_APPEARANCE));
-        const enemy=new RatEntity(stage.scene,stage.world,new THREE.Vector3(),'Preparation',DEFAULT_APPEARANCE,true);
-        enemy.enableRigidBatching();enemy.sense(.001);models.push(enemy);
-        // An opponent under Ironclad draws its batch with the metal reflection: another program.
-        const ironclad=new RatEntity(stage.scene,stage.world,new THREE.Vector3(),'Preparation',DEFAULT_APPEARANCE,true);
-        ironclad.setPowerups(1e6,0,0);ironclad.enableRigidBatching();models.push(ironclad);
-        // Quick Fix kits grow an x-ray shell at low health.
-        for(const kind of PICKUP_KINDS){const pickup=new PickupVisual(stage.scene,kind);pickup.setXray(true);pickups.push(pickup);}
-        // The carried case's red-hot look (its own coat-rim, spark, print and chain programs) on the batched opponent.
-        const hotLook=new HotCaseLook(stage.scene,briefcase,addLeatherBriefcase(briefcase));stage.scene.add(briefcase);hotLook.warm(enemy);street.push(hotLook);
-        // The welcome builds the launchers, Dispatch pillars, the zones, the
-        // flying cheese and the supplies' restock dials (one per kind: each draws its shared icon); warm them too.
-        const shots=createShotDraws(1),restocks=PICKUP_KINDS.map(kind=>new PickupRespawnVisual(kind));stage.scene.add(shots.root,...restocks.map(dial=>dial.root));
-        street.push(new PressureMachine(stage.scene),new DispatchPillars(stage.scene),new JurisdictionZones(stage.scene),shots,...restocks);
-        const heavyWarm=new HeavyCheese(stage.scene),trapWarm=new TrapField(stage.scene,true);trapWarm.apply([{id:'warm-trap',owner:'warm',x:0,y:0,z:0,yaw:0,hp:8,at:0}],false);street.push(heavyWarm,trapWarm);
-        const safeWarm=new SafeField(stage.scene);safeWarm.warm(stage.camera);street.push(safeWarm);
-        // The live papers are adopted into the noir evidence patch (FeelDirector.adoptEvidence): warm that program.
-        const filesWarm=new CaseFiles();filesWarm.warm();new NoirCity(new THREE.Scene()).adopt(filesWarm.root,true);stage.scene.add(filesWarm.root);street.push(filesWarm);
+        populateWarmStandIns(stage,{models,pickups,briefcase,street});
         const standIns=stage.scene.children.filter(object=>!scenery.has(object));
         for(const model of models)stage.world.removeBody(model.body);
         if(early)await issuePrograms(renderer,stage.scene,stage.camera,signal,standIns);

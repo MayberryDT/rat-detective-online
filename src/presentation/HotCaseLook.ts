@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { RatEntity } from '../entities/RatEntity';
 import { RigidBatch } from '../utils/RigidMeshBatch';
-import { RAT_CARRY_SHOULDER } from '../utils/RatAnimator';
+import { RAT_CARRY_SHOULDER } from '../rat/RatAnimator';
 import { metalReflection } from '../utils/metalReflection';
 import { CASE_HAND, CASE_SIZE, type CaseState } from '../shared/chaosState';
 import { beatPhase, pingFlash } from '../shared/caseHeartbeat';

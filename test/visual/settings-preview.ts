@@ -6,7 +6,7 @@ const prefs=new PreferenceStore({getItem:()=>null,setItem:()=>{}}),menu=new Play
 const params=new URLSearchParams(location.search);
 if(params.has('hud')){
     const [{DispatchHud},{createAssignment},THREE,{AssignmentDestinations}]=await Promise.all([
-        import('../../src/prototype/DispatchHud'),import('../../src/shared/assignments'),import('three'),import('../../src/prototype/AssignmentDestinations')]);
+        import('../../src/presentation/DispatchHud'),import('../../src/shared/assignments'),import('three'),import('../../src/presentation/AssignmentDestinations')]);
     prefs.update({uiScale:Number(params.get('scale')??1)});
     if(innerHeight<=500){await import('../../src/ui/touchControls.css');document.body.classList.add('touch-mode');}
     document.getElementById('title-settings-btn')!.remove();

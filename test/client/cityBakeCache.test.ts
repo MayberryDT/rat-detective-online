@@ -1,9 +1,9 @@
 import {expect,it,vi} from 'vitest';
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
-import {bakeGeometry,CITY_BAKE_READ_MS,cityBakeKey,cityBakeStore,openCityBake,parseCityBake,type BakeDatabase,type BakeDatabaseFactory,type CityBakeRecord,type CityBakeShape,type CityBakeSource,type CityBakeStore} from '../../src/prototype/CityBakeCache';
-import {Neighborhood} from '../../src/prototype/Neighborhood';
-import {FixedLightField} from '../../src/prototype/FixedLighting';
+import {bakeGeometry,CITY_BAKE_READ_MS,cityBakeKey,cityBakeStore,openCityBake,parseCityBake,type BakeDatabase,type BakeDatabaseFactory,type CityBakeRecord,type CityBakeShape,type CityBakeSource,type CityBakeStore} from '../../src/presentation/CityBakeCache';
+import {Neighborhood} from '../../src/presentation/Neighborhood';
+import {FixedLightField} from '../../src/presentation/FixedLighting';
 import {StaticCityBroadphase} from '../../src/shared/StaticCityBroadphase';
 import {CITY_PREVIEW_SEED,GRAYBOX_VERSION} from '../../src/shared/grayboxLayout';
 

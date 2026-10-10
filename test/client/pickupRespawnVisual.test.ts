@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import {afterEach,describe,expect,it,vi} from 'vitest';
-import {PickupVisual} from '../../src/prototype/PickupVisual';
+import {PickupVisual} from '../../src/presentation/PickupVisual';
 import {PICKUP_KINDS} from '../../src/shared/pickups';
-import {PickupRespawnVisual} from '../../src/prototype/PickupRespawnVisual';
+import {PickupRespawnVisual} from '../../src/presentation/PickupRespawnVisual';
 
 vi.mock('../../src/utils/metalReflection',()=>({metalReflection:()=>null}));
 afterEach(()=>vi.unstubAllGlobals());

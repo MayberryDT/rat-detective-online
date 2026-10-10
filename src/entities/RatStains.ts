@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import {COAT_PROFILE} from '../utils/RatCoatGeometry';
-import {ratSpineWeights} from '../utils/RatModel';
+import {COAT_PROFILE} from '../rat/RatCoatGeometry';
+import {ratSpineWeights} from '../rat/RatModel';
 
 const MAX_STAINS=8;
 let sharedGeometry:THREE.ShapeGeometry|undefined;

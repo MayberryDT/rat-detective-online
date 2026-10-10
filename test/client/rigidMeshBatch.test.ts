@@ -1,9 +1,9 @@
 import {feelState} from '../../src/feel/feelState';
 import {it,expect,vi} from 'vitest';
 import * as THREE from 'three';
-import {createRatMesh} from '../../src/utils/RatModel';
-import {RatAnimator} from '../../src/utils/RatAnimator';
-import {RAT_REACTIONS} from '../../src/utils/RatActing';
+import {createRatMesh} from '../../src/rat/RatModel';
+import {RatAnimator} from '../../src/rat/RatAnimator';
+import {RAT_REACTIONS} from '../../src/rat/RatActing';
 import {batchRigidMeshes} from '../../src/utils/RigidMeshBatch';
 import {disposeMeshResources} from '../../src/utils/disposeMeshResources';
 it('preserves every vertex of the living rat (its bending tail included) and every rigid (non-coat) vertex of a bent corpse',()=>{
