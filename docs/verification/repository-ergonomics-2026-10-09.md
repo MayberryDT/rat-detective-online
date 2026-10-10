@@ -69,3 +69,5 @@ CHROME_EXTRA_ARGS="--enable-unsafe-swiftshader --use-angle=swiftshader --mute-au
 ```
 
 Existing supply/results browser, idle-room and transport recovery receipts complement this check. Production was not changed; matching hosted cold-entry qualification and human acceptance remain separate.
+
+Shipped after Tyler authorized merge/deploy: [production release receipt](repository-ergonomics-release-2026-10-09.md). Earlier unreleased/qualification limits above describe their recorded phase.

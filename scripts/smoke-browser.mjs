@@ -16,7 +16,9 @@ const smokeComplete = Symbol('smokeComplete');
 
 function withBrowserSmokeRoom(rawUrl) {
   const url = new URL(rawUrl);
-  if (!url.searchParams.has('room')) {
+  // Local CI permits throwaway rooms; hosted admission only accepts the public
+  // default or an explicitly authenticated private room.
+  if (!url.searchParams.has('room') && ['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname)) {
     url.searchParams.set('room', `browser-smoke-${Date.now()}-${Math.random().toString(16).slice(2)}`);
   }
   // An agent's browser: the room records its rat as `agent`, never `human`.
@@ -69,6 +71,7 @@ function makeCdpClient(socketUrl) {
   let id = 0;
   const pending = new Map();
   const events = [];
+  const requests = new Map();
 
   socket.addEventListener('message', (event) => {
     const message = JSON.parse(event.data);
@@ -89,10 +92,13 @@ function makeCdpClient(socketUrl) {
       });
     }
 
+    if (message.method === 'Network.requestWillBeSent') requests.set(message.params.requestId, message.params.request.url);
+
     if (message.method === 'Network.loadingFailed') {
       events.push({
         kind: 'network-failed',
         errorText: message.params.errorText,
+        url: requests.get(message.params.requestId),
         type: message.params.type,
         canceled: message.params.canceled,
       });
@@ -166,7 +172,7 @@ const chromeArgs = [
   `--window-size=${viewport.width},${viewport.height}`,
   '--no-first-run',
   '--no-default-browser-check',
-  '--disable-gpu',
+  ...(!extraChromeArgs.some(arg => arg.startsWith('--use-angle=')) ? ['--disable-gpu'] : []),
   '--disable-dev-shm-usage',
   ...extraChromeArgs,
   'about:blank',
@@ -310,10 +316,15 @@ try {
   }
   const afterState = after.result.result.value;
   const receivedWelcome = events.some((event) => event.kind === 'ws-received' && event.payload.includes('"type":"welcome"'));
+  // Cloudflare injects optional Web Analytics; its unavailable beacon must be
+  // reported separately from game assets and runtime failures.
+  const optionalNetworkEvents = events.filter(event =>
+    ['network-failed', 'network-status'].includes(event.kind) &&
+    /^https:\/\/static\.cloudflareinsights\.com\/beacon\.min\.js(?:\/|\?|$)/.test(event.url || ''));
   const blockingEvents = events.filter((event) => (
     event.kind === 'exception'
-    || event.kind === 'network-failed'
-    || event.kind === 'network-status'
+    || (event.kind === 'network-failed' && !optionalNetworkEvents.includes(event))
+    || (event.kind === 'network-status' && !optionalNetworkEvents.includes(event))
     || (event.kind === 'console' && event.type === 'error')
   ));
 
@@ -372,6 +383,7 @@ try {
     before: beforeState,
     after: afterState,
     gameplay,
+    optionalNetworkEvents,
     screenshot: screenshotPath,
   }, null, 2));
 

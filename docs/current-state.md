@@ -4,8 +4,8 @@ Baseline checked against committed source and the latest release receipt on **9 
 
 ## Shipped baseline
 
-- Latest recorded production: `production-2026-10-10-21177b7`, Worker `e5c0c7a1-f332-48ee-ad44-1b406189292c`, client `index-DRHzezLz.js`. The build date is UTC; release was 9 October locally. [Softer-bot receipt](verification/bot-softening-2026-10-09.md).
-- Protocol **43**, layout **7**, mindVersion **21**, era `softer-bots`. Public room `public-live-v3` is in Chicago (ORD); v2 is the sleeping Seattle backup. [Room operations](live-service.md#the-public-room).
+- Latest recorded production: `production-2026-10-10-6bf21bd`, Worker `1659ab83-9e7e-4b4e-a57f-cad9e44cc575`, client `index-DLrZK7Yd.js`. The build date is UTC; release was 9 October locally. [Repository ergonomics release](verification/repository-ergonomics-release-2026-10-09.md).
+- Protocol **43**, layout **7**, mindVersion **22**, era `repository-ergonomics`. Public room `public-live-v3` is in Chicago (ORD); v2 is the sleeping Seattle backup. [Room operations](live-service.md#the-public-room).
 - Rooms play only with a human seat. Each round rolls **6–9 bots**, humans join on top, **10 rats total**; at capacity a human replaces a bot. No human means no tick, bots, alarm or continuing writes.
 - Three assignments: PAPER CHASE (5 deliveries), Jurisdiction (100 points from held zones of 20), Excessive Force (10 kills with the case). No round time limits. The carrier deals double damage and heals fully on a kill.
 - Case papers, paw prints and sight replace the old through-wall case locator. Chaos leaves physical evidence; the latest incident changes are recorded in [the chaos-evidence receipt](verification/chaos-evidence-release-2026-10-09.md).
@@ -17,7 +17,7 @@ See [game rules](game-rules.md) before changing behavior and [the code map](code
 
 | Area | Owning document | Current boundary |
 | --- | --- | --- |
-| Bots, Jev and learning | [Bot learning plan](bot-learning-plan.md), then [data plan](data-plan.md) | Softer reaction/tracking shipped. Human playtest and era comparison remain; burst pauses and attention changes are deferred. |
+| Bots, Jev and learning | [Bot learning plan](bot-learning-plan.md), then [data plan](data-plan.md) | Softer reaction/tracking retained; shared fog case sight correction shipped. Human playtest and era comparison remain; burst pauses and attention changes are deferred. |
 | Feel, sound, animation and noir | [Juice plan](juice-plan.md) | Follow its latest status and playtest decisions; older batches are evidence. |
 | City layout and architecture | [City overhaul](city-overhaul.md), then [city map](city-map.md) | Overhaul is shipped; layout tuning uses recorded facts and bumps layoutVersion. |
 | Telemetry and analysis | [Data plan](data-plan.md), [city map](city-map.md) | No data freeze. Separate builds/eras, agents and admin-touched rounds. |
