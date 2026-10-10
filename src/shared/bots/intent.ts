@@ -6,7 +6,7 @@ import type {JurisdictionZoneId} from '../jurisdictionZones';
  * Firing is not a goal: the motor fires whenever it has a shot, within the skill dials. */
 
 /** Raised by every change to the minds, questions, weights or dials; stamped on city facts next to `layoutVersion`. */
-export const MIND_VERSION=20;
+export const MIND_VERSION=21;
 
 /** When a bot decides (the bot learning plan, L4): on events (spawn, its goal ending or failing, the case changing
  * state, the assignment moving on) and at most `holdMs` after its last decision otherwise; between decisions it
@@ -132,8 +132,8 @@ export interface SkillDials {
     fireGapMs:number;
 }
 /** The base tier: below the median human's hit rate (docs/bot-overhaul.md, "Motor rewrite"). */
-export const BASE_SKILL:SkillDials={reactionMs:[240,480],sideMs:[120,260],rearMs:[320,600],aimWanderRadians:2.2*Math.PI/180,flickError:.2,
-    pointBlankMiss:15,trackingMs:[130,210],lead:[.2,.75],burst:[3,9],burstShotMs:[100,170],burstPauseMs:[60,460],fireGapMs:100};
+export const BASE_SKILL:SkillDials={reactionMs:[288,576],sideMs:[120,260],rearMs:[320,600],aimWanderRadians:2.2*Math.PI/180,flickError:.2,
+    pointBlankMiss:15,trackingMs:[156,252],lead:[.2,.75],burst:[3,9],burstShotMs:[100,170],burstPauseMs:[60,460],fireGapMs:100};
 /** Each archetype's dials (docs/bot-overhaul.md, "Archetypes"): base, or worse, in its own way. How long a burst runs
  * and how quick its clicks are is a habit, not sharpness; `fireGapMs` still floors every shot. */
 export const ARCHETYPE_SKILL:Record<Personality,SkillDials>={
@@ -144,5 +144,5 @@ export const ARCHETYPE_SKILL:Record<Personality,SkillDials>={
     // Slow to notice a rat to the side or behind: easier to flank.
     camper:{...BASE_SKILL,sideMs:[220,420],rearMs:[520,900]},
     joyrider:{...BASE_SKILL,aimWanderRadians:BASE_SKILL.aimWanderRadians*1.3},
-    gremlin:{...BASE_SKILL,reactionMs:[260,500],aimWanderRadians:BASE_SKILL.aimWanderRadians*1.2,flickError:.22},
+    gremlin:{...BASE_SKILL,reactionMs:[312,600],aimWanderRadians:BASE_SKILL.aimWanderRadians*1.2,flickError:.22},
 };

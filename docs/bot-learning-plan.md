@@ -2,6 +2,19 @@
 
 Status (30 September 2026): release A (L1 and L2) is live in production (build `production-2026-09-30-76701ab`, [receipt](verification/release-a-2026-09-30.md)). L4 is built and on staging (build `staging-2026-09-30-8a86be3`) and goes to production on Tyler's OK. There is no wait for baseline human hours: Tyler asked to keep it simple, so eras are compared with whatever play each one gets. This file owns the order, status and acceptance for teaching the bots to decide like Jev, and then like humans. How the data is organised is in [the data plan](data-plan.md). The bot design this builds on is [the bot overhaul plan](bot-overhaul.md).
 
+## Softer combat — 9 October 2026
+
+Tyler approved the first softer-bot pass: increase reaction and tracking delays by 20%, keeping the human behavior and archetypes. Implemented as mindVersion 21; not deployed.
+
+- Base reaction: 240–480 ms → 288–576 ms.
+- Gremlin reaction override: 260–500 ms → 312–600 ms.
+- Tracking lag for every archetype: 130–210 ms → 156–252 ms.
+- Burst pauses and attention changes wait for the next playtest.
+
+The target is roughly 20% less damage against humans per encounter, not a claim that 20% longer delays directly produce that result. Compare build/mindVersion 20 against 21, excluding agents and admin-touched rounds, with human play and player feedback. The existing recorder continues to capture controls, aim and shot targets. Private seeded full-game simulation checks traversal and combat; it cannot establish human difficulty.
+
+Verification: [softer-bot receipt](verification/bot-softening-2026-10-09.md).
+
 ## Goal
 
 Bots that decide like human try-hards, in deterministic code that costs nothing to run. We get there in 2 stages:
